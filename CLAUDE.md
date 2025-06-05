@@ -23,10 +23,11 @@ Human (AR) ←→ Triage Agent ←→ Specialized Agents ←→ External Tools
 
 This project uses UV package manager:
 
-```bash
-# Setup project
+### Windows (Recommended for Claude Code)
+```powershell
+# Setup project - Run in PowerShell or Command Prompt (NOT WSL2)
 uv venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+.venv\Scripts\activate
 uv pip install -e .
 
 # Run system test
@@ -43,6 +44,18 @@ black src/ tests/
 
 # Lint code
 ruff check src/ tests/
+```
+
+> **Note for Claude Code**: This project should be run on native Windows (PowerShell/Command Prompt), NOT through WSL2, for optimal compatibility with Rhino/Grasshopper MCP integration in Phase 2.
+
+### Linux/macOS
+```bash
+# Setup project
+uv venv
+source .venv/bin/activate
+uv pip install -e .
+
+# Commands same as above
 ```
 
 ## Key Implementation Patterns
