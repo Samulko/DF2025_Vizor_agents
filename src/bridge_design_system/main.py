@@ -155,17 +155,31 @@ def main():
         action="store_true",
         help="Run in interactive mode"
     )
+    parser.add_argument(
+        "--enhanced-cli",
+        action="store_true",
+        help="Run enhanced CLI with Rich formatting and real-time status"
+    )
     
     args = parser.parse_args()
     
     if args.test:
         success = test_system()
         exit(0 if success else 1)
+    elif args.enhanced_cli:
+        from .cli.enhanced_interface import run_enhanced_cli
+        run_enhanced_cli(simple_mode=False)
     elif args.interactive:
         interactive_mode()
     else:
-        # Default to interactive mode
-        interactive_mode()
+        # Default to simple CLI
+        try:
+            from .cli.simple_cli import run_simple_cli
+            run_simple_cli()
+        except Exception as e:
+            logger.warning(f"Enhanced CLI failed: {e}")
+            logger.info("Falling back to basic interactive mode")
+            interactive_mode()
 
 
 if __name__ == "__main__":

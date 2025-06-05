@@ -129,8 +129,7 @@ class TestTriageAgent:
         """Mock all managed agents."""
         with patch('bridge_design_system.agents.triage_agent.GeometryAgent'), \
              patch('bridge_design_system.agents.triage_agent.MaterialAgent'), \
-             patch('bridge_design_system.agents.triage_agent.StructuralAgent'), \
-             patch('bridge_design_system.agents.triage_agent.DummyAgent'):
+             patch('bridge_design_system.agents.triage_agent.StructuralAgent'):
             yield
     
     @pytest.fixture
@@ -142,19 +141,17 @@ class TestTriageAgent:
             agent.managed_agents = {
                 "geometry": Mock(),
                 "material": Mock(),
-                "structural": Mock(),
-                "dummy": Mock()
+                "structural": Mock()
             }
             return agent
     
     def test_triage_initialization(self, triage_agent):
         """Test triage agent initialization."""
         assert triage_agent.name == "triage_agent"
-        assert len(triage_agent.managed_agents) == 4
+        assert len(triage_agent.managed_agents) == 3
         assert "geometry" in triage_agent.managed_agents
         assert "material" in triage_agent.managed_agents
         assert "structural" in triage_agent.managed_agents
-        assert "dummy" in triage_agent.managed_agents
     
     def test_design_state_management(self, triage_agent):
         """Test design state tracking."""
@@ -182,8 +179,8 @@ class TestTriageAgent:
         
         status = triage_agent.get_agent_status()
         
-        assert len(status) == 4
-        for name in ["geometry", "material", "structural", "dummy"]:
+        assert len(status) == 3
+        for name in ["geometry", "material", "structural"]:
             assert name in status
             assert status[name]["initialized"] is True
             assert status[name]["conversation_length"] == 0

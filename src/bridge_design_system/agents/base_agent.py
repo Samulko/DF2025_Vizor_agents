@@ -138,14 +138,24 @@ class BaseAgent(ABC):
         if not self._agent:
             self.initialize_agent()
         
+        # Import here to avoid circular imports
+        from ..api.status_broadcaster import broadcast_agent_thinking, broadcast_agent_active, broadcast_agent_idle, broadcast_agent_error
+        
         try:
+            # Broadcast thinking status
+            broadcast_agent_thinking(self.name.replace("_agent", ""), task)
+            
             # Check step count
             if self.step_count >= settings.max_agent_steps:
+                broadcast_agent_error(self.name.replace("_agent", ""), "Maximum steps reached")
                 return AgentResponse(
                     success=False,
                     message="Maximum steps reached, please start a new conversation",
                     error=AgentError.CONTEXT_OVERFLOW
                 )
+            
+            # Broadcast active status
+            broadcast_agent_active(self.name.replace("_agent", ""), "Processing task")
             
             # Run the agent
             result = self._agent.run(task, reset=reset)
@@ -158,6 +168,9 @@ class BaseAgent(ABC):
                 "step": self.step_count
             })
             
+            # Broadcast completion
+            broadcast_agent_idle(self.name.replace("_agent", ""))
+            
             return AgentResponse(
                 success=True,
                 message=str(result),
@@ -166,6 +179,7 @@ class BaseAgent(ABC):
             
         except Exception as e:
             self.logger.error(f"Agent execution failed: {e}")
+            broadcast_agent_error(self.name.replace("_agent", ""), str(e))
             return AgentResponse(
                 success=False,
                 message=f"Agent execution failed: {str(e)}",

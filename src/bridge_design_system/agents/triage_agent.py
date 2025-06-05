@@ -98,17 +98,15 @@ class TriageAgent(BaseAgent):
     def initialize_agent(self):
         """Initialize the triage agent with managed agents."""
         # Import here to avoid circular imports
-        from .dummy_agent import DummyAgent
         from .geometry_agent import GeometryAgent
         from .material_agent import MaterialAgent
         from .structural_agent import StructuralAgent
         
-        # Initialize managed agents
+        # Initialize managed agents (only the three specialized agents)
         self.managed_agents = {
             "geometry": GeometryAgent(),
             "material": MaterialAgent(),
-            "structural": StructuralAgent(),
-            "dummy": DummyAgent()  # For testing
+            "structural": StructuralAgent()
         }
         
         # Initialize each managed agent
@@ -173,6 +171,19 @@ class TriageAgent(BaseAgent):
                 message=validation_error,
                 error=AgentError.INVALID_REQUEST
             )
+        
+        # Import here to avoid circular imports  
+        from ..api.status_broadcaster import broadcast_agent_delegating
+        
+        # Example of delegation broadcasting (when agent determines delegation)
+        # This is a simplified example - in practice, the triage agent would
+        # analyze the request and determine which agent to delegate to
+        if "geometry" in request.lower() or "point" in request.lower() or "bridge" in request.lower():
+            broadcast_agent_delegating("triage", "geometry", request)
+        elif "material" in request.lower() or "stock" in request.lower():
+            broadcast_agent_delegating("triage", "material", request)
+        elif "structural" in request.lower() or "analysis" in request.lower():
+            broadcast_agent_delegating("triage", "structural", request)
         
         # Process through the triage agent
         return self.run(request)

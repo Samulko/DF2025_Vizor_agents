@@ -12,6 +12,7 @@ dependencies = [
     "chromadb>=0.4.0",
     "requests>=2.31.0",
     "litellm>=1.0.0",
+    "rich>=13.0.0",
 ]
 
 [project.optional-dependencies]
