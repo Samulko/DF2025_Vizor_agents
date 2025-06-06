@@ -76,6 +76,46 @@ def tool_name(param: type) -> return_type:
 - Define behavior via system prompts in `system_prompts/`
 - Pass tools to agents at initialization
 
+## Git Workflow - Trunk-based Development
+
+This project uses **Trunk-based Development** for collaborative development:
+
+### Branch Strategy
+- **`master`**: The trunk branch - always deployable, represents production-ready code
+- **Feature branches**: Short-lived branches for new features (max 2-3 days)
+- **Branch naming**: `feature/description-of-change` (e.g., `feature/http-mcp-integration`)
+
+### Workflow Rules
+1. **Small, frequent commits**: Keep changes atomic and focused
+2. **Feature branches**: Create from `master`, merge back to `master` via PR
+3. **Continuous integration**: All commits on `master` must pass tests
+4. **No long-lived branches**: Feature branches should be merged within 2-3 days
+5. **Merge strategy**: Use squash merges to keep linear history
+
+### Commands
+```bash
+# Create feature branch from master
+git checkout master
+git pull origin master
+git checkout -b feature/your-feature-name
+
+# Work on feature, make atomic commits
+git add .
+git commit -m "feat: add specific functionality"
+
+# Before merging, rebase on latest master
+git checkout master
+git pull origin master
+git checkout feature/your-feature-name
+git rebase master
+
+# Merge back to master (or via PR)
+git checkout master
+git merge --squash feature/your-feature-name
+git commit -m "feat: complete feature description"
+git branch -d feature/your-feature-name
+```
+
 ## Coding Standards
 
 - Type hints required for all functions
