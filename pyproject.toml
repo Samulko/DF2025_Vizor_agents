@@ -1,7 +1,7 @@
 [project]
-name = "bridge-design-system"
-version = "0.1.0"
-description = "AR-assisted bridge design system using multi-agent AI"
+name = "vizor-agents"
+version = "0.2.0"
+description = "AR-assisted bridge design system using AI agents"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -13,6 +13,10 @@ dependencies = [
     "requests>=2.31.0",
     "litellm>=1.0.0",
     "rich>=13.0.0",
+    "fastapi>=0.104.0",
+    "uvicorn>=0.24.0",
+    "httpx>=0.25.0",
+    "websockets>=11.0.0",
 ]
 
 [project.optional-dependencies]
@@ -24,6 +28,14 @@ dev = [
     "ruff>=0.1.0",
     "ipython>=8.0.0",
 ]
+
+[project.scripts]
+vizor-agents = "bridge_design_system.main:main"
+
+[project.urls]
+Homepage = "https://github.com/Samulko/vizor_agents"
+Repository = "https://github.com/Samulko/vizor_agents"
+Issues = "https://github.com/Samulko/vizor_agents/issues"
 
 [tool.uv]
 dev-dependencies = [
@@ -47,5 +59,12 @@ select = [
 ]
 
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["bridge_design_system*"]
+
+[tool.setuptools.package-data]
+bridge_design_system = ["py.typed"]
