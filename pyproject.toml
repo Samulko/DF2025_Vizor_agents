@@ -17,6 +17,7 @@ dependencies = [
     "uvicorn>=0.24.0",
     "httpx>=0.25.0",
     "websockets>=11.0.0",
+    "click>=8.0.0",
 ]
 
 [project.optional-dependencies]

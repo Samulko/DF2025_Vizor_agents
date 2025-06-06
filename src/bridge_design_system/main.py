@@ -160,12 +160,29 @@ def main():
         action="store_true",
         help="Run enhanced CLI with Rich formatting and real-time status"
     )
+    parser.add_argument(
+        "--start-mcp-server",
+        action="store_true",
+        help="Start HTTP MCP server for Grasshopper integration"
+    )
+    parser.add_argument(
+        "--mcp-port",
+        type=int,
+        default=8001,
+        help="Port for MCP HTTP server (default: 8001)"
+    )
     
     args = parser.parse_args()
     
     if args.test:
         success = test_system()
         exit(0 if success else 1)
+    elif args.start_mcp_server:
+        from .cli.mcp_server import start_mcp_server
+        import sys
+        # Override sys.argv to pass the port argument
+        sys.argv = ["mcp-server", "--port", str(args.mcp_port)]
+        start_mcp_server()
     elif args.enhanced_cli:
         from .cli.enhanced_interface import run_enhanced_cli
         run_enhanced_cli(simple_mode=False)
