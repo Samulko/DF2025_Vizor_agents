@@ -163,7 +163,12 @@ def main():
     parser.add_argument(
         "--start-mcp-server",
         action="store_true",
-        help="Start HTTP MCP server for Grasshopper integration"
+        help="Start HTTP MCP server for Grasshopper integration (legacy)"
+    )
+    parser.add_argument(
+        "--start-official-mcp",
+        action="store_true",
+        help="Start official MCP server using MCP SDK (recommended)"
     )
     parser.add_argument(
         "--mcp-port",
@@ -171,12 +176,28 @@ def main():
         default=8001,
         help="Port for MCP HTTP server (default: 8001)"
     )
+    parser.add_argument(
+        "--grasshopper-url",
+        default="http://localhost:8080",
+        help="URL of Grasshopper HTTP server (default: http://localhost:8080)"
+    )
     
     args = parser.parse_args()
     
     if args.test:
         success = test_system()
         exit(0 if success else 1)
+    elif args.start_official_mcp:
+        from .cli.official_mcp_server import start_official_mcp_server
+        import sys
+        # Override sys.argv to pass the arguments
+        sys.argv = [
+            "official-mcp-server",
+            "--grasshopper-url", args.grasshopper_url
+        ]
+        if hasattr(args, 'debug') and args.debug:
+            sys.argv.append("--debug")
+        start_official_mcp_server()
     elif args.start_mcp_server:
         from .cli.mcp_server import start_mcp_server
         import sys

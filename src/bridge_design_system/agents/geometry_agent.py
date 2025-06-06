@@ -4,12 +4,14 @@ from typing import List
 from smolagents import Tool, tool
 
 from .base_agent import BaseAgent
+from ..config.settings import settings
+from ..mcp.official_adapter import get_official_mcp_tools
 
 
 class GeometryAgent(BaseAgent):
     """Agent responsible for creating and manipulating 3D geometry.
     
-    This agent interfaces with Rhino/Grasshopper through MCP to create,
+    This agent interfaces with Rhino/Grasshopper through official MCP to create,
     modify, and analyze bridge geometry.
     """
     
@@ -20,8 +22,9 @@ class GeometryAgent(BaseAgent):
             description="Creates and manipulates 3D geometry for bridge design in Rhino/Grasshopper"
         )
         
-        # MCP connection will be established in Phase 2
+        # MCP connection will be established when tools are initialized
         self.mcp_connected = False
+        self.use_official_mcp = True  # Use official MCP implementation
     
     def _get_system_prompt(self) -> str:
         """Get the system prompt for the geometry agent."""
@@ -51,8 +54,21 @@ You have access to tools for:
 Always confirm successful operations and provide relevant geometric data."""
     
     def _initialize_tools(self) -> List[Tool]:
-        """Initialize geometry tools (placeholders for Phase 1)."""
+        """Initialize geometry tools using official MCP or fallback to placeholders."""
         
+        if self.use_official_mcp and hasattr(settings, 'grasshopper_mcp_path'):
+            try:
+                # Use official MCP tools
+                grasshopper_url = getattr(settings, 'grasshopper_url', 'http://localhost:8080')
+                mcp_tools = get_official_mcp_tools(grasshopper_url)
+                self.mcp_connected = True
+                self.logger.info("Geometry agent initialized with official MCP tools")
+                return mcp_tools
+            except Exception as e:
+                self.logger.warning(f"Failed to initialize MCP tools, falling back to placeholders: {e}")
+                self.mcp_connected = False
+        
+        # Fallback to placeholder tools for testing/development
         @tool
         def create_point(x: float, y: float, z: float, name: str = "") -> dict:
             """Create a 3D point in Rhino space.
@@ -122,47 +138,6 @@ Always confirm successful operations and provide relevant geometric data."""
             return curve_data
         
         @tool
-        def create_surface(boundary_curves: list, name: str = "") -> dict:
-            """Create a surface from boundary curves.
-            
-            Args:
-                boundary_curves: List of curve dictionaries
-                name: Optional name for the surface
-                
-            Returns:
-                Dictionary with surface data
-            """
-            # Placeholder implementation
-            surface_data = {
-                "type": "surface",
-                "boundaries": boundary_curves,
-                "name": name or "Surface",
-                "boundary_count": len(boundary_curves)
-            }
-            return surface_data
-        
-        @tool
-        def transform_geometry(geometry: dict, transformation: str, parameters: dict) -> dict:
-            """Apply transformation to geometry.
-            
-            Args:
-                geometry: Geometry dictionary to transform
-                transformation: Type of transformation (move, rotate, scale)
-                parameters: Transformation parameters
-                
-            Returns:
-                Transformed geometry dictionary
-            """
-            # Placeholder implementation
-            transformed = geometry.copy()
-            transformed["transformed"] = True
-            transformed["transformation"] = {
-                "type": transformation,
-                "parameters": parameters
-            }
-            return transformed
-        
-        @tool
         def analyze_geometry(geometry: dict, analysis_type: str = "properties") -> dict:
             """Analyze geometric properties.
             
@@ -188,11 +163,10 @@ Always confirm successful operations and provide relevant geometric data."""
             
             return analysis
         
+        self.logger.info("Geometry agent initialized with placeholder tools")
         return [
             create_point,
             create_line,
             create_curve,
-            create_surface,
-            transform_geometry,
             analyze_geometry
         ]
