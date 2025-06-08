@@ -5,7 +5,7 @@ from smolagents import Tool, tool
 
 from .base_agent import BaseAgent
 from ..config.settings import settings
-from ..mcp.smolagents_integration import get_grasshopper_tools
+from ..mcp.sync_mcp_tools import get_sync_grasshopper_tools
 
 
 class GeometryAgent(BaseAgent):
@@ -58,19 +58,18 @@ Always confirm successful operations and provide relevant geometric data."""
         
         if self.use_official_mcp:
             try:
-                # Use streamable-http MCP integration with smolagents MCPClient
-                mcp_server_url = getattr(settings, 'mcp_server_url', 'http://localhost:8001/mcp')
-                mcp_tools = get_grasshopper_tools(mcp_server_url)
+                # Use sync MCP tools that work with smolagents CodeAgent
+                sync_tools = get_sync_grasshopper_tools()
                 
-                if mcp_tools:
+                if sync_tools:
                     self.mcp_connected = True
-                    self.logger.info(f"Geometry agent initialized with {len(mcp_tools)} streamable-http MCP tools")
-                    return mcp_tools
+                    self.logger.info(f"Geometry agent initialized with {len(sync_tools)} sync MCP tools")
+                    return sync_tools
                 else:
-                    raise Exception("No tools returned from MCP server")
+                    raise Exception("No sync tools available")
                     
             except Exception as e:
-                self.logger.warning(f"Failed to initialize MCP tools, falling back to placeholders: {e}")
+                self.logger.warning(f"Failed to initialize sync MCP tools, falling back to placeholders: {e}")
                 self.mcp_connected = False
         
         # Fallback to placeholder tools for testing/development
