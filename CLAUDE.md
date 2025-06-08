@@ -168,3 +168,12 @@ bridge-design-system/
 ├── system_prompts/       # Agent behavior definitions
 └── .env.example          # Environment configuration template
 ```
+
+## Memory: @pyproject.toml
+- Critical configuration file for project metadata and build system settings
+- Uses `uv` (Rye) package manager
+- Defines project dependencies, build requirements, and packaging information
+
+## Memories
+
+- Do not build the environment yourself, rather give me instructions how to do it. I will then give you informations if there were any issues

@@ -154,6 +154,40 @@ interface CommunicationFlow {
 
 ## Implementation Phases
 
+### Phase 0: MCP Integration with Official Specification (Current)
+**Objective**: Implement official MCP streamable-http transport for Grasshopper integration
+
+#### Key Findings from Smolagents Research
+Based on official smolagents documentation analysis:
+
+**Supported MCP Transports:**
+1. **stdio** - `StdioServerParameters` (subprocess-based)
+2. **SSE (HTTP+SSE)** - Legacy HTTP transport ⚠️ **DEPRECATED**  
+3. **streamable-http** - **RECOMMENDED** modern HTTP transport ✅
+
+**Official Integration Pattern:**
+```python
+# Recommended approach for our Grasshopper bridge
+with MCPClient({
+    "url": "http://localhost:8000/mcp", 
+    "transport": "streamable-http"
+}) as tools:
+    agent = CodeAgent(tools=tools, model=model)
+```
+
+#### Updated MCP Strategy
+- ✅ **Use streamable-http transport** - Official recommended approach
+- ✅ **Leverage smolagents MCPClient directly** - No custom adapters needed
+- ✅ **Create official MCP server** with streamable-http endpoint
+- ✅ **Simpler architecture** - Less custom code, more standard implementation
+
+#### Deliverables
+- [ ] Official MCP server with streamable-http transport
+- [ ] Update GeometryAgent to use smolagents MCPClient directly
+- [ ] Remove custom HTTP adapter implementations
+- [ ] Create C# Grasshopper HTTP client for streamable-http endpoint
+- [ ] Integration testing with official MCP specification
+
 ### Phase 1: Enhanced CLI Foundation (Week 1)
 **Objective**: Create rich CLI experience with status broadcasting
 
@@ -166,18 +200,26 @@ interface CommunicationFlow {
 
 #### Technical Tasks
 ```python
-# 1. Enhanced CLI Implementation
+# 1. Official MCP Implementation (Phase 0)
+src/bridge_design_system/mcp/
+├── streamable_http_server.py    # Official MCP streamable-http server
+├── smolagents_integration.py   # Direct MCPClient usage
+└── grasshopper_mcp/
+    ├── streamable_http_bridge.py  # Official MCP bridge
+    └── GH_MCP/                     # C# HTTP client update
+
+# 2. Enhanced CLI Implementation (Phase 1)
 src/bridge_design_system/cli/
 ├── enhanced_interface.py      # Rich-based CLI interface
 ├── status_broadcaster.py     # WebSocket status broadcasting
 ├── design_visualizer.py      # ASCII/text design visualization
 └── command_processor.py      # Enhanced command handling
 
-# 2. Agent Integration
+# 3. Agent Integration
 src/bridge_design_system/agents/base_agent.py
 └── Add status broadcasting to all agent operations
 
-# 3. API Layer
+# 4. API Layer
 src/bridge_design_system/api/
 ├── websocket_server.py       # Real-time status API
 └── rest_endpoints.py         # RESTful API for visualization

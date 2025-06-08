@@ -5,7 +5,7 @@ from smolagents import Tool, tool
 
 from .base_agent import BaseAgent
 from ..config.settings import settings
-from ..mcp.official_adapter import get_official_mcp_tools
+from ..mcp.smolagents_integration import get_grasshopper_tools
 
 
 class GeometryAgent(BaseAgent):
@@ -56,14 +56,19 @@ Always confirm successful operations and provide relevant geometric data."""
     def _initialize_tools(self) -> List[Tool]:
         """Initialize geometry tools using official MCP or fallback to placeholders."""
         
-        if self.use_official_mcp and hasattr(settings, 'grasshopper_mcp_path'):
+        if self.use_official_mcp:
             try:
-                # Use official MCP tools
-                grasshopper_url = getattr(settings, 'grasshopper_url', 'http://localhost:8080')
-                mcp_tools = get_official_mcp_tools(grasshopper_url)
-                self.mcp_connected = True
-                self.logger.info("Geometry agent initialized with official MCP tools")
-                return mcp_tools
+                # Use streamable-http MCP integration with smolagents MCPClient
+                mcp_server_url = getattr(settings, 'mcp_server_url', 'http://localhost:8001/mcp')
+                mcp_tools = get_grasshopper_tools(mcp_server_url)
+                
+                if mcp_tools:
+                    self.mcp_connected = True
+                    self.logger.info(f"Geometry agent initialized with {len(mcp_tools)} streamable-http MCP tools")
+                    return mcp_tools
+                else:
+                    raise Exception("No tools returned from MCP server")
+                    
             except Exception as e:
                 self.logger.warning(f"Failed to initialize MCP tools, falling back to placeholders: {e}")
                 self.mcp_connected = False

@@ -168,7 +168,12 @@ def main():
     parser.add_argument(
         "--start-official-mcp",
         action="store_true",
-        help="Start official MCP server using MCP SDK (recommended)"
+        help="Start official MCP server using MCP SDK (stdio transport)"
+    )
+    parser.add_argument(
+        "--start-streamable-http",
+        action="store_true",
+        help="Start official MCP streamable-http server (recommended)"
     )
     parser.add_argument(
         "--mcp-port",
@@ -187,6 +192,18 @@ def main():
     if args.test:
         success = test_system()
         exit(0 if success else 1)
+    elif args.start_streamable_http:
+        from .cli.streamable_http_server import start_streamable_http_server
+        import sys
+        # Override sys.argv to pass the arguments
+        sys.argv = [
+            "streamable-http-server",
+            "--port", str(getattr(args, 'mcp_port', 8000)),
+            "--grasshopper-url", args.grasshopper_url
+        ]
+        if hasattr(args, 'debug') and args.debug:
+            sys.argv.append("--debug")
+        start_streamable_http_server()
     elif args.start_official_mcp:
         from .cli.official_mcp_server import start_official_mcp_server
         import sys
