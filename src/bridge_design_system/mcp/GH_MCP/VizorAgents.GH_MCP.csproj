@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+  
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <AssemblyName>VizorAgents.GH_MCP</AssemblyName>
+    <RootNamespace>VizorAgents.GH_MCP</RootNamespace>
+    <OutputType>Library</OutputType>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <UseWindowsForms>true</UseWindowsForms>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <AssemblyTitle>VizorAgents MCP Bridge</AssemblyTitle>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <OutputPath>bin\Debug\</OutputPath>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <StartAction>Program</StartAction>
+    <StartProgram>C:\Program Files\Rhino 8\System\Rhino.exe</StartProgram>
+    <StartArguments>/NOSPLASH</StartArguments>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+    <OutputPath>bin\Release\</OutputPath>
+    <DebugSymbols>false</DebugSymbols>
+    <DebugType>none</DebugType>
+    <Optimize>true</Optimize>
+    <DefineConstants>TRACE</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="GH_AssemblyInfo.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Drawing" />
+  </ItemGroup>
+
+
+  <!-- Grasshopper and Rhino References -->
+  <ItemGroup>
+    <Reference Include="Grasshopper">
+      <HintPath>C:\Program Files\Rhino 8\Plug-ins\Grasshopper\Grasshopper.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="GH_IO">
+      <HintPath>C:\Program Files\Rhino 8\Plug-ins\Grasshopper\GH_IO.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="RhinoCommon">
+      <HintPath>C:\Program Files\Rhino 8\System\RhinoCommon.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <!-- Post-build event to copy and rename to .gha for Grasshopper -->
+  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
+    <!-- Copy as .gha file -->
+    <Exec Command="copy &quot;$(TargetPath)&quot; &quot;$(APPDATA)\Grasshopper\Libraries\VizorAgents.GH_MCP.gha&quot;" 
+          ContinueOnError="true" />
+    <!-- Copy dependencies -->
+    <Exec Command="xcopy &quot;$(TargetDir)Newtonsoft.Json.dll&quot; &quot;$(APPDATA)\Grasshopper\Libraries\&quot; /Y" 
+          ContinueOnError="true" />
+  </Target>
+
+</Project>
