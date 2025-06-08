@@ -193,17 +193,14 @@ def main():
         success = test_system()
         exit(0 if success else 1)
     elif args.start_streamable_http:
-        from .cli.streamable_http_server import start_streamable_http_server
-        import sys
-        # Override sys.argv to pass the arguments
-        sys.argv = [
-            "streamable-http-server",
-            "--port", str(getattr(args, 'mcp_port', 8000)),
-            "--grasshopper-url", args.grasshopper_url
-        ]
-        if hasattr(args, 'debug') and args.debug:
-            sys.argv.append("--debug")
-        start_streamable_http_server()
+        from .mcp.streamable_http_server import GrasshopperMCPStreamableServer
+        # Create and run server with bridge mode enabled by default
+        server = GrasshopperMCPStreamableServer(
+            grasshopper_url=args.grasshopper_url, 
+            port=args.mcp_port,
+            bridge_mode=True  # Enable bridge mode for Grasshopper component integration
+        )
+        server.run()
     elif args.start_official_mcp:
         from .cli.official_mcp_server import start_official_mcp_server
         import sys

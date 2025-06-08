@@ -118,7 +118,7 @@ class BaseAgent(ABC):
             description=self.description,
             max_steps=settings.max_agent_steps,
             additional_authorized_imports=[
-                "json", "datetime", "pathlib", "typing", "dataclasses", "enum"
+                "json", "datetime", "pathlib", "typing", "dataclasses", "enum", "asyncio"
             ]
         )
         

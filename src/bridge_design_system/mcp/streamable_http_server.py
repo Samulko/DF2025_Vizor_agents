@@ -2,11 +2,16 @@
 
 This implements the official MCP streamable-http transport protocol
 for seamless integration with smolagents framework.
+
+Also includes polling endpoints for Grasshopper bridge component.
 """
 import contextlib
 import logging
+import json
+import uuid
 from collections.abc import AsyncIterator
 from typing import Any, Dict, List, Optional
+from datetime import datetime
 
 import anyio
 import click
@@ -14,7 +19,9 @@ import mcp.types as types
 from mcp.server.lowlevel import Server
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from starlette.applications import Starlette
-from starlette.routing import Mount
+from starlette.routing import Mount, Route
+from starlette.responses import JSONResponse
+from starlette.requests import Request
 from starlette.types import Receive, Scope, Send
 
 from .grasshopper_mcp.utils.communication import GrasshopperHttpClient
@@ -26,16 +33,23 @@ logger = logging.getLogger(__name__)
 class GrasshopperMCPStreamableServer:
     """Official MCP streamable-http server for Grasshopper integration."""
     
-    def __init__(self, grasshopper_url: str = "http://localhost:8080", port: int = 8001):
+    def __init__(self, grasshopper_url: str = "http://localhost:8080", port: int = 8001, bridge_mode: bool = True):
         """Initialize the streamable MCP server.
         
         Args:
-            grasshopper_url: URL of the Grasshopper HTTP server
+            grasshopper_url: URL of the Grasshopper HTTP server (for direct mode)
             port: Port for the MCP server
+            bridge_mode: If True, queue commands for bridge. If False, call Grasshopper directly.
         """
         self.grasshopper_url = grasshopper_url
         self.port = port
+        self.bridge_mode = bridge_mode
         self.grasshopper_client = GrasshopperHttpClient(grasshopper_url)
+        
+        # Bridge polling state
+        self.pending_commands: List[Dict] = []
+        self.command_results: Dict[str, Dict] = {}
+        self.command_history: List[Dict] = []
         
         # Create MCP server instance
         self.app = Server("grasshopper-mcp-streamable")
@@ -43,12 +57,15 @@ class GrasshopperMCPStreamableServer:
         # Register handlers
         self._register_handlers()
         
-        # Create session manager
+        # Create session manager with polling endpoints
         self.session_manager = StreamableHTTPSessionManager(
             app=self.app,
             event_store=None,  # Simple in-memory store for now
             json_response=False  # Use streamable HTTP, not JSON
         )
+        
+        # Add polling endpoints to the session manager's app
+        self._add_polling_endpoints()
     
     def _register_handlers(self):
         """Register MCP tool handlers."""
@@ -59,43 +76,42 @@ class GrasshopperMCPStreamableServer:
         ) -> List[types.TextContent | types.ImageContent | types.EmbeddedResource]:
             """Handle tool execution requests."""
             try:
-                logger.info(f"Executing tool: {name} with args: {arguments}")
+                logger.info(f"Executing tool: {name} with args: {arguments} (bridge_mode: {self.bridge_mode})")
                 
-                if name == "add_component":
-                    result = await self._add_component(
-                        component_type=arguments["component_type"],
-                        x=arguments["x"],
-                        y=arguments["y"]
-                    )
-                
-                elif name == "connect_components":
-                    result = await self._connect_components(
-                        source_id=arguments["source_id"],
-                        target_id=arguments["target_id"],
-                        source_param=arguments.get("source_param"),
-                        target_param=arguments.get("target_param")
-                    )
-                
-                elif name == "get_all_components":
-                    result = await self._get_all_components()
-                
-                elif name == "set_component_value":
-                    result = await self._set_component_value(
-                        component_id=arguments["component_id"],
-                        parameter_name=arguments["parameter_name"],
-                        value=arguments["value"]
-                    )
-                
-                elif name == "clear_document":
-                    result = await self._clear_document()
-                
-                elif name == "save_document":
-                    result = await self._save_document(
-                        filename=arguments.get("filename")
-                    )
-                
+                # Choose execution mode
+                if self.bridge_mode:
+                    result = await self._handle_bridge_mode_tool(name, arguments)
                 else:
-                    raise ValueError(f"Unknown tool: {name}")
+                    # Direct execution mode
+                    if name == "add_component":
+                        result = await self._add_component(
+                            component_type=arguments["component_type"],
+                            x=arguments["x"],
+                            y=arguments["y"]
+                        )
+                    elif name == "connect_components":
+                        result = await self._connect_components(
+                            source_id=arguments["source_id"],
+                            target_id=arguments["target_id"],
+                            source_param=arguments.get("source_param"),
+                            target_param=arguments.get("target_param")
+                        )
+                    elif name == "get_all_components":
+                        result = await self._get_all_components()
+                    elif name == "set_component_value":
+                        result = await self._set_component_value(
+                            component_id=arguments["component_id"],
+                            parameter_name=arguments["parameter_name"],
+                            value=arguments["value"]
+                        )
+                    elif name == "clear_document":
+                        result = await self._clear_document()
+                    elif name == "save_document":
+                        result = await self._save_document(
+                            filename=arguments.get("filename")
+                        )
+                    else:
+                        raise ValueError(f"Unknown tool: {name}")
                 
                 # Format success result
                 if isinstance(result, dict) and result.get("success", True):
@@ -319,6 +335,51 @@ class GrasshopperMCPStreamableServer:
             logger.error(f"Failed to save document: {e}")
             return {"success": False, "error": str(e)}
     
+    def _add_polling_endpoints(self):
+        """Add polling endpoints for bridge integration."""
+        # This will be implemented in create_app method
+        pass
+    
+    def _queue_command_for_bridge(self, command_type: str, parameters: Dict[str, Any]) -> str:
+        """Queue a command for the bridge to execute."""
+        command_id = str(uuid.uuid4())
+        command = {
+            "id": command_id,
+            "type": command_type,
+            "parameters": parameters,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        self.pending_commands.append(command)
+        logger.info(f"Queued command for bridge: {command_type} [{command_id}]")
+        return command_id
+    
+    async def _handle_bridge_mode_tool(self, name: str, arguments: dict) -> Dict[str, Any]:
+        """Handle tool execution in bridge mode (queue for bridge)."""
+        try:
+            command_id = self._queue_command_for_bridge(name, arguments)
+            
+            # Wait for result with timeout
+            max_wait = 30  # seconds
+            wait_interval = 0.5
+            waited = 0
+            
+            while waited < max_wait:
+                if command_id in self.command_results:
+                    result = self.command_results[command_id]
+                    # Clean up
+                    del self.command_results[command_id]
+                    return result
+                
+                await anyio.sleep(wait_interval)
+                waited += wait_interval
+            
+            # Timeout
+            return {"success": False, "error": "Bridge execution timeout"}
+            
+        except Exception as e:
+            logger.error(f"Bridge mode tool execution failed: {e}")
+            return {"success": False, "error": str(e)}
+    
     # ASGI handler for streamable HTTP connections
     async def handle_streamable_http(
         self, scope: Scope, receive: Receive, send: Send
@@ -337,12 +398,65 @@ class GrasshopperMCPStreamableServer:
             finally:
                 logger.info("Grasshopper MCP server shutting down...")
     
+    async def get_pending_commands(self, request: Request) -> JSONResponse:
+        """Get pending commands for bridge to execute."""
+        commands = self.pending_commands.copy()
+        self.pending_commands.clear()  # Clear after sending
+        logger.info(f"Bridge requested commands: {len(commands)} pending")
+        return JSONResponse(commands)
+    
+    async def receive_command_result(self, request: Request) -> JSONResponse:
+        """Receive command execution result from bridge."""
+        try:
+            data = await request.json()
+            command_id = data["command_id"]
+            success = data["success"]
+            result = data["result"]
+            
+            # Store result
+            self.command_results[command_id] = {
+                "success": success,
+                "result": result
+            }
+            
+            # Add to history
+            self.command_history.append({
+                "command_id": command_id,
+                "success": success,
+                "result": result,
+                "timestamp": data.get("timestamp", datetime.utcnow().isoformat())
+            })
+            
+            # Keep only last 100 in history
+            if len(self.command_history) > 100:
+                self.command_history.pop(0)
+            
+            logger.info(f"Received result from bridge: {command_id} - {'SUCCESS' if success else 'FAILED'}")
+            return JSONResponse({"status": "received"})
+            
+        except Exception as e:
+            logger.error(f"Error receiving command result: {e}")
+            return JSONResponse({"error": str(e)}, status_code=400)
+    
+    async def get_bridge_status(self, request: Request) -> JSONResponse:
+        """Get bridge status and command history."""
+        return JSONResponse({
+            "pending_commands": len(self.pending_commands),
+            "completed_commands": len(self.command_results),
+            "command_history": self.command_history[-10:],  # Last 10
+            "server_time": datetime.utcnow().isoformat()
+        })
+
     def create_app(self) -> Starlette:
         """Create the ASGI application."""
         return Starlette(
             debug=True,
             routes=[
                 Mount("/mcp", app=self.handle_streamable_http),
+                # Bridge polling endpoints
+                Route("/grasshopper/pending_commands", self.get_pending_commands, methods=["GET"]),
+                Route("/grasshopper/command_result", self.receive_command_result, methods=["POST"]),
+                Route("/grasshopper/status", self.get_bridge_status, methods=["GET"]),
             ],
             lifespan=self.lifespan,
         )

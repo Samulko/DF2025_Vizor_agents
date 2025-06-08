@@ -30,7 +30,7 @@ namespace VizorAgents.GH_MCP
         private int _componentCounter = 0;
 
         public SimpleMCPBridge()
-            : base("MCP Bridge", "MCPB", "HTTP client bridge for MCP command execution", "Params", "Util")
+            : base("Simple MCP Bridge", "SMCP", "HTTP polling bridge for MCP command execution", "Params", "Util")
         {
         }
 
