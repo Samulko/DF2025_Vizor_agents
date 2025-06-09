@@ -1,30 +1,43 @@
 """MCP (Model Context Protocol) integration for Grasshopper bridge design.
 
-This module provides official MCP SDK integration using streamable-http transport
-for seamless integration with smolagents framework.
+This module provides multiple MCP implementations:
+- FastMCP-based server (recommended, requires FastMCP)
+- Manual HTTP server (fallback, pure HTTP + JSON-RPC)
+- StreamableHTTPSessionManager server (legacy, may have issues)
 """
 
-# Official MCP streamable-http implementation (recommended)
-from .smolagents_integration import (
-    GrasshopperMCPIntegration,
-    get_grasshopper_tools,
-    get_mcp_client_with_tools
+# New implementations (recommended)
+# from .fastmcp_server import GrasshopperFastMCPServer, create_grasshopper_mcp_server  # Commented out - has import issues
+# from .manual_http_server import GrasshopperManualMCPServer, create_manual_mcp_server  # Commented out - not implemented yet
+
+# Clean FastMCP implementation (recommended)
+# Use smolagents' built-in ToolCollection.from_mcp() instead of custom integration
+from .mcp_tools_utils import (
+    get_mcp_tools_stdio, 
+    get_mcp_tools_http, 
+    get_grasshopper_tools, 
+    is_mcp_server_available,
+    is_mcp_server_available_stdio,
+    is_mcp_server_available_http
 )
-from .streamable_http_server import GrasshopperMCPStreamableServer
 
 # Legacy implementations (for backward compatibility)
+from .streamable_http_server import GrasshopperMCPStreamableServer
 from .official_adapter import OfficialMCPAdapter, get_official_mcp_tools
 from .http_adapter import HttpMCPAdapter, get_http_mcp_tools
 from .grasshopper_mcp.bridge_http import GrasshopperMCPBridge
 from .grasshopper_mcp.http_server import GrasshopperMCPServer
 
 __all__ = [
-    # Official MCP streamable-http (recommended)
-    "GrasshopperMCPIntegration",
-    "get_grasshopper_tools",
-    "get_mcp_client_with_tools",
+    # Clean FastMCP utilities (recommended)
+    "get_mcp_tools_stdio",
+    "get_mcp_tools_http", 
+    "get_grasshopper_tools", 
+    "is_mcp_server_available",
+    "is_mcp_server_available_stdio",
+    "is_mcp_server_available_http",
+    # Legacy implementations (for backward compatibility)
     "GrasshopperMCPStreamableServer",
-    # Legacy implementations
     "OfficialMCPAdapter",
     "get_official_mcp_tools",
     "HttpMCPAdapter",

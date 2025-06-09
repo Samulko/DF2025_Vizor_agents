@@ -1,30 +1,31 @@
 """Geometry Agent - Handles 3D geometry operations in Rhino/Grasshopper."""
-from typing import List
+from typing import List, Optional
 
-from smolagents import Tool, tool
+from smolagents import Tool, tool, CodeAgent
 
 from .base_agent import BaseAgent
 from ..config.settings import settings
-from ..mcp.sync_mcp_tools import get_sync_grasshopper_tools
 
 
 class GeometryAgent(BaseAgent):
     """Agent responsible for creating and manipulating 3D geometry.
     
-    This agent interfaces with Rhino/Grasshopper through official MCP to create,
-    modify, and analyze bridge geometry.
+    This is a standard smolagents agent that can use MCP tools alongside
+    other tools in its toolbox.
     """
     
-    def __init__(self):
-        """Initialize the geometry agent."""
+    def __init__(self, mcp_tools: Optional[List[Tool]] = None):
+        """Initialize the geometry agent.
+        
+        Args:
+            mcp_tools: Optional list of MCP tools to include in agent's toolbox
+        """
         super().__init__(
             name="geometry_agent",
             description="Creates and manipulates 3D geometry for bridge design in Rhino/Grasshopper"
         )
         
-        # MCP connection will be established when tools are initialized
-        self.mcp_connected = False
-        self.use_official_mcp = True  # Use official MCP implementation
+        self.mcp_tools = mcp_tools or []
     
     def _get_system_prompt(self) -> str:
         """Get the system prompt for the geometry agent."""
@@ -54,25 +55,32 @@ You have access to tools for:
 Always confirm successful operations and provide relevant geometric data."""
     
     def _initialize_tools(self) -> List[Tool]:
-        """Initialize geometry tools using official MCP or fallback to placeholders."""
+        """Initialize geometry tools - combines MCP tools with custom tools."""
         
-        if self.use_official_mcp:
-            try:
-                # Use sync MCP tools that work with smolagents CodeAgent
-                sync_tools = get_sync_grasshopper_tools()
-                
-                if sync_tools:
-                    self.mcp_connected = True
-                    self.logger.info(f"Geometry agent initialized with {len(sync_tools)} sync MCP tools")
-                    return sync_tools
-                else:
-                    raise Exception("No sync tools available")
-                    
-            except Exception as e:
-                self.logger.warning(f"Failed to initialize sync MCP tools, falling back to placeholders: {e}")
-                self.mcp_connected = False
+        tools = []
         
-        # Fallback to placeholder tools for testing/development
+        # Add MCP tools if provided
+        if self.mcp_tools:
+            tools.extend(self.mcp_tools)
+            self.logger.info(f"Added {len(self.mcp_tools)} MCP tools to geometry agent")
+            
+            # Log MCP tool names
+            mcp_tool_names = [tool.name for tool in self.mcp_tools]
+            self.logger.info(f"MCP tools: {mcp_tool_names}")
+        
+        # Add custom geometry tools
+        custom_tools = self._create_custom_tools()
+        tools.extend(custom_tools)
+        self.logger.info(f"Added {len(custom_tools)} custom tools to geometry agent")
+        
+        total_tools = len(tools)
+        self.logger.info(f"Geometry agent initialized with {total_tools} total tools")
+        
+        return tools
+    
+    def _create_custom_tools(self) -> List[Tool]:
+        """Create custom geometry tools for analysis and validation."""
+        
         @tool
         def create_point(x: float, y: float, z: float, name: str = "") -> dict:
             """Create a 3D point in Rhino space.
@@ -167,7 +175,6 @@ Always confirm successful operations and provide relevant geometric data."""
             
             return analysis
         
-        self.logger.info("Geometry agent initialized with placeholder tools")
         return [
             create_point,
             create_line,

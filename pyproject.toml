@@ -19,9 +19,11 @@ dependencies = [
     "websockets>=11.0.0",
     "click>=8.0.0",
     "mcp>=1.9.3",
+    "fastmcp>=0.1.0",
     "starlette>=0.45.3",
     "anyio>=4.9.0",
     "aiohttp>=3.9.0",
+    "grasshopper-mcp",
 ]
 
 [project.optional-dependencies]
@@ -48,6 +50,9 @@ dev-dependencies = [
     "black",
     "ruff",
 ]
+
+[tool.uv.sources]
+grasshopper-mcp = { path = "reference", editable = true }
 
 [tool.black]
 line-length = 100
