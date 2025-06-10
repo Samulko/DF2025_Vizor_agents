@@ -69,3 +69,8 @@ logs/
 materials.db
 design_state.json
 .chromadb/reference/GH_MCP/.vs/
+
+# Visual Studio build artifacts
+reference/GH_MCP/GH_MCP/obj/
+reference/GH_MCP/GH_MCP/bin/
+reference/GH_MCP/.vs/
