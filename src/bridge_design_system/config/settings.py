@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     
     # Paths
     grasshopper_mcp_path: str = ""
+    grasshopper_mcp_url: str = "http://localhost:8001/mcp"
     material_db_path: str = "materials.db"
     
     # Logging Configuration

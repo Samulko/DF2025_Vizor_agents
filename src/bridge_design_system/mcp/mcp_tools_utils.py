@@ -2,12 +2,54 @@
 
 import os
 from typing import List, Optional
-from smolagents import Tool, ToolCollection
+from smolagents import Tool, ToolCollection, MCPClient
 from mcp import StdioServerParameters
 
 from ..config.logging_config import get_logger
 
 logger = get_logger(__name__)
+
+
+def create_mcp_client_for_grasshopper(
+    command: str = "uv",
+    args: List[str] = None,
+    working_directory: str = None
+) -> MCPClient:
+    """
+    Create an MCPClient configured for the Grasshopper MCP server.
+    
+    This creates a properly configured MCPClient for connecting to the
+    grasshopper_mcp.bridge server using STDIO transport.
+    
+    Args:
+        command: Command to run the MCP server (default: "uv")
+        args: Arguments for the command (default: connects to grasshopper_mcp.bridge)
+        working_directory: Directory to run command from
+        
+    Returns:
+        Configured MCPClient instance (not yet connected)
+    """
+    if args is None:
+        # Default to grasshopper_mcp.bridge server
+        args = [
+            "run",
+            "python", 
+            "-m", 
+            "grasshopper_mcp.bridge"
+        ]
+    
+    # Create STDIO server parameters
+    server_parameters = StdioServerParameters(
+        command=command,
+        args=args,
+        env=os.environ,
+        cwd=working_directory or os.getcwd()
+    )
+    
+    logger.info(f"Creating MCPClient for Grasshopper: {command} {' '.join(args)}")
+    
+    # Return configured MCPClient (caller manages connection)
+    return MCPClient(server_parameters)
 
 
 def get_mcp_tools_stdio(
@@ -18,6 +60,10 @@ def get_mcp_tools_stdio(
 ) -> List[Tool]:
     """
     Get MCP tools from STDIO server for use in smolagents agents.
+    
+    NOTE: This function is deprecated in favor of using MCPClient directly
+    for better connection lifecycle management. Use create_mcp_client_for_grasshopper()
+    and manage the connection properly instead.
     
     This connects to your existing Grasshopper MCP server using STDIO transport,
     the same way Cline Desktop connects to it.

@@ -1,6 +1,8 @@
 # Grasshopper Bridge Testing Instructions
 
-This guide helps you test the Grasshopper MCP Bridge component step by step.
+This guide helps you test the Grasshopper MCP Bridge component with the streamable-http MCP server.
+
+**Current Status**: ✅ **95% Complete** - Authentication and session management working. Final server fix needed for command execution.
 
 ## Setup
 
@@ -12,33 +14,36 @@ This guide helps you test the Grasshopper MCP Bridge component step by step.
 4. **Build the project**: Build → Build Solution (Ctrl+Shift+B)
 5. **Verify installation**: The .gha file should be copied to `%APPDATA%\Grasshopper\Libraries\`
 
-### 2. Start the Test Server
+### 2. Start the MCP Streamable-HTTP Server
 
 ```bash
 # Navigate to project root
 cd /path/to/vizor_agents
 
-# Start the test server
-uv run python src/bridge_design_system/mcp/grasshopper_bridge_test_server.py
+# Start the official MCP streamable-http server
+python -m bridge_design_system.main --start-streamable-http --mcp-port 8001
 ```
 
-The server will start on `http://localhost:8001` and show available test endpoints.
+The server will start on `http://localhost:8001/mcp/` with official MCP protocol support.
 
 ### 3. Setup Grasshopper
 
 1. **Open Rhino** and start **Grasshopper**
-2. **Find the component**: Look for "MCP Bridge" (MCPB) in Params → Util category
+2. **Find the component**: Look for "Simple MCP Bridge" in the component library
 3. **Add to canvas**: Drag the component onto the Grasshopper canvas
 4. **Setup inputs**:
-   - Connect a **Boolean Toggle** to "Connect" (C) input
-   - Optional: Connect **Text Panel** with "http://localhost:8001" to "Server" (S) input
+   - Connect a **Boolean Toggle** to "Connect" input  
+   - Server URL defaults to "http://localhost:8001" (MCP server endpoint)
 
-## Supported Component Types
+## Supported MCP Tools
 
-This simplified bridge supports only 3 component types for testing:
-- **point** (or **pt**) - Point parameter
-- **number** (or **num**) - Number slider
-- **panel** - Text panel
+The bridge supports the full set of MCP tools:
+- **add_component** - Create components (point, line, circle, slider, panel, etc.)
+- **connect_components** - Wire components together
+- **get_all_components** - List all components in document
+- **set_component_value** - Set parameter values
+- **clear_document** - Clear the canvas
+- **save_document** - Save the document
 
 ## Testing Phases
 
@@ -56,25 +61,25 @@ This simplified bridge supports only 3 component types for testing:
 ✅ **Success**: Bridge shows "Connected" and server logs show polling requests  
 ❌ **Failure**: Check firewall, port conflicts, or server URL
 
-### Phase 2: Simple Command Test
+### Phase 2: MCP Tool Integration Test
 
-**Goal**: Test basic component creation
+**Goal**: Test sync MCP tools integration
 
 1. **Ensure bridge is connected** (Phase 1 complete)
-2. **Send test command**:
+2. **Test sync MCP tools**:
    ```bash
    # In another terminal
    cd /path/to/vizor_agents
-   uv run python test_grasshopper_bridge.py
-   # Choose option 1: Add Point Component
+   python test_sync_tools.py
    ```
-3. **Monitor Grasshopper**:
-   - **Commands** output should show received command
-   - **Log** should show execution progress
-   - **Grasshopper canvas** should have a new Point parameter
+3. **Expected behavior**:
+   - Session authentication should work ✅
+   - Commands should be sent to MCP server ✅
+   - Bridge should receive polling commands ✅
+   - **Current Issue**: Server task group error prevents execution
 
-✅ **Success**: Point component appears on Grasshopper canvas  
-❌ **Failure**: Check bridge logs and component creation errors
+✅ **Success**: Commands reach bridge, authentication works  
+🔧 **Current Status**: 95% complete, server fix needed for execution
 
 ### Phase 3: Multiple Components Test
 

@@ -4,19 +4,37 @@ A multi-agent AI system for AR-assisted bridge design in Rhino Grasshopper using
 
 ## Overview
 
-The system implements a **hub-and-spoke multi-agent architecture** with:
+The system implements a **hub-and-spoke multi-agent architecture** with **MCP integration**:
 - **🔵 Triage Agent**: Main orchestrator that interprets human requests and coordinates specialized agents
-- **🟢 Geometry Agent**: Creates and manipulates 3D geometry in Rhino/Grasshopper
+- **🟢 Geometry Agent**: Creates and manipulates 3D geometry in Rhino/Grasshopper via MCP bridge
 - **🔴 Material Agent**: Manages construction material inventory and constraints
 - **🟠 Structural Agent**: Performs structural analysis and validation
 
+### MCP Integration Architecture
+```
+Geometry Agent → Sync MCP Tools → HTTP MCP Server → Simple MCP Bridge → Grasshopper
+```
+
+**Key Innovation**: Custom sync wrapper tools solve async/sync conflicts while preserving bridge architecture for real-time visual monitoring in Grasshopper.
+
 ## Features
 
+### Core System
 - ✨ **Enhanced CLI Interface**: Color-coded agent interactions with real-time status updates
 - 🤖 **Multi-Agent Coordination**: Intelligent task delegation between specialized agents
 - 🎨 **Visual Agent Communication**: Clear visual feedback showing which agents are active
 - ⚙️ **Flexible Model Configuration**: Support for multiple LLM providers (OpenAI, Anthropic, DeepSeek, etc.)
 - 🔧 **Terminal Compatibility**: Works in Git Bash, PowerShell, Windows Terminal, and more
+
+### MCP Integration (Phase 2 - Complete)
+- 🚀 **FastMCP Framework**: Uses [FastMCP v2](https://github.com/jlowin/fastmcp) - the standard framework for MCP with automatic session management
+- 🌉 **Bridge Architecture**: Agent → FastMCP Server → SimpleMCPBridge → Grasshopper
+- 🔄 **Real-time Polling**: C# bridge component polls server and executes commands in real-time  
+- 🔗 **Session Management**: Automatic session handling via FastMCP framework (eliminates timeout issues)
+- ⚡ **Sync Tools**: Custom wrappers solve smolagents async/sync conflicts
+- 📡 **Production Ready**: Streamable HTTP transport with graceful fallback to manual server
+- 🎯 **Complete Tool Set**: Full Grasshopper integration including Python script tools
+- 🔧 **Multiple Transports**: Supports Streamable HTTP, SSE, STDIO, and In-Memory protocols
 
 ## Quick Start
 
@@ -25,6 +43,7 @@ The system implements a **hub-and-spoke multi-agent architecture** with:
 - Python 3.10+
 - UV package manager
 - API keys for LLM providers (OpenAI, Anthropic, DeepSeek, etc.)
+- **For MCP Integration (Phase 2)**: Rhino 8 + Grasshopper (Windows)
 
 ### Installation
 
@@ -56,6 +75,24 @@ python -m bridge_design_system.main
 **System test** - Validate configuration:
 ```bash
 python -m bridge_design_system.main --test
+```
+
+**MCP Integration (Phase 2)** - Start MCP server for Grasshopper:
+```bash
+# Start MCP server
+python -m bridge_design_system.main --start-streamable-http --mcp-port 8001
+
+# In Grasshopper: Add "Simple MCP Bridge" component and connect to True
+# The bridge will poll for commands and execute them in real-time
+```
+
+**Test MCP Integration**:
+```bash
+# Test sync tools (requires MCP server running)
+python test_sync_tools.py
+
+# Debug connection issues
+python debug_session_id.py
 ```
 
 **Basic interactive mode** - Simple fallback:
@@ -137,10 +174,26 @@ See `.env.example` for all configuration options.
 - Configuration system with multi-LLM provider support
 - Comprehensive logging and error handling
 
-🔄 **Next Phases:**
-- **Phase 2**: MCP Integration with Rhino/Grasshopper
-- **Phase 3**: Specialized Agent Tools & Full Functionality
+🎯 **Phase 2: MCP Integration** - **COMPLETED**
+- ✅ **Phase 2.1**: FastMCP server implementation with official MCP protocol
+- ✅ **Phase 2.2**: C# SimpleMCPBridge component for Grasshopper (polling client)
+- ✅ **Phase 2.3**: End-to-end integration with FastMCP framework
+
+**Major Breakthrough Achieved:**
+- ✅ **FastMCP Integration**: Uses the standard MCP framework - eliminates timeout and session issues
+- ✅ **Sync Tools**: Custom wrappers solve async/sync framework conflicts  
+- ✅ **Bridge Architecture**: Preserved visual monitoring in Grasshopper
+- ✅ **Protocol Implementation**: Full MCP streamable HTTP with automatic session management
+- ✅ **Production Ready**: Graceful fallback system (FastMCP → Manual → Legacy)
+
+**Remaining Phases:**
+- **Phase 3**: Specialized Agent Tools & Full Functionality (Next)
 - **Phase 4**: AR Integration & Advanced Features
+
+### Known Issues
+- **Resolved**: `RuntimeError: Task group is not initialized` - Fixed by switching to FastMCP framework
+- **Current Status**: Phase 2 MCP Integration complete with FastMCP 
+- **Next**: Phase 3 specialized agent tools and enhanced functionality
 
 ## License
 

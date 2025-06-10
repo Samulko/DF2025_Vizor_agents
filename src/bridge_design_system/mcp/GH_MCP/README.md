@@ -1,6 +1,8 @@
 # Grasshopper MCP Bridge Component (Simplified)
 
-This simplified C# component acts as a bridge/client that connects Grasshopper to the Python MCP server. Based on the working SimpleMCPBridge template, it polls the MCP server for commands and executes them on the Grasshopper canvas.
+This C# component acts as a bridge/client that connects Grasshopper to the Python MCP streamable-http server. Based on the SimpleMCPBridge implementation, it polls the MCP server for commands and executes them on the Grasshopper canvas.
+
+**Current Status**: ✅ **95% Complete** - Successfully connects, authenticates, and receives commands. One server task group initialization issue remains for full execution.
 
 ## Features
 
@@ -102,14 +104,17 @@ dotnet build --configuration Release
 
 ### From Python (MCP Server)
 
-The bridge connects to the Python MCP server:
+The bridge connects to the Python MCP streamable-http server:
 
 ```python
-# Start the Python MCP server (the bridge connects to this)
-uv run python -m bridge_design_system.main --start-streamable-http
+# Start the MCP streamable-http server (default: http://localhost:8001)
+python -m bridge_design_system.main --start-streamable-http --mcp-port 8001
 
-# Test the geometry agent (which uses the MCP server)
-uv run python test_geometry_agent_safe.py
+# Test the sync MCP tools (requires MCP server running)
+python test_sync_tools.py
+
+# Test with geometry agent using sync wrapper tools
+python -m bridge_design_system.main  # Use geometry agent in interactive mode
 ```
 
 ## API Examples
@@ -143,18 +148,25 @@ curl http://localhost:8080/health
 
 ## Integration with MCP
 
-This component works seamlessly with the Python MCP streamable-http server:
+This component works with the Python MCP streamable-http server implementing the official MCP protocol:
 
-1. **Start Grasshopper** and add the MCP Server component
-2. **Enable the server** by setting Start=True
-3. **Run the Python MCP server**:
+1. **Start the MCP server**:
    ```bash
-   uv run python -m bridge_design_system.main --start-streamable-http
+   python -m bridge_design_system.main --start-streamable-http --mcp-port 8001
    ```
-4. **Test with an agent**:
+2. **Start Grasshopper** and add the SimpleMCPBridge component  
+3. **Connect the bridge** by setting Connect=True
+4. **Test the integration**:
    ```bash
-   uv run python test_geometry_agent_safe.py
+   # Test sync wrapper tools
+   python test_sync_tools.py
+   
+   # Use geometry agent interactively
+   python -m bridge_design_system.main
+   # Then: "Create a point at coordinates 100, 200"
    ```
+
+**Current Status**: Session authentication works, final server task group fix needed for command execution.
 
 ## Implementation Details
 
@@ -192,17 +204,20 @@ All Grasshopper document operations are properly synchronized using `Rhino.Rhino
 
 ## Architecture
 
+**Current Implementation (95% Complete)**:
 ```
-AI Agent → smolagents MCPClient → Python MCP Server → Command Queue
-                                           ↓
-                    Grasshopper Bridge ← HTTP Polling ← Command Queue
-                           ↓
-                  Real Grasshopper API
-                (GH_Document.AddObject,
-                 IGH_Param.AddSource, etc.)
-                           ↓
-                  Grasshopper Canvas
+Geometry Agent → Sync MCP Tools → HTTP MCP Server → SimpleMCPBridge → Grasshopper
+     ↓               ↓                ↓                  ↓              ↓
+ CodeAgent    sync wrappers    streamable-http    HTTP polling    Real Canvas
+ (sync)      (solve async)    (MCP protocol)    (1s interval)   (UI thread)
 ```
+
+**Key Components**:
+- **Sync MCP Tools** (`sync_mcp_tools.py`): Bridge async/sync gap
+- **MCP Server** (`streamable_http_server.py`): Official MCP protocol with SSE
+- **SimpleMCPBridge** (C#): Polls server and executes commands in Grasshopper
+- **Session Management**: 'mcp-session-id' authentication working ✅
+- **Final Issue**: Server task group initialization (5% remaining)
 
 ## Troubleshooting
 

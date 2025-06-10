@@ -193,14 +193,56 @@ def main():
         success = test_system()
         exit(0 if success else 1)
     elif args.start_streamable_http:
-        from .mcp.streamable_http_server import GrasshopperMCPStreamableServer
-        # Create and run server with bridge mode enabled by default
-        server = GrasshopperMCPStreamableServer(
-            grasshopper_url=args.grasshopper_url, 
-            port=args.mcp_port,
-            bridge_mode=True  # Enable bridge mode for Grasshopper component integration
-        )
-        server.run()
+        # Use Clean FastMCP implementation (recommended approach)
+        print("🔍 Checking for FastMCP server availability...")
+        
+        fastmcp_available = False
+        try:
+            # Test FastMCP imports before attempting to use
+            from mcp.server.fastmcp import FastMCP
+            print("✅ FastMCP framework available")
+            fastmcp_available = True
+        except ImportError as e:
+            print(f"⚠️ FastMCP framework not available: {e}")
+        
+        if fastmcp_available:
+            try:
+                from .mcp.fastmcp_server_clean import run_clean_fastmcp_server
+                
+                print("🚀 Starting Clean FastMCP server (pure FastMCP architecture)")
+                print("🎯 Architecture: FastMCP with @custom_route decorators for bridge endpoints")
+                print("✅ Note: Using FastMCP @custom_route for bridge compatibility")
+                
+                # Use the clean FastMCP approach - let FastMCP own everything
+                run_clean_fastmcp_server(
+                    grasshopper_url=args.grasshopper_url,
+                    host="127.0.0.1",
+                    port=args.mcp_port
+                )
+                
+            except Exception as e:
+                print(f"❌ Clean FastMCP server not suitable for HTTP: {e}")
+                print(f"🔄 Using Manual MCP server for reliable HTTP support...")
+                fastmcp_available = False
+        
+        if not fastmcp_available:
+            # Use manual server as fallback
+            try:
+                from .mcp.manual_mcp_server import ManualMCPServer
+                
+                # Fallback to manual server
+                server = ManualMCPServer(
+                    grasshopper_url=args.grasshopper_url, 
+                    port=args.mcp_port,
+                    bridge_mode=True
+                )
+                print(f"🔄 Starting Manual MCP server on port {args.mcp_port} (fallback mode)")
+                server.run()
+                
+            except Exception as e:
+                print(f"❌ Manual MCP server also failed: {e}")
+                print("💡 Try installing FastMCP: pip install fastmcp")
+                exit(1)
     elif args.start_official_mcp:
         from .cli.official_mcp_server import start_official_mcp_server
         import sys

@@ -307,6 +307,104 @@ bridge-design-system/
 - Explains bridge architecture, session management, and authentication mechanisms
 - Provides reference implementations for different programming environments
 
-## Memories
+## Memories: Tools for MCP and Smolagents
 
-- Do not build the environment yourself, rather give me instructions how to do it. I will then give you informations if there were any issues
+### Smolagents Tools Overview
+Smolagents provides a robust framework for creating and managing AI tools with key features:
+
+1. **Tool Creation**
+```python
+@tool
+def web_search(query: str, max_results: int = 10) -> List[str]:
+    """Search the web and return top results."""
+    # Implementation
+```
+
+2. **Tool Loading from Hub**
+```python
+# Load a tool directly from Hugging Face Hub
+image_generator = Tool.from_space(
+    space_id="stability-ai/stable-diffusion",
+    name="image-generator",
+    description="Generate images from text prompts"
+)
+```
+
+3. **MCP Tool Collection**
+```python
+# Load tools from an MCP server
+tool_collection = ToolCollection.from_mcp({
+    "url": "http://localhost:8001/mcp", 
+    "transport": "streamable-http"
+}, trust_remote_code=True)
+```
+
+4. **Tool Collection Management**
+```python
+# Combine tools from multiple sources
+all_tools = [
+    *weather_tool_collection.tools, 
+    *pubmed_tool_collection.tools
+]
+```
+
+### MCP Tool Integration Patterns
+
+1. **Stdio MCP Server**
+```python
+server_parameters = StdioServerParameters(
+    command="uv",
+    args=["--quiet", "pubmedmcp@0.1.3"],
+    env={"UV_PYTHON": "3.12", **os.environ},
+)
+
+with ToolCollection.from_mcp(server_parameters, trust_remote_code=True) as tool_collection:
+    agent = CodeAgent(tools=[*tool_collection.tools])
+```
+
+2. **HTTP Streamable MCP**
+```python
+tool_collection = ToolCollection.from_mcp({
+    "url": "http://localhost:8000/mcp", 
+    "transport": "streamable-http"
+}, trust_remote_code=True)
+```
+
+### Best Practices
+- Always use `trust_remote_code=False` by default
+- Inspect tools before loading from external sources
+- Use tool collections for modular tool management
+- Leverage built-in MCP transport methods
+
+## Tools Memory for Smolagents and MCP
+
+**Key Tools Categories:**
+1. **Web Interaction**
+   - WebSearchTool
+   - VisitWebpageTool
+   - DuckDuckGoSearchTool
+   - GoogleSearchTool
+
+2. **Code & Computation**
+   - PythonInterpreterTool
+   - MathTool
+   - CodeExecutionTool
+
+3. **Text Processing**
+   - TextClassificationTool
+   - TranslationTool
+   - SummarizationTool
+
+4. **Multimedia**
+   - SpeechToTextTool
+   - ImageGenerationTool
+   - ImageClassificationTool
+
+5. **Specialized Domain Tools**
+   - MedicalResearchTool (PubMed)
+   - WeatherForecastTool
+   - FinancialDataTool
+
+### Adding New Memories
+
+Do not build the environment yourself, rather give me instructions how to do it. I will then give you informations if there were any issues.

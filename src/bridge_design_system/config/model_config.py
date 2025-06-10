@@ -2,7 +2,7 @@
 import logging
 from typing import Any, Optional
 
-from smolagents import InferenceClientModel, LiteLLMModel
+from smolagents import InferenceClientModel, LiteLLMModel, OpenAIServerModel
 
 from ..config.settings import settings
 
@@ -54,11 +54,11 @@ class ModelProvider:
             )
         
         elif provider == "deepseek":
-            # DeepSeek uses OpenAI-compatible API
-            return LiteLLMModel(
-                model_id=f"deepseek/{model_name}",
-                api_key=api_key,
-                base_url="https://api.deepseek.com/v1"
+            # DeepSeek uses OpenAI-compatible API via OpenAIServerModel (recommended by smolagents docs)
+            return OpenAIServerModel(
+                model_id=model_name,  # Just "deepseek-chat", not "deepseek/deepseek-chat"
+                api_base="https://api.deepseek.com/v1",
+                api_key=api_key
             )
         
         elif provider == "together":

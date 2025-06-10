@@ -1,10 +1,8 @@
-"""Official MCP Streamable HTTP Server for Grasshopper integration.
+"""Fixed MCP Streamable HTTP Server using the official pattern.
 
-This implements the official MCP streamable-http transport protocol
-for seamless integration with smolagents framework.
-
-Also includes polling endpoints for Grasshopper bridge component.
+This implementation follows the official MCP documentation and examples exactly.
 """
+import asyncio
 import contextlib
 import logging
 import json
@@ -30,11 +28,11 @@ from .grasshopper_mcp.utils.communication import GrasshopperHttpClient
 logger = logging.getLogger(__name__)
 
 
-class GrasshopperMCPStreamableServer:
-    """Official MCP streamable-http server for Grasshopper integration."""
+class FixedGrasshopperMCPServer:
+    """Fixed MCP server implementation following official patterns."""
     
     def __init__(self, grasshopper_url: str = "http://localhost:8080", port: int = 8001, bridge_mode: bool = True):
-        """Initialize the streamable MCP server.
+        """Initialize the MCP server.
         
         Args:
             grasshopper_url: URL of the Grasshopper HTTP server (for direct mode)
@@ -52,26 +50,21 @@ class GrasshopperMCPStreamableServer:
         self.command_history: List[Dict] = []
         
         # Create MCP server instance
-        self.app = Server("grasshopper-mcp-streamable")
+        self.mcp_server = Server("grasshopper-mcp-fixed")
         
         # Register handlers
         self._register_handlers()
         
-        # Create session manager with polling endpoints
-        # Note: Using default event store to avoid task group issues
+        # Create session manager following official pattern
         self.session_manager = StreamableHTTPSessionManager(
-            app=self.app,
-            # event_store=None,  # Default store to ensure proper initialization
+            app=self.mcp_server,
             json_response=False  # Use streamable HTTP, not JSON
         )
-        
-        # Add polling endpoints to the session manager's app
-        self._add_polling_endpoints()
     
     def _register_handlers(self):
         """Register MCP tool handlers."""
         
-        @self.app.call_tool()
+        @self.mcp_server.call_tool()
         async def call_tool(
             name: str, arguments: dict
         ) -> List[types.TextContent | types.ImageContent | types.EmbeddedResource]:
@@ -136,7 +129,7 @@ class GrasshopperMCPStreamableServer:
                 )
                 return [content]
         
-        @self.app.list_tools()
+        @self.mcp_server.list_tools()
         async def list_tools() -> List[types.Tool]:
             """List available tools."""
             return [
@@ -336,11 +329,6 @@ class GrasshopperMCPStreamableServer:
             logger.error(f"Failed to save document: {e}")
             return {"success": False, "error": str(e)}
     
-    def _add_polling_endpoints(self):
-        """Add polling endpoints for bridge integration."""
-        # This will be implemented in create_app method
-        pass
-    
     def _queue_command_for_bridge(self, command_type: str, parameters: Dict[str, Any]) -> str:
         """Queue a command for the bridge to execute."""
         command_id = str(uuid.uuid4())
@@ -381,24 +369,7 @@ class GrasshopperMCPStreamableServer:
             logger.error(f"Bridge mode tool execution failed: {e}")
             return {"success": False, "error": str(e)}
     
-    # ASGI handler for streamable HTTP connections
-    async def handle_streamable_http(
-        self, scope: Scope, receive: Receive, send: Send
-    ) -> None:
-        """Handle incoming streamable HTTP requests."""
-        await self.session_manager.handle_request(scope, receive, send)
-    
-    @contextlib.asynccontextmanager
-    async def lifespan(self, app: Starlette) -> AsyncIterator[None]:
-        """Context manager for managing session manager lifecycle."""
-        async with self.session_manager.run():
-            logger.info(f"Grasshopper MCP Streamable HTTP server started on port {self.port}")
-            logger.info(f"Connected to Grasshopper at: {self.grasshopper_url}")
-            try:
-                yield
-            finally:
-                logger.info("Grasshopper MCP server shutting down...")
-    
+    # Bridge polling endpoints
     async def get_pending_commands(self, request: Request) -> JSONResponse:
         """Get pending commands for bridge to execute."""
         commands = self.pending_commands.copy()
@@ -447,30 +418,26 @@ class GrasshopperMCPStreamableServer:
             "command_history": self.command_history[-10:],  # Last 10
             "server_time": datetime.utcnow().isoformat()
         })
-
-    def create_app(self) -> Starlette:
-        """Create the ASGI application."""
-        
-        # Custom ASGI app that properly handles the session manager context
-        async def mcp_handler(scope, receive, send):
-            """Custom MCP handler that ensures session manager context."""
+    
+    @contextlib.asynccontextmanager
+    async def lifespan(self, app: Starlette) -> AsyncIterator[None]:
+        """Context manager for managing session manager lifecycle."""
+        async with self.session_manager.run():
+            logger.info(f"Fixed Grasshopper MCP Streamable HTTP server started on port {self.port}")
+            logger.info(f"Connected to Grasshopper at: {self.grasshopper_url}")
+            logger.info("MCP session manager is properly initialized!")
             try:
-                await self.session_manager.handle_request(scope, receive, send)
-            except RuntimeError as e:
-                if "Task group is not initialized" in str(e):
-                    # Fallback error response
-                    if scope["type"] == "http":
-                        await send({
-                            "type": "http.response.start",
-                            "status": 500,
-                            "headers": [[b"content-type", b"text/plain"]],
-                        })
-                        await send({
-                            "type": "http.response.body",
-                            "body": b"MCP session manager not properly initialized",
-                        })
-                else:
-                    raise
+                yield
+            finally:
+                logger.info("Fixed Grasshopper MCP server shutting down...")
+    
+    def create_app(self) -> Starlette:
+        """Create the ASGI application following official pattern."""
+        
+        # MCP handler that uses session manager properly
+        async def mcp_handler(scope: Scope, receive: Receive, send: Send) -> None:
+            """Handle MCP requests through session manager."""
+            await self.session_manager.handle_request(scope, receive, send)
         
         return Starlette(
             debug=True,
@@ -481,7 +448,7 @@ class GrasshopperMCPStreamableServer:
                 Route("/grasshopper/command_result", self.receive_command_result, methods=["POST"]),
                 Route("/grasshopper/status", self.get_bridge_status, methods=["GET"]),
             ],
-            lifespan=self.lifespan,
+            lifespan=self.lifespan,  # This ensures session_manager.run() is active
         )
     
     def run(self) -> None:
@@ -489,7 +456,7 @@ class GrasshopperMCPStreamableServer:
         import uvicorn
         
         app = self.create_app()
-        logger.info(f"Starting Grasshopper MCP Streamable HTTP server on port {self.port}")
+        logger.info(f"Starting Fixed Grasshopper MCP Streamable HTTP server on port {self.port}")
         uvicorn.run(app, host="127.0.0.1", port=self.port)
 
 
@@ -506,7 +473,7 @@ class GrasshopperMCPStreamableServer:
     help="Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)",
 )
 def main(port: int, grasshopper_url: str, log_level: str) -> int:
-    """Start the Grasshopper MCP Streamable HTTP server."""
+    """Start the Fixed Grasshopper MCP Streamable HTTP server."""
     # Configure logging
     logging.basicConfig(
         level=getattr(logging, log_level.upper()),
@@ -514,7 +481,7 @@ def main(port: int, grasshopper_url: str, log_level: str) -> int:
     )
     
     # Create and run server
-    server = GrasshopperMCPStreamableServer(grasshopper_url, port)
+    server = FixedGrasshopperMCPServer(grasshopper_url, port)
     server.run()
     
     return 0
