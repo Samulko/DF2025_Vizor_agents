@@ -44,16 +44,14 @@ class GeometryAgentMCPAdapt:
             "itertools", "functools", "operator", "statistics"
         ]
         
-        # Configure MCP server parameters
-        self.server_params = StdioServerParameters(
-            command="uv",
-            args=["run", "python", "-m", "grasshopper_mcp.bridge"],
-            env=None  # Use current environment
-        )
+        # Configure MCP server parameters based on transport mode
+        self.server_params = settings.get_mcp_server_params()
+        self.transport_mode = settings.mcp_transport_mode.lower()
+        self.fallback_params = settings.get_mcp_connection_fallback_params()
         
         # Get model configuration
         self.model = ModelProvider.get_model(model_name)
-        logger.info(f"Initialized {model_name} agent with MCPAdapt support")
+        logger.info(f"Initialized {model_name} agent with MCPAdapt support (transport: {self.transport_mode})")
     
     def run(self, task: str) -> Any:
         """Execute the geometry task using MCPAdapt.
@@ -64,7 +62,7 @@ class GeometryAgentMCPAdapt:
         Returns:
             Result from the agent execution
         """
-        logger.info(f"🎯 Executing task with MCPAdapt: {task[:100]}...")
+        logger.info(f"🎯 Executing task with MCPAdapt ({self.transport_mode}): {task[:100]}...")
         
         # Try MCPAdapt integration first
         try:
@@ -73,7 +71,7 @@ class GeometryAgentMCPAdapt:
                 self.server_params,
                 SmolAgentsAdapter(),
             ) as mcp_tools:
-                logger.info(f"Connected to MCP via MCPAdapt with {len(mcp_tools)} tools")
+                logger.info(f"Connected to MCP via MCPAdapt ({self.transport_mode}) with {len(mcp_tools)} tools")
                 
                 # Combine MCP tools with custom tools
                 all_tools = list(mcp_tools) + self.custom_tools
@@ -97,14 +95,59 @@ class GeometryAgentMCPAdapt:
             
             # Check error type for better diagnostics
             error_str = str(e).lower()
-            if any(keyword in error_str for keyword in ["connection", "timeout", "mcp", "server", "stdio"]):
-                logger.warning("MCP connection error detected, falling back to basic tools")
+            if any(keyword in error_str for keyword in ["connection", "timeout", "mcp", "server", "stdio", "http"]):
+                logger.warning(f"MCP {self.transport_mode} connection error detected: {e}")
+                
+                # Try fallback transport if using HTTP
+                if self.transport_mode == "http":
+                    return self._try_fallback_transport(task)
+                else:
+                    return self._run_with_fallback(task)
             elif "event loop" in error_str:
                 logger.warning("Event loop error detected, falling back to basic tools")
+                return self._run_with_fallback(task)
             else:
                 logger.warning(f"General error in MCPAdapt execution: {e}")
+                return self._run_with_fallback(task)
+    
+    def _try_fallback_transport(self, task: str) -> Any:
+        """Try STDIO transport when HTTP fails.
+        
+        Args:
+            task: The task description for the agent to execute
             
-            # Fall back to basic tools
+        Returns:
+            Result from fallback transport or basic fallback tools
+        """
+        logger.warning("🔄 HTTP transport failed, trying STDIO fallback...")
+        
+        try:
+            # Use STDIO fallback parameters
+            with MCPAdapt(
+                self.fallback_params,
+                SmolAgentsAdapter(),
+            ) as mcp_tools:
+                logger.info(f"Connected to MCP via STDIO fallback with {len(mcp_tools)} tools")
+                
+                # Combine MCP tools with custom tools
+                all_tools = list(mcp_tools) + self.custom_tools
+                
+                # Create agent with all tools
+                agent = CodeAgent(
+                    tools=all_tools,
+                    model=self.model,
+                    add_base_tools=True,
+                    max_steps=self.max_steps,
+                    additional_authorized_imports=self.SAFE_IMPORTS
+                )
+                
+                # Execute task
+                result = agent.run(task)
+                logger.info("✅ Task completed successfully with STDIO fallback")
+                return result
+                
+        except Exception as e:
+            logger.error(f"❌ STDIO fallback also failed: {e}")
             return self._run_with_fallback(task)
     
     def _run_with_fallback(self, task: str) -> Any:
@@ -257,24 +300,44 @@ Please inform the user that full Grasshopper functionality requires MCP connecti
                 tool_names = [getattr(tool, 'name', str(tool)) for tool in mcp_tools]
                 return {
                     "connected": True,
+                    "transport": self.transport_mode,
                     "mcp_tools": len(mcp_tools),
                     "total_tools": len(mcp_tools) + len(self.custom_tools),
                     "mode": "mcpadapt",
                     "mcp_tool_names": tool_names[:10],  # First 10 for brevity
                     "custom_tools": len(self.custom_tools),
-                    "message": f"MCPAdapt connection active with {len(mcp_tools)} tools"
+                    "message": f"MCPAdapt {self.transport_mode} connection active with {len(mcp_tools)} tools"
                 }
         except Exception as e:
+            # Try fallback transport if using HTTP
+            if self.transport_mode == "http":
+                try:
+                    with MCPAdapt(self.fallback_params, SmolAgentsAdapter()) as mcp_tools:
+                        tool_names = [getattr(tool, 'name', str(tool)) for tool in mcp_tools]
+                        return {
+                            "connected": True,
+                            "transport": "stdio_fallback",
+                            "mcp_tools": len(mcp_tools),
+                            "total_tools": len(mcp_tools) + len(self.custom_tools),
+                            "mode": "mcpadapt_fallback",
+                            "mcp_tool_names": tool_names[:10],
+                            "custom_tools": len(self.custom_tools),
+                            "message": f"MCPAdapt STDIO fallback active with {len(mcp_tools)} tools (HTTP failed: {e})"
+                        }
+                except Exception as e2:
+                    logger.error(f"Both HTTP and STDIO transports failed: HTTP={e}, STDIO={e2}")
+            
             fallback_tools = self._create_fallback_tools()
             return {
                 "connected": False,
+                "transport": "none",
                 "mcp_tools": 0,
                 "total_tools": len(self.custom_tools) + len(fallback_tools),
                 "mode": "fallback",
                 "error": str(e),
                 "fallback_tools": len(fallback_tools),
                 "custom_tools": len(self.custom_tools),
-                "message": "MCPAdapt connection unavailable, using fallback tools"
+                "message": f"MCPAdapt {self.transport_mode} connection unavailable, using fallback tools"
             }
 
 
