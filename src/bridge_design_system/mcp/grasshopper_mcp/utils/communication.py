@@ -1,220 +1,115 @@
-"""HTTP communication utilities for Grasshopper MCP.
-
-This module replaces TCP socket communication with HTTP requests.
 """
-import asyncio
-import logging
-from typing import Any, Dict, List, Optional
+Communication utilities for Grasshopper MCP.
 
-import httpx
-from httpx import AsyncClient, HTTPStatusError, RequestError
+This module contains functions for communicating with the Grasshopper MCP server.
+"""
 
-logger = logging.getLogger(__name__)
+import socket
+import json
+import sys
+import traceback
+from typing import Dict, Any, Optional
 
+# Grasshopper MCP connection parameters
+import platform
+import subprocess
 
-class GrasshopperHttpClient:
-    """HTTP client for communicating with Grasshopper."""
-    
-    def __init__(self, base_url: str = "http://localhost:8080", timeout: float = 30.0):
-        """Initialize the HTTP client.
-        
-        Args:
-            base_url: Base URL of the Grasshopper HTTP server
-            timeout: Request timeout in seconds
-        """
-        self.base_url = base_url.rstrip("/")
-        self.timeout = timeout
-        self.client: Optional[AsyncClient] = None
-        
-    async def __aenter__(self):
-        """Async context manager entry."""
-        self.client = AsyncClient(
-            base_url=self.base_url,
-            timeout=self.timeout,
-            headers={"Content-Type": "application/json"}
-        )
-        return self
-        
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Async context manager exit."""
-        if self.client:
-            await self.client.aclose()
-    
-    def _get_client(self) -> AsyncClient:
-        """Get or create HTTP client."""
-        if self.client is None:
-            self.client = AsyncClient(
-                base_url=self.base_url,
-                timeout=self.timeout,
-                headers={"Content-Type": "application/json"}
-            )
-        return self.client
-    
-    async def send_command(self, command_type: str, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Send a command to Grasshopper via HTTP.
-        
-        Args:
-            command_type: Type of command to execute
-            params: Command parameters
-            
-        Returns:
-            Response from Grasshopper
-            
-        Raises:
-            HTTPError: If the request fails
-            ConnectionError: If cannot connect to Grasshopper
-        """
-        client = self._get_client()
-        
+def get_windows_host():
+    """Get Windows host IP from WSL."""
+    if 'microsoft' in platform.uname().release.lower():
+        # Running in WSL
         try:
-            logger.debug(f"Sending HTTP command: {command_type} with params: {params}")
+            # Method 1: Try default route (more reliable for WSL2)
+            result = subprocess.run(['ip', 'route', 'show'], 
+                                  capture_output=True, text=True)
+            if result.returncode == 0:
+                for line in result.stdout.split('\n'):
+                    if 'default' in line:
+                        # Extract IP address from: default via 172.28.192.1 dev eth0
+                        parts = line.split()
+                        if len(parts) >= 3 and parts[1] == 'via':
+                            windows_ip = parts[2]
+                            print(f"WSL detected Windows host via default route: {windows_ip}", file=sys.stderr)
+                            return windows_ip
             
-            # Prepare the request payload
-            payload = {
-                "type": command_type,
-                "parameters": params
-            }
-            
-            # Send POST request to Grasshopper
-            response = await client.post(
-                f"/grasshopper/{command_type}",
-                json=payload
-            )
-            
-            # Check for HTTP errors
-            response.raise_for_status()
-            
-            # Parse JSON response
-            result = response.json()
-            logger.debug(f"Received response: {result}")
-            
-            return result
-            
-        except HTTPStatusError as e:
-            logger.error(f"HTTP error for command {command_type}: {e.response.status_code} - {e.response.text}")
-            raise ConnectionError(f"Grasshopper HTTP error: {e.response.status_code}")
-            
-        except RequestError as e:
-            logger.error(f"Request error for command {command_type}: {str(e)}")
-            raise ConnectionError(f"Cannot connect to Grasshopper: {str(e)}")
-            
+            # Method 2: Fallback to /etc/resolv.conf
+            result = subprocess.run(['grep', 'nameserver', '/etc/resolv.conf'], 
+                                  capture_output=True, text=True)
+            if result.returncode == 0:
+                windows_ip = result.stdout.strip().split()[1]
+                print(f"WSL detected Windows host via resolv.conf: {windows_ip}", file=sys.stderr)
+                return windows_ip
         except Exception as e:
-            logger.error(f"Unexpected error for command {command_type}: {str(e)}")
-            raise
-    
-    async def check_connection(self) -> bool:
-        """Check if Grasshopper is reachable.
-        
-        Returns:
-            True if connected, False otherwise
-        """
-        client = self._get_client()
-        
-        try:
-            response = await client.get("/health", timeout=5.0)
-            return response.status_code == 200
-        except Exception as e:
-            logger.warning(f"Grasshopper connection check failed: {str(e)}")
-            return False
-    
-    async def get_available_tools(self) -> List[Dict[str, Any]]:
-        """Get list of available tools from Grasshopper.
-        
-        Returns:
-            List of available tools with their descriptions
-        """
-        try:
-            result = await self.send_command("get_available_tools", {})
-            return result.get("tools", [])
-        except Exception as e:
-            logger.error(f"Failed to get available tools: {str(e)}")
-            return []
-    
-    async def get_status(self) -> Dict[str, Any]:
-        """Get comprehensive status from Grasshopper.
-        
-        Returns:
-            Status information including components and connections
-        """
-        try:
-            result = await self.send_command("get_document_info", {})
-            return {
-                "status": "connected",
-                "components": result.get("result", {}).get("components", []),
-                "connections": result.get("result", {}).get("connections", []),
-                "document_info": result.get("result", {})
-            }
-        except Exception as e:
-            logger.error(f"Failed to get status: {str(e)}")
-            return {
-                "status": "disconnected",
-                "error": str(e),
-                "components": [],
-                "connections": []
-            }
-    
-    # Core Grasshopper operations
-    async def add_component(self, component_type: str, x: float, y: float, **kwargs) -> Dict[str, Any]:
-        """Add a component to Grasshopper canvas."""
-        params = {
-            "component_type": component_type,
-            "x": x,
-            "y": y,
-            **kwargs
-        }
-        return await self.send_command("add_component", params)
-    
-    async def connect_components(
-        self, 
-        source_id: str, 
-        target_id: str,
-        source_param: Optional[str] = None,
-        target_param: Optional[str] = None
-    ) -> Dict[str, Any]:
-        """Connect two components in Grasshopper."""
-        params = {
-            "source_id": source_id,
-            "target_id": target_id
-        }
-        if source_param:
-            params["source_param"] = source_param
-        if target_param:
-            params["target_param"] = target_param
-            
-        return await self.send_command("connect_components", params)
-    
-    async def get_all_components(self) -> Dict[str, Any]:
-        """Get all components in the Grasshopper document."""
-        return await self.send_command("get_all_components", {})
-    
-    async def get_component_info(self, component_id: str) -> Dict[str, Any]:
-        """Get information about a specific component."""
-        return await self.send_command("get_component_info", {"component_id": component_id})
-    
-    async def clear_document(self) -> Dict[str, Any]:
-        """Clear the Grasshopper document."""
-        return await self.send_command("clear_grasshopper_document", {})
-    
-    async def close(self):
-        """Close the HTTP client."""
-        if self.client:
-            await self.client.aclose()
-            self.client = None
+            print(f"Error detecting Windows host: {e}", file=sys.stderr)
+    return "localhost"
+
+GRASSHOPPER_HOST = get_windows_host()
+GRASSHOPPER_PORT = 8081  # TCP bridge port (GH_MCPComponent listens on 8081)
+
+# Log the connection target
+print(f"Grasshopper TCP bridge target: {GRASSHOPPER_HOST}:{GRASSHOPPER_PORT}", file=sys.stderr)
 
 
-# Backward compatibility function (replaces the old TCP send_to_grasshopper)
-async def send_to_grasshopper_http(command_type: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """Send command to Grasshopper via HTTP (backward compatibility).
-    
+def send_to_grasshopper(command_type: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """
+    Send a command to the Grasshopper MCP server.
+
     Args:
-        command_type: Command type to execute
-        params: Optional parameters
-        
+        command_type: The type of command to send
+        params: Optional parameters for the command
+
     Returns:
-        Response from Grasshopper
+        Dict[str, Any]: The response from the Grasshopper MCP server
     """
     if params is None:
         params = {}
-    
-    async with GrasshopperHttpClient() as client:
-        return await client.send_command(command_type, params)
+
+    # Create command
+    command = {
+        "type": command_type,
+        "parameters": params
+    }
+
+    try:
+        print(f"Sending command to Grasshopper: {command_type} with params: {params}", file=sys.stderr)
+        
+        # Log script parameter specifically for debugging
+        if "script" in params:
+            print(f"Script parameter found! Length: {len(params['script'])}", file=sys.stderr)
+            print(f"Script preview: {params['script'][:100]}...", file=sys.stderr)
+
+        # Connect to Grasshopper MCP
+        client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        client.connect((GRASSHOPPER_HOST, GRASSHOPPER_PORT))
+
+        # Send command
+        command_json = json.dumps(command)
+        client.sendall((command_json + "\n").encode("utf-8"))
+        print(f"Command sent: {command_json}", file=sys.stderr)
+        print(f"Command JSON length: {len(command_json)}", file=sys.stderr)
+
+        # Receive response
+        response_data = b""
+        while True:
+            chunk = client.recv(4096)
+            if not chunk:
+                break
+            response_data += chunk
+            if response_data.endswith(b"\n"):
+                break
+
+        # Handle potential BOM
+        response_str = response_data.decode("utf-8-sig").strip()
+        print(f"Response received: {response_str}", file=sys.stderr)
+
+        # Parse JSON response
+        response = json.loads(response_str)
+        client.close()
+        return response
+    except Exception as e:
+        print(f"Error communicating with Grasshopper: {str(e)}", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
+        return {
+            "success": False,
+            "error": f"Error communicating with Grasshopper: {str(e)}"
+        }

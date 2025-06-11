@@ -76,7 +76,7 @@ python test_simple_working_solution.py
 python test_tcp_bridge_connection.py
 
 # Deploy TCP bridge to Grasshopper (one-time setup)
-cd reference/GH_MCP/GH_MCP/ && dotnet build --configuration Release
+cd src/bridge_design_system/mcp/GH_MCP/GH_MCP/ && dotnet build --configuration Release
 
 # Run comprehensive tests
 pytest tests/

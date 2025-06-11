@@ -52,7 +52,7 @@ dev-dependencies = [
 ]
 
 [tool.uv.sources]
-grasshopper-mcp = { path = "reference", editable = true }
+grasshopper-mcp = { path = "src/bridge_design_system/mcp", editable = true }
 
 [tool.black]
 line-length = 100

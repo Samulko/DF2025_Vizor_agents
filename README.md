@@ -51,8 +51,10 @@ cp .env.example .env
 
 **3. Deploy Grasshopper Component**
 ```powershell
-# In Windows PowerShell
-copy "reference\GH_MCP\GH_MCP\bin\Release\net48\GH_MCP.gha" "%APPDATA%\Grasshopper\Libraries\"
+# In Windows PowerShell - Build and deploy the component
+cd src\bridge_design_system\mcp\GH_MCP\GH_MCP\
+dotnet build --configuration Release
+copy "bin\Release\net48\GH_MCP.gha" "%APPDATA%\Grasshopper\Libraries\"
 ```
 
 **4. Setup Grasshopper**

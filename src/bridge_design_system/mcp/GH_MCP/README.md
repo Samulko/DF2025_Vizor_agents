@@ -1,6 +1,6 @@
 # Grasshopper MCP Bridge Component (Simplified)
 
-This C# component acts as a bridge/client that connects Grasshopper to the Python MCP streamable-http server. Based on the SimpleMCPBridge implementation, it polls the MCP server for commands and executes them on the Grasshopper canvas.
+This C# component acts as a TCP bridge that connects Grasshopper to the Python MCP STDIO server. Based on the proven TCP bridge architecture from Claude Desktop integration, it listens for commands on TCP port 8081 and executes them on the Grasshopper canvas.
 
 **Current Status**: ✅ **95% Complete** - Successfully connects, authenticates, and receives commands. One server task group initialization issue remains for full execution.
 
@@ -122,7 +122,7 @@ python -m bridge_design_system.main  # Use geometry agent in interactive mode
 ### Add a Point Component
 
 ```bash
-curl -X POST http://localhost:8080/grasshopper/add_component \
+curl -X POST http://localhost:8081/grasshopper/add_component \
   -H "Content-Type: application/json" \
   -d '{
     "type": "add_component",
@@ -137,13 +137,13 @@ curl -X POST http://localhost:8080/grasshopper/add_component \
 ### Get All Components
 
 ```bash
-curl http://localhost:8080/grasshopper/get_all_components
+curl http://localhost:8081/grasshopper/get_all_components
 ```
 
 ### Health Check
 
 ```bash
-curl http://localhost:8080/health
+curl http://localhost:8081/health
 ```
 
 ## Integration with MCP
@@ -154,7 +154,7 @@ This component works with the Python MCP streamable-http server implementing the
    ```bash
    python -m bridge_design_system.main --start-streamable-http --mcp-port 8001
    ```
-2. **Start Grasshopper** and add the SimpleMCPBridge component  
+2. **Start Grasshopper** and add the Grasshopper MCP component  
 3. **Connect the bridge** by setting Connect=True
 4. **Test the integration**:
    ```bash
@@ -206,7 +206,7 @@ All Grasshopper document operations are properly synchronized using `Rhino.Rhino
 
 **Current Implementation (95% Complete)**:
 ```
-Geometry Agent → Sync MCP Tools → HTTP MCP Server → SimpleMCPBridge → Grasshopper
+Geometry Agent → STDIO MCP Server → TCP Client → GH_MCPComponent → Grasshopper
      ↓               ↓                ↓                  ↓              ↓
  CodeAgent    sync wrappers    streamable-http    HTTP polling    Real Canvas
  (sync)      (solve async)    (MCP protocol)    (1s interval)   (UI thread)
@@ -215,7 +215,7 @@ Geometry Agent → Sync MCP Tools → HTTP MCP Server → SimpleMCPBridge → Gr
 **Key Components**:
 - **Sync MCP Tools** (`sync_mcp_tools.py`): Bridge async/sync gap
 - **MCP Server** (`streamable_http_server.py`): Official MCP protocol with SSE
-- **SimpleMCPBridge** (C#): Polls server and executes commands in Grasshopper
+- **GH_MCPComponent** (C#): TCP server that listens and executes commands in Grasshopper
 - **Session Management**: 'mcp-session-id' authentication working ✅
 - **Final Issue**: Server task group initialization (5% remaining)
 

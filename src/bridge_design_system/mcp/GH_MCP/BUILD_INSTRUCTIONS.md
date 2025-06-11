@@ -90,7 +90,7 @@ This simplified MCP Bridge component:
 - Only 3 component types for testing: Point, Number, Panel
 - Simple clear document command
 - Minimal dependencies to avoid build issues
-- Based on the working SimpleMCPBridge template
+- Based on proven TCP bridge architecture from Claude Desktop integration
 
 ## Troubleshooting
 

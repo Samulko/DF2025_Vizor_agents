@@ -22,7 +22,7 @@ namespace GrasshopperMCP
     {
         private static TcpListener listener;
         private static bool isRunning = false;
-        private static int grasshopperPort = 8080;
+        private static int grasshopperPort = 8081;
         private static string grasshopperAddress = "0.0.0.0";
         
         /// <summary>
