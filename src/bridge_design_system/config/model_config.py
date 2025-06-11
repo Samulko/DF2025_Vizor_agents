@@ -54,10 +54,18 @@ class ModelProvider:
             )
         
         elif provider == "deepseek":
-            # DeepSeek uses OpenAI-compatible API via OpenAIServerModel (recommended by smolagents docs)
+            # DeepSeek uses OpenAI-compatible API via OpenAIServerModel
             return OpenAIServerModel(
-                model_id=model_name,  # Just "deepseek-chat", not "deepseek/deepseek-chat"
+                model_id=model_name,
                 api_base="https://api.deepseek.com/v1",
+                api_key=api_key
+            )
+        
+        elif provider == "gemini":
+            # Google Gemini via OpenAI-compatible API
+            return OpenAIServerModel(
+                model_id=model_name,
+                api_base="https://generativelanguage.googleapis.com/v1beta/openai/",
                 api_key=api_key
             )
         
@@ -78,7 +86,7 @@ class ModelProvider:
         else:
             raise ValueError(
                 f"Unknown provider: {provider}. "
-                f"Supported providers: openai, anthropic, deepseek, together, hf"
+                f"Supported providers: openai, anthropic, deepseek, gemini, together, hf"
             )
     
     @staticmethod

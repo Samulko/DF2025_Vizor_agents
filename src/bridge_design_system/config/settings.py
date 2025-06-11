@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     anthropic_api_key: Optional[str] = None
     deepseek_api_key: Optional[str] = None
     together_api_key: Optional[str] = None
+    gemini_api_key: Optional[str] = None
     hf_token: Optional[str] = None
     
     # Agent Model Configuration
@@ -53,7 +54,7 @@ class Settings(BaseSettings):
         """Get API key for a specific provider.
         
         Args:
-            provider: Provider name (openai, anthropic, deepseek, together, hf)
+            provider: Provider name (openai, anthropic, deepseek, together, gemini, hf)
             
         Returns:
             API key if available, None otherwise
@@ -63,6 +64,7 @@ class Settings(BaseSettings):
             "anthropic": self.anthropic_api_key,
             "deepseek": self.deepseek_api_key,
             "together": self.together_api_key,
+            "gemini": self.gemini_api_key,
             "hf": self.hf_token,
         }
         return key_mapping.get(provider.lower())

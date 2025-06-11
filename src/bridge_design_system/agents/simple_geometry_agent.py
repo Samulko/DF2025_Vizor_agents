@@ -68,7 +68,11 @@ def create_geometry_agent_with_mcp_tools(agent_name: str = "geometry"):
             agent = CodeAgent(
                 tools=mcp_tools,  # Use tools directly from the active collection
                 model=model,
-                add_base_tools=False  # Don't add base tools (avoids duckduckgo_search dependency)
+                add_base_tools=False,  # Don't add base tools (avoids duckduckgo_search dependency)
+                additional_authorized_imports=[
+                    "json", "datetime", "pathlib", "typing", "dataclasses", "enum", "asyncio",
+                    "re", "collections", "functools", "operator", "itertools"
+                ]
             )
             
             logger.info(f"✅ Agent created with {len(mcp_tools)} MCP tools (no base tools to avoid dependencies)")
