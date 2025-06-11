@@ -1,4 +1,8 @@
-"""Main entry point for the Bridge Design System."""
+"""Main entry point for the Bridge Design System.
+
+This system uses MCPAdapt for robust MCP integration with Grasshopper,
+providing stable async/sync handling and eliminating event loop issues.
+"""
 import logging
 from pathlib import Path
 

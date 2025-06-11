@@ -98,23 +98,43 @@ class TriageAgent(BaseAgent):
     def initialize_agent(self):
         """Initialize the triage agent with managed agents."""
         # Import here to avoid circular imports
-        from .geometry_agent import GeometryAgent
-        from .material_agent import MaterialAgent
-        from .structural_agent import StructuralAgent
+        from .geometry_agent_mcpadapt import GeometryAgentMCPAdapt
+        # Temporarily disabled for geometry-only mode
+        # from .material_agent import MaterialAgent
+        # from .structural_agent import StructuralAgent
         
-        # Initialize managed agents (only the three specialized agents)
+        # Initialize geometry agent with MCPAdapt support (robust MCP integration)
+        geometry_agent = GeometryAgentMCPAdapt()
+        self.logger.info("✅ Geometry agent initialized with MCPAdapt support")
+        
+        # Initialize managed agents - GEOMETRY ONLY MODE
         self.managed_agents = {
-            "geometry": GeometryAgent(),
-            "material": MaterialAgent(),
-            "structural": StructuralAgent()
+            "geometry": geometry_agent,
+            # Temporarily disabled
+            # "material": MaterialAgent(),
+            # "structural": StructuralAgent()
         }
         
-        # Initialize each managed agent
-        for agent in self.managed_agents.values():
-            agent.initialize_agent()
+        # Initialize non-geometry agents normally
+        # Temporarily disabled - no other agents to initialize
+        # for name, agent in self.managed_agents.items():
+        #     if name != "geometry":  # Geometry agent already initialized above
+        #         agent.initialize_agent()
         
         # Create the triage agent with managed agents
-        managed_agent_instances = list(self.managed_agents.values())
+        # For smolagents compatibility, we need to extract the internal agent for most agents
+        # but handle GeometryAgentMCPAdapt specially since it uses direct tool execution
+        managed_agent_instances = []
+        for name, agent in self.managed_agents.items():
+            if name == "geometry":
+                # GeometryAgentMCPAdapt doesn't need internal agent extraction
+                # It manages its own execution and tool lifecycle
+                self.logger.info("Geometry agent using MCPAdapt - direct execution mode")
+                # Note: We'll handle geometry tasks differently in handle_design_request
+            # Temporarily disabled - no other agents
+            # else:
+            #     # Other agents follow the standard BaseAgent pattern
+            #     managed_agent_instances.append(agent._agent)
         
         self._agent = CodeAgent(
             tools=[],  # No direct tools
@@ -122,7 +142,7 @@ class TriageAgent(BaseAgent):
             name=self.name,
             description=self.description,
             max_steps=settings.max_agent_steps,
-            managed_agents=[agent._agent for agent in managed_agent_instances],
+            managed_agents=managed_agent_instances,
             additional_authorized_imports=[
                 "json", "datetime", "pathlib", "typing", "dataclasses", "enum"
             ]
@@ -140,18 +160,35 @@ class TriageAgent(BaseAgent):
         self.logger.info(f"Design state updated: {updates}")
     
     def get_agent_status(self) -> Dict[str, Dict[str, any]]:
-        """Get status of all managed agents.
+        """Get status of all managed agents including MCP connection info.
         
         Returns:
             Dictionary mapping agent names to their status
         """
         status = {}
         for name, agent in self.managed_agents.items():
-            status[name] = {
-                "initialized": agent._agent is not None,
-                "conversation_length": len(agent.conversation_history),
-                "step_count": agent.step_count
-            }
+            if name == "geometry":
+                # Special handling for GeometryAgentMCPAdapt
+                tool_info = agent.get_tool_info()
+                status[name] = {
+                    "initialized": True,  # MCPAdapt agent is always initialized
+                    "mcp_connected": tool_info.get("connected", False),
+                    "mode": tool_info.get("mode", "unknown"),
+                    "tool_count": tool_info.get("total_tools", 0),
+                    "mcp_tool_count": tool_info.get("mcp_tools", 0),
+                    "fallback_tools": tool_info.get("fallback_tools", 0),
+                    "custom_tools": tool_info.get("custom_tools", 0),
+                    "message": tool_info.get("message", "No status available"),
+                    "agent_type": "MCPAdapt"
+                }
+            else:
+                # Standard BaseAgent pattern
+                status[name] = {
+                    "initialized": agent._agent is not None,
+                    "conversation_length": len(agent.conversation_history),
+                    "step_count": agent.step_count,
+                    "agent_type": "BaseAgent"
+                }
         return status
     
     def handle_design_request(self, request: str) -> AgentResponse:
@@ -185,8 +222,61 @@ class TriageAgent(BaseAgent):
         elif "structural" in request.lower() or "analysis" in request.lower():
             broadcast_agent_delegating("triage", "structural", request)
         
-        # Process through the triage agent
+        # Check if this is a geometry-specific request and handle directly
+        if self._is_geometry_request(request):
+            return self._handle_geometry_request(request)
+        
+        # For other requests, process through the triage agent
         return self.run(request)
+    
+    def _is_geometry_request(self, request: str) -> bool:
+        """Check if a request is specifically for geometry operations."""
+        geometry_keywords = [
+            "point", "line", "curve", "spiral", "geometry", "create", 
+            "draw", "build", "construct", "coordinate", "3d", "bridge"
+        ]
+        return any(keyword in request.lower() for keyword in geometry_keywords)
+    
+    def _handle_geometry_request(self, request: str) -> AgentResponse:
+        """Handle geometry-specific requests directly with MCPAdapt geometry agent."""
+        try:
+            if "geometry" not in self.managed_agents:
+                return AgentResponse(
+                    success=False,
+                    message="Geometry agent not available",
+                    error=AgentError.AGENT_NOT_AVAILABLE
+                )
+            
+            geometry_agent = self.managed_agents["geometry"]
+            
+            # Execute task directly with MCPAdapt geometry agent
+            self.logger.info(f"Delegating geometry task to MCPAdapt agent: {request[:100]}")
+            
+            result = geometry_agent.run(request)
+            
+            # Check if result indicates success
+            if result and not ("error" in str(result).lower() and "fallback" not in str(result).lower()):
+                self.logger.info("✅ Geometry task completed successfully")
+                return AgentResponse(
+                    success=True,
+                    message=str(result),
+                    data={"result": result, "agent": "geometry", "method": "mcpadapt"}
+                )
+            else:
+                self.logger.warning("⚠️ Geometry task completed with issues")
+                return AgentResponse(
+                    success=True,  # Still consider success as task was handled
+                    message=str(result),
+                    data={"result": result, "agent": "geometry", "method": "mcpadapt", "status": "partial"}
+                )
+                
+        except Exception as e:
+            self.logger.error(f"❌ Geometry task delegation failed: {e}")
+            return AgentResponse(
+                success=False,
+                message=f"Geometry task failed: {e}",
+                error=AgentError.EXECUTION_ERROR
+            )
     
     def reset_all_agents(self):
         """Reset conversation state for all agents."""

@@ -24,298 +24,94 @@ from grasshopper_mcp.utils.communication import send_to_grasshopper
 # Create MCP server
 server = FastMCP("Grasshopper Bridge")
 
-# 註冊 MCP 工具
-@server.tool("add_component")
-def add_component(component_type: str, x: float, y: float):
-    """
-    Add a component to the Grasshopper canvas
+# 註冊 MCP 工具 - TEMPORARILY DISABLED
+# @server.tool("add_component")
+# def add_component(component_type: str, x: float, y: float):
+    # """
+    # Add a component to the Grasshopper canvas
 
-    Args:
-        component_type: Component type (point, curve, circle, line, panel, slider)
-        x: X coordinate on the canvas
-        y: Y coordinate on the canvas
+    # Args:
+    #     component_type: Component type (point, curve, circle, line, panel, slider)
+    #     x: X coordinate on the canvas
+    #     y: Y coordinate on the canvas
 
-    Returns:
-        Result of adding the component
-    """
-    # 處理常見的組件名稱混淆問題
-    component_mapping = {
-        # Number Slider 的各種可能輸入方式
-        "number slider": "Number Slider",
-        "numeric slider": "Number Slider",
-        "num slider": "Number Slider",
-        "slider": "Number Slider",  # 當只提到 slider 且上下文是數值時，預設為 Number Slider
-
-        # 其他組件的標準化名稱
-        "md slider": "MD Slider",
-        "multidimensional slider": "MD Slider",
-        "multi-dimensional slider": "MD Slider",
-        "graph mapper": "Graph Mapper",
-
-        # 數學運算組件
-        "add": "Addition",
-        "addition": "Addition",
-        "plus": "Addition",
-        "sum": "Addition",
-        "subtract": "Subtraction",
-        "subtraction": "Subtraction",
-        "minus": "Subtraction",
-        "difference": "Subtraction",
-        "multiply": "Multiplication",
-        "multiplication": "Multiplication",
-        "times": "Multiplication",
-        "product": "Multiplication",
-        "divide": "Division",
-        "division": "Division",
-
-        # 輸出組件
-        "panel": "Panel",
-        "text panel": "Panel",
-        "output panel": "Panel",
-        "display": "Panel"
-    }
-
-    # 檢查並修正組件類型
-    normalized_type = component_type.lower()
-    if normalized_type in component_mapping:
-        component_type = component_mapping[normalized_type]
-        print(f"Component type normalized from '{normalized_type}' to '{component_mapping[normalized_type]}'", file=sys.stderr)
-
-    params = {
-        "type": component_type,
-        "x": x,
-        "y": y
-    }
-
-    return send_to_grasshopper("add_component", params)
+    # Returns:
+    #     Result of adding the component
+    # """
+    # pass
 
 # Document operations are now provided by core.document module
 
-@server.tool("connect_components")
-def connect_components(source_id: str, target_id: str, source_param: str = None, target_param: str = None, source_param_index: int = None, target_param_index: int = None):
-    """
-    Connect two components in the Grasshopper canvas
-
-    Args:
-        source_id: ID of the source component (output)
-        target_id: ID of the target component (input)
-        source_param: Name of the source parameter (optional)
-        target_param: Name of the target parameter (optional)
-        source_param_index: Index of the source parameter (optional, used if source_param is not provided)
-        target_param_index: Index of the target parameter (optional, used if target_param is not provided)
-
-    Returns:
-        Result of connecting the components
-    """
-    # 獲取目標組件的信息，檢查是否已有連接
-    target_info = send_to_grasshopper("get_component_info", {"componentId": target_id})
-
-    # 檢查組件類型，如果是需要多個輸入的組件（如 Addition, Subtraction 等），智能分配輸入
-    if target_info and "result" in target_info and "type" in target_info["result"]:
-        component_type = target_info["result"]["type"]
-
-        # 獲取現有連接 (temporarily disabled until C# backend is updated)
-        existing_connections = []
-
-        # 對於特定需要多個輸入的組件，自動選擇正確的輸入端口
-        if component_type in ["Addition", "Subtraction", "Multiplication", "Division", "Math"]:
-            # 如果沒有指定目標參數，且已有連接到第一個輸入，則自動連接到第二個輸入
-            if target_param is None and target_param_index is None:
-                # 檢查第一個輸入是否已被佔用
-                first_input_occupied = False
-                for conn in existing_connections:
-                    if conn.get("targetParam") == "A" or conn.get("targetParamIndex") == 0:
-                        first_input_occupied = True
-                        break
-
-                # 如果第一個輸入已被佔用，則連接到第二個輸入
-                if first_input_occupied:
-                    target_param = "B"  # 第二個輸入通常命名為 B
-                else:
-                    target_param = "A"  # 否則連接到第一個輸入
-
-    params = {
-        "sourceId": source_id,
-        "targetId": target_id
-    }
-
-    if source_param is not None:
-        params["sourceParam"] = source_param
-    elif source_param_index is not None:
-        params["sourceParamIndex"] = source_param_index
-
-    if target_param is not None:
-        params["targetParam"] = target_param
-    elif target_param_index is not None:
-        params["targetParamIndex"] = target_param_index
-
-    return send_to_grasshopper("connect_components", params)
+# @server.tool("connect_components") - TEMPORARILY DISABLED
+# def connect_components(source_id: str, target_id: str, source_param: str = None, target_param: str = None, source_param_index: int = None, target_param_index: int = None):
+#     """
+#     Connect two components in the Grasshopper canvas
+#
+#     Args:
+#         source_id: ID of the source component (output)
+#         target_id: ID of the target component (input)
+#         source_param: Name of the source parameter (optional)
+#         target_param: Name of the target parameter (optional)
+#         source_param_index: Index of the source parameter (optional, used if source_param is not provided)
+#         target_param_index: Index of the target parameter (optional, used if target_param is not provided)
+#
+#     Returns:
+#         Result of connecting the components
+#     """
+#     pass
 
 # Pattern operations are now provided by core.patterns module
 
-@server.tool("get_component_info")
-def get_component_info(component_id: str):
-    """
-    Get detailed information about a specific component
+# @server.tool("get_component_info") - TEMPORARILY DISABLED
+# def get_component_info(component_id: str):
+#     """
+#     Get detailed information about a specific component
+#
+#     Args:
+#         component_id: ID of the component to get information about
+#
+#     Returns:
+#         Detailed information about the component, including inputs, outputs, and current values
+#     """
+#     pass
 
-    Args:
-        component_id: ID of the component to get information about
-
-    Returns:
-        Detailed information about the component, including inputs, outputs, and current values
-    """
-    params = {
-        "componentId": component_id
-    }
-
-    result = send_to_grasshopper("get_component_info", params)
-
-    # 增強返回結果，添加更多參數信息
-    if result and "result" in result:
-        component_data = result["result"]
-
-        # 獲取組件類型
-        if "type" in component_data:
-            component_type = component_data["type"]
-
-            # 查詢組件庫，獲取該類型組件的詳細參數信息
-            component_library = get_component_library()
-            if "components" in component_library:
-                for lib_component in component_library["components"]:
-                    if lib_component.get("name") == component_type or lib_component.get("fullName") == component_type:
-                        # 將組件庫中的參數信息合併到返回結果中
-                        if "settings" in lib_component:
-                            component_data["availableSettings"] = lib_component["settings"]
-                        if "inputs" in lib_component:
-                            component_data["inputDetails"] = lib_component["inputs"]
-                        if "outputs" in lib_component:
-                            component_data["outputDetails"] = lib_component["outputs"]
-                        if "usage_examples" in lib_component:
-                            component_data["usageExamples"] = lib_component["usage_examples"]
-                        if "common_issues" in lib_component:
-                            component_data["commonIssues"] = lib_component["common_issues"]
-                        break
-
-            # 特殊處理某些組件類型
-            if component_type == "Number Slider":
-                # 嘗試從組件數據中獲取當前滑桿的實際設置
-                if "currentSettings" not in component_data:
-                    component_data["currentSettings"] = {
-                        "min": component_data.get("min", 0),
-                        "max": component_data.get("max", 10),
-                        "value": component_data.get("value", 5),
-                        "rounding": component_data.get("rounding", 0.1),
-                        "type": component_data.get("type", "float")
-                    }
-
-            # 添加組件的連接信息 (temporarily disabled until C# backend is updated)
-            # TODO: Re-enable when get_connections command is available
-
-    return result
-
-@server.tool("get_all_components")
-def get_all_components():
-    """
-    Get a list of all components in the current document
-
-    Returns:
-        List of all components in the document with their IDs, types, and positions
-    """
-    result = send_to_grasshopper("get_document_info", {})
-
-    # 增強返回結果，為每個組件添加更多參數信息
-    if result and "result" in result:
-        doc_data = result["result"]
-        components = doc_data.get("components", [])
-        component_library = get_component_library()
-
-        # 獲取所有連接信息 (temporarily disabled until C# backend is updated)
-        connections_data = []
-
-        # 為每個組件添加詳細信息
-        for component in components:
-            if "id" in component and "type" in component:
-                component_id = component["id"]
-                component_type = component["type"]
-
-                # 添加組件的詳細參數信息
-                if "components" in component_library:
-                    for lib_component in component_library["components"]:
-                        if lib_component.get("name") == component_type or lib_component.get("fullName") == component_type:
-                            # 將組件庫中的參數信息合併到組件數據中
-                            if "settings" in lib_component:
-                                component["availableSettings"] = lib_component["settings"]
-                            if "inputs" in lib_component:
-                                component["inputDetails"] = lib_component["inputs"]
-                            if "outputs" in lib_component:
-                                component["outputDetails"] = lib_component["outputs"]
-                            break
-
-                # 添加組件的連接信息
-                related_connections = []
-                for conn in connections_data:
-                    if conn.get("sourceId") == component_id or conn.get("targetId") == component_id:
-                        related_connections.append(conn)
-
-                if related_connections:
-                    component["connections"] = related_connections
-
-                # 特殊處理某些組件類型
-                if component_type == "Number Slider":
-                    # 嘗試獲取滑桿的當前設置
-                    component_info = send_to_grasshopper("get_component_info", {"componentId": component_id})
-                    if component_info and "result" in component_info:
-                        info_data = component_info["result"]
-                        component["currentSettings"] = {
-                            "min": info_data.get("min", 0),
-                            "max": info_data.get("max", 10),
-                            "value": info_data.get("value", 5),
-                            "rounding": info_data.get("rounding", 0.1)
-                        }
-
-        # Return the enhanced components in the expected format
-        return {
-            "success": result.get("success", True),
-            "result": components
-        }
-    
-    return result
+# @server.tool("get_all_components") - TEMPORARILY DISABLED
+# def get_all_components():
+#     """
+#     Get a list of all components in the current document
+#
+#     Returns:
+#         List of all components in the document with their IDs, types, and positions
+#     """
+#     pass
 
 # Connection query is now provided by core.connections module as get_all_connections
 
-@server.tool("search_components")
-def search_components(query: str):
-    """
-    Search for components by name or category
+# @server.tool("search_components") - TEMPORARILY DISABLED
+# def search_components(query: str):
+#     """
+#     Search for components by name or category
+#
+#     Args:
+#         query: Search query
+#
+#     Returns:
+#         List of components matching the search query
+#     """
+#     pass
 
-    Args:
-        query: Search query
-
-    Returns:
-        List of components matching the search query
-    """
-    params = {
-        "query": query
-    }
-
-    return send_to_grasshopper("search_components", params)
-
-@server.tool("get_component_parameters")
-def get_component_parameters(component_type: str):
-    """
-    Get a list of parameters for a specific component type
-
-    Args:
-        component_type: Type of component to get parameters for
-
-    Returns:
-        List of input and output parameters for the component type
-    """
-    params = {
-        "componentType": component_type
-    }
-
-    return send_to_grasshopper("get_component_parameters", params)
+# @server.tool("get_component_parameters") - TEMPORARILY DISABLED
+# def get_component_parameters(component_type: str):
+#     """
+#     Get a list of parameters for a specific component type
+#
+#     Args:
+#         component_type: Type of component to get parameters for
+#
+#     Returns:
+#         List of input and output parameters for the component type
+#     """
+#     pass
 
 # Connection validation is now provided by core.connections module as validate_grasshopper_connection
 
@@ -328,8 +124,9 @@ def get_grasshopper_status():
         doc_info = send_to_grasshopper("get_document_info")
 
         # 獲取所有組件（使用增強版的 get_all_components）
-        components_result = get_all_components()
-        components = components_result.get("result", []) if components_result else []
+        # components_result = get_all_components()  # Temporarily disabled
+        # components = components_result.get("result", []) if components_result else []
+        components = []  # Placeholder until function is re-enabled
 
         # 獲取所有連接 (temporarily disabled until C# backend is updated)
         connections = {"result": []}
@@ -679,114 +476,117 @@ def get_component_guide():
         ]
     }
 
-# Import Vizor components
-from grasshopper_mcp.tools.vizor.components import (
-    add_vizor_component,
-    vizor_tracked_object,
-    vizor_ar_worker,
-    vizor_robot,
-    vizor_ws_connection,
-    vizor_construct_content,
-    vizor_make_mesh,
-    vizor_device_tracker,
-    vizor_make_text,
-    vizor_make_trajectory,
-    vizor_scene_model,
-    vizor_construct_task,
-    vizor_task_controller,
-    vizor_robot_execution
-)
+# Import Vizor components - TEMPORARILY DISABLED
+# from grasshopper_mcp.tools.vizor.components import (
+#     add_vizor_component,
+#     vizor_tracked_object,
+#     vizor_ar_worker,
+#     vizor_robot,
+#     vizor_ws_connection,
+#     vizor_construct_content,
+#     vizor_make_mesh,
+#     vizor_device_tracker,
+#     vizor_make_text,
+#     vizor_make_trajectory,
+#     vizor_scene_model,
+#     vizor_construct_task,
+#     vizor_task_controller,
+#     vizor_robot_execution
+# )
 
-# Register Vizor tools with the server
-server.tool("add_vizor_component")(add_vizor_component)
-server.tool("vizor_tracked_object")(vizor_tracked_object)
-server.tool("vizor_ar_worker")(vizor_ar_worker)
-server.tool("vizor_robot")(vizor_robot)
-server.tool("vizor_ws_connection")(vizor_ws_connection)
-server.tool("vizor_construct_content")(vizor_construct_content)
-server.tool("vizor_make_mesh")(vizor_make_mesh)
-server.tool("vizor_device_tracker")(vizor_device_tracker)
-server.tool("vizor_make_text")(vizor_make_text)
-server.tool("vizor_make_trajectory")(vizor_make_trajectory)
-server.tool("vizor_scene_model")(vizor_scene_model)
-server.tool("vizor_construct_task")(vizor_construct_task)
-server.tool("vizor_task_controller")(vizor_task_controller)
-server.tool("vizor_robot_execution")(vizor_robot_execution)
+# Register Vizor tools with the server - TEMPORARILY DISABLED
+# server.tool("add_vizor_component")(add_vizor_component)
+# server.tool("vizor_tracked_object")(vizor_tracked_object)
+# server.tool("vizor_ar_worker")(vizor_ar_worker)
+# server.tool("vizor_robot")(vizor_robot)
+# server.tool("vizor_ws_connection")(vizor_ws_connection)
+# server.tool("vizor_construct_content")(vizor_construct_content)
+# server.tool("vizor_make_mesh")(vizor_make_mesh)
+# server.tool("vizor_device_tracker")(vizor_device_tracker)
+# server.tool("vizor_make_text")(vizor_make_text)
+# server.tool("vizor_make_trajectory")(vizor_make_trajectory)
+# server.tool("vizor_scene_model")(vizor_scene_model)
+# server.tool("vizor_construct_task")(vizor_construct_task)
+# server.tool("vizor_task_controller")(vizor_task_controller)
+# server.tool("vizor_robot_execution")(vizor_robot_execution)
 
-# Import Core tools
+# Import Core tools - ONLY KEEP REQUIRED TOOLS
 from grasshopper_mcp.tools.core import (
-    # Component tools
-    add_number_slider,
-    add_panel,
-    add_addition,
-    add_circle,
-    add_xy_plane,
-    add_construct_point,
-    add_line,
-    add_extrude,
+    # Component tools - KEEP ONLY THESE 6
     add_python3_script,
     get_python3_script,
     edit_python3_script,
     get_python3_script_errors,
-    set_component_value,
     get_component_info_enhanced,
     get_all_components_enhanced,
-    search_components_by_type,
-    get_component_parameters_info,
-    analyze_script_parameters,
-    recreate_python3_script_with_parameters,
-    # Document tools
-    clear_grasshopper_document,
-    save_grasshopper_document,
-    load_grasshopper_document,
-    get_grasshopper_document_info,
-    # Connection tools
-    connect_grasshopper_components,
-    get_all_connections,
-    validate_grasshopper_connection,
-    smart_connect,
-    # Pattern tools
-    create_grasshopper_pattern,
-    get_pattern_list
+    # TEMPORARILY DISABLED
+    # add_number_slider,
+    # add_panel,
+    # add_addition,
+    # add_circle,
+    # add_xy_plane,
+    # add_construct_point,
+    # add_line,
+    # add_extrude,
+    # set_component_value,
+    # search_components_by_type,
+    # get_component_parameters_info,
+    # analyze_script_parameters,
+    # recreate_python3_script_with_parameters,
+    # Document tools - DISABLED
+    # clear_grasshopper_document,
+    # save_grasshopper_document,
+    # load_grasshopper_document,
+    # get_grasshopper_document_info,
+    # Connection tools - DISABLED
+    # connect_grasshopper_components,
+    # get_all_connections,
+    # validate_grasshopper_connection,
+    # smart_connect,
+    # Pattern tools - DISABLED
+    # create_grasshopper_pattern,
+    # get_pattern_list
 )
 
-# Register Core tools with the server
-# Component tools
-server.tool("add_number_slider")(add_number_slider)
-server.tool("add_panel")(add_panel)
-server.tool("add_addition")(add_addition)
-server.tool("add_circle")(add_circle)
-server.tool("add_xy_plane")(add_xy_plane)
-server.tool("add_construct_point")(add_construct_point)
-server.tool("add_line")(add_line)
-server.tool("add_extrude")(add_extrude)
+# Register Core tools with the server - ONLY KEEP 6 REQUIRED TOOLS
+# Component tools - KEEP ONLY THESE 6
 server.tool("add_python3_script")(add_python3_script)
 server.tool("get_python3_script")(get_python3_script)
 server.tool("edit_python3_script")(edit_python3_script)
 server.tool("get_python3_script_errors")(get_python3_script_errors)
-server.tool("set_component_value")(set_component_value)
 server.tool("get_component_info_enhanced")(get_component_info_enhanced)
 server.tool("get_all_components_enhanced")(get_all_components_enhanced)
-server.tool("search_components_by_type")(search_components_by_type)
-server.tool("get_component_parameters_info")(get_component_parameters_info)
-server.tool("analyze_script_parameters")(analyze_script_parameters)
-server.tool("recreate_python3_script_with_parameters")(recreate_python3_script_with_parameters)
 
-# Document tools
-server.tool("clear_grasshopper_document")(clear_grasshopper_document)
-server.tool("save_grasshopper_document")(save_grasshopper_document)
-server.tool("load_grasshopper_document")(load_grasshopper_document)
-server.tool("get_grasshopper_document_info")(get_grasshopper_document_info)
+# TEMPORARILY DISABLED TOOLS
+# server.tool("add_number_slider")(add_number_slider)
+# server.tool("add_panel")(add_panel)
+# server.tool("add_addition")(add_addition)
+# server.tool("add_circle")(add_circle)
+# server.tool("add_xy_plane")(add_xy_plane)
+# server.tool("add_construct_point")(add_construct_point)
+# server.tool("add_line")(add_line)
+# server.tool("add_extrude")(add_extrude)
+# server.tool("set_component_value")(set_component_value)
+# server.tool("search_components_by_type")(search_components_by_type)
+# server.tool("get_component_parameters_info")(get_component_parameters_info)
+# server.tool("analyze_script_parameters")(analyze_script_parameters)
+# server.tool("recreate_python3_script_with_parameters")(recreate_python3_script_with_parameters)
 
-# Connection tools
-server.tool("connect_grasshopper_components")(connect_grasshopper_components)
-server.tool("get_all_connections")(get_all_connections)
-server.tool("validate_grasshopper_connection")(validate_grasshopper_connection)
-server.tool("smart_connect")(smart_connect)
+# Document tools - TEMPORARILY DISABLED
+# server.tool("clear_grasshopper_document")(clear_grasshopper_document)
+# server.tool("save_grasshopper_document")(save_grasshopper_document)
+# server.tool("load_grasshopper_document")(load_grasshopper_document)
+# server.tool("get_grasshopper_document_info")(get_grasshopper_document_info)
 
-# Pattern tools
-server.tool("create_grasshopper_pattern")(create_grasshopper_pattern)
-server.tool("get_pattern_list")(get_pattern_list)
+# Connection tools - TEMPORARILY DISABLED
+# server.tool("connect_grasshopper_components")(connect_grasshopper_components)
+# server.tool("get_all_connections")(get_all_connections)
+# server.tool("validate_grasshopper_connection")(validate_grasshopper_connection)
+# server.tool("smart_connect")(smart_connect)
+
+# Pattern tools - TEMPORARILY DISABLED
+# server.tool("create_grasshopper_pattern")(create_grasshopper_pattern)
+# server.tool("get_pattern_list")(get_pattern_list)
 
 @server.resource("grasshopper://component_library")
 def get_component_library():

@@ -24,6 +24,8 @@ dependencies = [
     "anyio>=4.9.0",
     "aiohttp>=3.9.0",
     "grasshopper-mcp",
+    "duckduckgo-search>=8.0.3",
+    "mcpadapt[smolagents]>=0.1.9",
 ]
 
 [project.optional-dependencies]
