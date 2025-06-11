@@ -64,17 +64,17 @@ def create_http_mcp_server(
         logger.info(f"Adding Python3 script at ({x}, {y})")
         
         params = {
-            "script": script,
+            "type": "Py3",  # Use correct TCP bridge command type
             "x": x,
             "y": y
         }
         
-        if inputs:
-            params["inputs"] = inputs
-        if outputs:
-            params["outputs"] = outputs
+        if script:
+            params["script"] = script
         
-        result = send_to_grasshopper("add_python3_script", params)
+        # Note: inputs/outputs not supported by current TCP bridge
+        
+        result = send_to_grasshopper("add_component", params)
         
         if result.get("success", False):
             component_id = result.get("result", {}).get("component_id", "unknown")
@@ -95,7 +95,7 @@ def create_http_mcp_server(
         """
         logger.info(f"Getting Python3 script for component: {component_id}")
         
-        result = send_to_grasshopper("get_python3_script", {"component_id": component_id})
+        result = send_to_grasshopper("get_python_script_content", {"id": component_id})
         
         if result.get("success", False):
             script_content = result.get("result", {}).get("script", "")
@@ -117,8 +117,8 @@ def create_http_mcp_server(
         """
         logger.info(f"Editing Python3 script for component: {component_id}")
         
-        result = send_to_grasshopper("edit_python3_script", {
-            "component_id": component_id,
+        result = send_to_grasshopper("set_python_script_content", {
+            "id": component_id,
             "script": script
         })
         
@@ -140,7 +140,7 @@ def create_http_mcp_server(
         """
         logger.info(f"Getting Python3 script errors for component: {component_id}")
         
-        result = send_to_grasshopper("get_python3_script_errors", {"component_id": component_id})
+        result = send_to_grasshopper("get_python_script_errors", {"id": component_id})
         
         if result.get("success", False):
             errors = result.get("result", {}).get("errors", [])
@@ -165,7 +165,7 @@ def create_http_mcp_server(
         """
         logger.info(f"Getting enhanced info for component: {component_id}")
         
-        result = send_to_grasshopper("get_component_info_enhanced", {"component_id": component_id})
+        result = send_to_grasshopper("get_component_info", {"componentId": component_id})
         
         if result.get("success", False):
             import json
@@ -184,7 +184,19 @@ def create_http_mcp_server(
         """
         logger.info("Getting enhanced info for all components")
         
-        result = send_to_grasshopper("get_all_components_enhanced", {})
+        doc_info = send_to_grasshopper("get_document_info", {})
+        
+        if doc_info.get("success") and "result" in doc_info:
+            result_data = doc_info["result"]
+            if "components" in result_data:
+                result = {
+                    "success": True,
+                    "result": result_data["components"]
+                }
+            else:
+                result = doc_info
+        else:
+            result = doc_info
         
         if result.get("success", False):
             import json
@@ -200,7 +212,7 @@ def create_http_mcp_server(
         """Get Grasshopper TCP bridge status."""
         try:
             # Test TCP bridge connection
-            result = send_to_grasshopper("get_all_components_enhanced", {})
+            result = send_to_grasshopper("get_document_info", {})
             
             return {
                 "status": "Connected to Grasshopper via HTTP MCP",
