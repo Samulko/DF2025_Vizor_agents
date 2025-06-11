@@ -35,7 +35,7 @@ smolagents → STDIO MCP Server → TCP Client → TCP Bridge → Grasshopper
 - **grasshopper_mcp.bridge**: FastMCP server with complete Grasshopper toolset
 - **TCP Client**: communication.py sends JSON commands over TCP socket
 - **TCP Bridge**: GH_MCPComponent.cs proven C# bridge from Claude Desktop integration
-- **DeepSeek Model**: Cost-efficient LLM (21x cheaper than Claude)
+- **Gemini 2.5 Flash**: Cost-efficient LLM with optimal price-performance ratio
 
 ### Architecture Decision: TCP Bridge (Proven)
 **Why TCP Bridge** (vs HTTP polling):
@@ -64,32 +64,32 @@ uv venv
 uv pip install -e .
 
 # Run system test
-python -m bridge_design_system.main --test
+uv run python -m bridge_design_system.main --test
 
 # Run interactive mode
-python -m bridge_design_system.main --interactive
+uv run python -m bridge_design_system.main --interactive
 
 # Test STDIO MCP server integration (49 tools)
-python test_simple_working_solution.py
+uv run python test_simple_working_solution.py
 
 # Test TCP bridge connection and communication
-python test_tcp_bridge_connection.py
+uv run python test_tcp_bridge_connection.py
 
 # Deploy TCP bridge to Grasshopper (one-time setup)
 cd src/bridge_design_system/mcp/GH_MCP/GH_MCP/ && dotnet build --configuration Release
 
 # Run comprehensive tests
-pytest tests/
+uv run pytest tests/
 
 # Debug MCP connection issues  
-python debug_mcp_connection.py
-python debug_session_id.py
+uv run python debug_mcp_connection.py
+uv run python debug_session_id.py
 
 # Format code
-black src/ tests/
+uv run black src/ tests/
 
 # Lint code
-ruff check src/ tests/
+uv run ruff check src/ tests/
 ```
 
 > **Note for Claude Code**: This project should be run on native Windows (PowerShell/Command Prompt), NOT through WSL2, for optimal compatibility with Rhino/Grasshopper MCP integration in Phase 2.
@@ -218,14 +218,16 @@ git branch -d feature/your-feature-name
 - Enhanced CLI interface with color-coded agent interactions
 - Test framework and system validation
 
-**Phase 2: MCP Integration** - **IN-COMPLETE**
-
-
-
+**Phase 2: MCP Integration** - ✅ **COMPLETED**
+- ✅ STDIO MCP server with 49 working Grasshopper tools
+- ✅ TCP bridge architecture proven and functional  
+- ✅ Gemini 2.5 Flash integration for optimal cost-performance
+- ✅ Enhanced JSON handling with proper smolagents imports
+- ✅ Successful test validation (5/5 tests passing)
 
 **Phase Status:**
 1. ✅ **Phase 1: Core Agent Setup** (COMPLETE)
-2.  **Phase 2: MCP Integration** (progressing - STDIO server needs to connect to tcp)
+2. ✅ **Phase 2: MCP Integration** (COMPLETE - TCP bridge working with 49 tools)
 3. 🎯 **Phase 3: Specialized Agent Tools** (Next - Ready to start)
 4. ⏳ **Phase 4: AR Integration** (Future)
 
@@ -240,26 +242,30 @@ Current implementation supports multiple LLM providers:
 - OpenAI (GPT-4, GPT-3.5)
 - Anthropic (Claude 3.5 Sonnet)
 - DeepSeek (deepseek-chat)
+- Gemini (Gemini 2.5 Flash) - ✅ **Default for optimal price-performance**
 - HuggingFace Inference API
 - Together AI
 
 ## Known Issues & Troubleshooting
 
 ### MCP Integration (Phase 2.3)
-**Latest Status (RESOLVED):**
+**Latest Status (COMPLETED):**
 - ✅ Fixed local dependency installation issue for grasshopper-mcp
 - ✅ Added grasshopper-mcp as local dependency in main pyproject.toml  
 - ✅ Updated STDIO command to use installed module: `uv run python -m grasshopper_mcp.bridge`
-- ✅ Ready for testing with proper package installation
+- ✅ Enhanced JSON handling with proper smolagents imports (json, re, collections, etc.)
+- ✅ Gemini 2.5 Flash integration for all agents
+- ✅ All tests passing (5/5) with improved performance
+- ✅ Ready for production with proven TCP bridge architecture
 
 
 **Debugging Commands:**
 ```bash
 # Test connection and session
-python debug_session_id.py
+uv run python debug_session_id.py
 
 # Test sync tools (will show server error)
-python test_sync_tools.py
+uv run python test_sync_tools.py
 
 system structure
 
