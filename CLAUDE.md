@@ -25,17 +25,65 @@ The system uses **Model Context Protocol (MCP)** for seamless integration with R
 
 ### TCP Bridge Architecture (Production Solution) ✅
 ```
-smolagents → STDIO MCP Server → TCP Client → TCP Bridge → Grasshopper
-          (grasshopper_mcp.bridge)  (communication.py)  (GH_MCPComponent.cs)
-           49 tools via STDIO      JSON over TCP       C# TCP server
+Human (AR) ↔ Triage Agent ↔ Geometry Agent → STDIO MCP Server → TCP Client → TCP Bridge → Grasshopper
+                ↓                                    ↓                      ↓              ↓
+         (smolagents)            (grasshopper_mcp.bridge)    (communication.py)   (GH_MCPComponent.cs)
 ```
 
-**Key Components:**
-- **STDIO Transport**: smolagents uses STDIO MCP for 49 working tools
-- **grasshopper_mcp.bridge**: FastMCP server with complete Grasshopper toolset
-- **TCP Client**: communication.py sends JSON commands over TCP socket
-- **TCP Bridge**: GH_MCPComponent.cs proven C# bridge from Claude Desktop integration
+**Full Chain Components:**
+- **Triage Agent**: Orchestrates and delegates geometry tasks (`triage_agent.py`)
+- **Geometry Agents**: Two implementations for different robustness needs
+- **STDIO MCP Server**: FastMCP server with 6 active tools + 43 disabled for stability
+- **TCP Client**: JSON-over-TCP communication layer with WSL2 auto-detection
+- **TCP Bridge**: Proven C# component from Claude Desktop integration
 - **Gemini 2.5 Flash**: Cost-efficient LLM with optimal price-performance ratio
+
+### Detailed Component Analysis
+
+#### 1. STDIO MCP Server (`grasshopper_mcp.bridge`)
+**Location**: `src/bridge_design_system/mcp/grasshopper_mcp/bridge.py`
+- **Active Tools (6)**: `add_python3_script`, `get_python3_script`, `edit_python3_script`, `get_python3_script_errors`, `get_component_info_enhanced`, `get_all_components_enhanced`
+- **Disabled Tools (43+)**: Component creation, connections, document operations (temporarily disabled for stability)
+- **Resources (3)**: Grasshopper status, component guide, component library
+- **Transport**: STDIO via FastMCP framework
+- **Philosophy**: Minimal tool set prioritizes stability; Python script tools provide maximum flexibility
+
+#### 2. TCP Client Communication (`communication.py`)
+**Location**: `src/bridge_design_system/mcp/grasshopper_mcp/utils/communication.py`
+- **Protocol**: JSON-over-TCP socket communication
+- **Port**: 8081 (Grasshopper TCP bridge listener)
+- **Host Resolution**: Smart WSL2 detection via `get_windows_host()`
+- **Message Format**: `{"type": "command_type", "parameters": {...}}`
+- **Error Handling**: Comprehensive connection recovery with fallback modes
+
+#### 3. Dual Geometry Agent Architecture
+**Two distinct MCP integration patterns for different use cases:**
+
+**A. GeometryAgentWithMCP** (`geometry_agent_with_mcp.py`)
+- **Pattern**: `ToolCollection.from_mcp()` (smolagents' native MCP support)
+- **Lifecycle**: Fresh ToolCollection context per task
+- **Pros**: Native integration, automatic async/sync handling
+- **Cons**: Potential "Event loop is closed" errors
+
+**B. GeometryAgentMCPAdapt** (`geometry_agent_mcpadapt.py`) - **Currently Active**
+- **Pattern**: `MCPAdapt` with `SmolAgentsAdapter`
+- **Lifecycle**: Robust connection lifecycle management
+- **Pros**: Better async/sync handling, reduced event loop issues
+- **Cons**: Additional dependency (mcpadapt)
+
+#### 4. C# TCP Bridge Component (`GH_MCPComponent.cs`)
+**Location**: `src/bridge_design_system/mcp/GH_MCP/GH_MCP/GH_MCPComponent.cs`
+- **Type**: Grasshopper component with embedded TCP server
+- **Port**: 8081 (configurable via component inputs)
+- **Binding**: `0.0.0.0` (all interfaces) or `127.0.0.1` (localhost only)
+- **Visual Feedback**: Real-time status display in Grasshopper canvas
+- **Command Processing**: Receives JSON, executes in Grasshopper context
+
+#### 5. Triage Agent Orchestration (`triage_agent.py`)
+**Current Configuration**:
+- **Geometry Delegation**: Uses `GeometryAgentMCPAdapt` (line 107) for robustness
+- **Agent Mode**: Geometry-only mode (material/structural agents temporarily disabled)
+- **Pattern**: Direct task execution rather than managed agents delegation
 
 ### Architecture Decision: TCP Bridge (Proven)
 **Why TCP Bridge** (vs HTTP polling):
@@ -51,6 +99,22 @@ smolagents → STDIO MCP Server → TCP Client → TCP Bridge → Grasshopper
 - ✅ **No HTTP Overhead**: Simple protocol, faster execution
 - ✅ **Proven Protocol**: Same TCP bridge used by Claude Desktop
 - ✅ **Visual Feedback**: Bridge component shows commands in real-time
+
+### Typical Request Flow
+1. **Triage Agent** receives human geometry request
+2. **Delegates** to GeometryAgentMCPAdapt for execution
+3. **MCPAdapt** establishes connection to STDIO MCP server
+4. **MCP Server** receives tool calls via STDIO transport
+5. **TCP Client** (`send_to_grasshopper()`) sends JSON to port 8081
+6. **C# Bridge** executes commands in Grasshopper context
+7. **Results** propagate back through the entire chain
+
+### Current Production Status
+- ✅ **6-Tool Stability**: Intentionally minimal for production reliability
+- ✅ **Python Script Flexibility**: Core tools enable unlimited geometry creation
+- ✅ **Dual Integration Patterns**: ToolCollection + MCPAdapt for different needs
+- ✅ **Robust Error Handling**: Fallback modes when MCP unavailable
+- ✅ **Visual Monitoring**: Real-time status in Grasshopper component
 
 ## Development Commands
 
@@ -69,7 +133,7 @@ uv run python -m bridge_design_system.main --test
 # Run interactive mode
 uv run python -m bridge_design_system.main --interactive
 
-# Test STDIO MCP server integration (49 tools)
+# Test STDIO MCP server integration (6 active tools)
 uv run python test_simple_working_solution.py
 
 # Test TCP bridge connection and communication
@@ -255,6 +319,9 @@ Current implementation supports multiple LLM providers:
 - ✅ Updated STDIO command to use installed module: `uv run python -m grasshopper_mcp.bridge`
 - ✅ Enhanced JSON handling with proper smolagents imports (json, re, collections, etc.)
 - ✅ Gemini 2.5 Flash integration for all agents
+- ✅ Dual geometry agent architecture (ToolCollection + MCPAdapt patterns)
+- ✅ 6-tool minimal stable configuration for production reliability
+- ✅ Comprehensive error handling with fallback modes
 - ✅ All tests passing (5/5) with improved performance
 - ✅ Ready for production with proven TCP bridge architecture
 
@@ -394,4 +461,4 @@ tool_collection = ToolCollection.from_mcp({
 
 ### Adding New Memories
 
-Do not build the environment yourself, rather give me instructions how to do it. I will then give you informations if there were any issues.
+I want you to be direct and critical in your answer. If you don't know, say don't know. If something won't work say it won't work. Please do not give me BS.

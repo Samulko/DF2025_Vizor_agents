@@ -26,9 +26,16 @@ class Settings(BaseSettings):
     structural_agent_provider: str = "anthropic"
     structural_agent_model: str = "claude-3-5-sonnet-latest"
     
+    # MCP Configuration
+    mcp_transport_mode: str = "http"  # "http" or "stdio"
+    mcp_http_url: str = "http://localhost:8001/mcp"
+    mcp_http_timeout: int = 30
+    mcp_stdio_command: str = "uv"
+    mcp_stdio_args: str = "run,python,-m,grasshopper_mcp.bridge"
+    
     # Paths
     grasshopper_mcp_path: str = ""
-    grasshopper_mcp_url: str = "http://localhost:8001/mcp"
+    grasshopper_mcp_url: str = "http://localhost:8001/mcp"  # Legacy - use mcp_http_url
     material_db_path: str = "materials.db"
     
     # Logging Configuration
@@ -38,6 +45,11 @@ class Settings(BaseSettings):
     # Agent Configuration
     max_agent_steps: int = 20
     max_context_tokens: int = 8000
+    
+    # MCP Server Configuration
+    mcp_server_host: str = "127.0.0.1"
+    mcp_server_port: int = 8001
+    mcp_grasshopper_url: str = "http://localhost:8080"
     
     # Development Settings
     debug: bool = False
@@ -83,6 +95,41 @@ class Settings(BaseSettings):
             if not self.get_api_key(provider):
                 missing.append(provider)
         return missing
+    
+    def get_mcp_server_params(self) -> dict:
+        """Get MCP server parameters based on transport mode.
+        
+        Returns:
+            Dictionary with server parameters for MCPAdapt
+        """
+        if self.mcp_transport_mode.lower() == "http":
+            return {
+                "url": self.mcp_http_url,
+                "transport": "streamable-http"
+            }
+        else:
+            # STDIO mode
+            from mcp import StdioServerParameters
+            args = self.mcp_stdio_args.split(",")
+            return StdioServerParameters(
+                command=self.mcp_stdio_command,
+                args=args,
+                env=None
+            )
+    
+    def get_mcp_connection_fallback_params(self) -> dict:
+        """Get fallback MCP parameters when HTTP fails.
+        
+        Returns:
+            STDIO parameters for fallback
+        """
+        from mcp import StdioServerParameters
+        args = self.mcp_stdio_args.split(",")
+        return StdioServerParameters(
+            command=self.mcp_stdio_command,
+            args=args,
+            env=None
+        )
     
     @property
     def log_file_path(self) -> Path:
