@@ -25,6 +25,9 @@ class TriageAgent(BaseAgent):
         # Managed agents will be initialized later
         self.managed_agents: Dict[str, BaseAgent] = {}
         
+        # Conversation memory for continuous chat (separate from agent lifecycle)
+        self.conversation_history = []
+        
         # Track current design state
         self.design_state = {
             "current_step": "initial",
@@ -136,17 +139,22 @@ class TriageAgent(BaseAgent):
             #     # Other agents follow the standard BaseAgent pattern
             #     managed_agent_instances.append(agent._agent)
         
-        self._agent = CodeAgent(
-            tools=[],  # No direct tools
-            model=self.model,
-            name=self.name,
-            description=self.description,
-            max_steps=settings.max_agent_steps,
-            managed_agents=managed_agent_instances,
-            additional_authorized_imports=[
+        # Note: CodeAgent will be created fresh for each request to preserve conversation context
+        # Store configuration for fresh agent creation
+        self.agent_config = {
+            "tools": [],  # No direct tools
+            "model": self.model,
+            "name": self.name,
+            "description": self.description,
+            "max_steps": settings.max_agent_steps,
+            "managed_agents": managed_agent_instances,
+            "additional_authorized_imports": [
                 "json", "datetime", "pathlib", "typing", "dataclasses", "enum"
             ]
-        )
+        }
+        
+        # Create initial agent for compatibility (will be replaced for each request)
+        self._agent = CodeAgent(**self.agent_config)
         
         self.logger.info(f"Triage agent initialized with {len(self.managed_agents)} managed agents")
     
@@ -226,21 +234,72 @@ class TriageAgent(BaseAgent):
         
         # Check if this is a geometry-specific request and handle directly
         if self._is_geometry_request(request):
-            return self._handle_geometry_request(request)
+            result = self._handle_geometry_request(request)
+        else:
+            # For other requests, process through the triage agent with conversation context
+            result = self._run_with_context(request)
         
-        # For other requests, process through the triage agent
-        return self.run(request)
+        # Store the conversation for future reference
+        self._store_conversation(request, result)
+        
+        return result
     
     def _is_geometry_request(self, request: str) -> bool:
         """Check if a request is specifically for geometry operations."""
-        geometry_keywords = [
+        # Direct geometry creation keywords
+        creation_keywords = [
             "point", "line", "curve", "spiral", "geometry", "create", 
-            "draw", "build", "construct", "coordinate", "3d", "bridge"
+            "draw", "build", "construct", "coordinate", "3d", "bridge", "staircase"
         ]
-        return any(keyword in request.lower() for keyword in geometry_keywords)
+        
+        # Geometry modification keywords that require context
+        modification_keywords = [
+            "wider", "bigger", "smaller", "larger", "thicker", "thinner",
+            "taller", "shorter", "longer", "extend", "scale", "resize",
+            "modify", "change", "adjust", "increase", "decrease", "expand"
+        ]
+        
+        # Shape and structure keywords
+        shape_keywords = [
+            "circle", "rectangle", "box", "sphere", "cylinder", "cone",
+            "arch", "beam", "column", "deck", "support", "foundation"
+        ]
+        
+        # Tool and capability keywords
+        tool_keywords = [
+            "mcp", "tool", "tools", "available", "capability", "capabilities",
+            "grasshopper", "component", "function", "what can", "list of"
+        ]
+        
+        request_lower = request.lower()
+        
+        # Check for tool-related queries - these should go to geometry agent
+        if any(keyword in request_lower for keyword in tool_keywords):
+            self.logger.info(f"Detected tool/capability inquiry: '{request}'")
+            return True
+            
+        # Check for direct geometry keywords
+        if any(keyword in request_lower for keyword in creation_keywords + shape_keywords):
+            return True
+            
+        # Check for modification keywords - these need conversation context
+        if any(keyword in request_lower for keyword in modification_keywords):
+            # If we have conversation history with geometry work, this is likely a geometry request
+            if self.conversation_history:
+                for interaction in self.conversation_history[-3:]:  # Check last 3 interactions
+                    prev_request = interaction['request'].lower()
+                    prev_result = str(interaction['result']).lower()
+                    
+                    # If recent interaction involved geometry creation or modification
+                    if (any(kw in prev_request for kw in creation_keywords + shape_keywords) or
+                        any(kw in prev_result for kw in ["component", "grasshopper", "geometry", "spiral", "staircase"])):
+                        self.logger.info(f"Detected geometry modification request with context: '{request}'")
+                        return True
+        
+        return False
     
     def _handle_geometry_request(self, request: str) -> AgentResponse:
-        """Handle geometry-specific requests directly with Hybrid geometry agent."""
+        """Handle geometry-specific requests directly with geometry agent including conversation context."""
         try:
             if "geometry" not in self.managed_agents:
                 return AgentResponse(
@@ -251,10 +310,13 @@ class TriageAgent(BaseAgent):
             
             geometry_agent = self.managed_agents["geometry"]
             
-            # Execute task directly with STDIO geometry agent (100% reliable)
-            self.logger.info(f"Delegating geometry task to STDIO agent: {request[:100]}")
+            # Build conversation context for geometry agent (including triage conversation)
+            request_with_context = self._build_conversation_context_for_geometry(request)
             
-            result = geometry_agent.run(request)
+            # Execute task with STDIO geometry agent (100% reliable) including context
+            self.logger.info(f"Delegating geometry task to STDIO agent with context: {request[:50]}...")
+            
+            result = geometry_agent.run(request_with_context)
             
             # Check if result indicates success
             if result and not ("error" in str(result).lower() and "fallback" not in str(result).lower()):
@@ -262,14 +324,14 @@ class TriageAgent(BaseAgent):
                 return AgentResponse(
                     success=True,
                     message=str(result),
-                    data={"result": result, "agent": "geometry", "method": "stdio"}
+                    data={"result": result, "agent": "geometry", "method": "stdio_with_context"}
                 )
             else:
                 self.logger.warning("⚠️ Geometry task completed with issues")
                 return AgentResponse(
                     success=True,  # Still consider success as task was handled
                     message=str(result),
-                    data={"result": result, "agent": "geometry", "method": "stdio", "status": "partial"}
+                    data={"result": result, "agent": "geometry", "method": "stdio_with_context", "status": "partial"}
                 )
                 
         except Exception as e:
@@ -279,6 +341,146 @@ class TriageAgent(BaseAgent):
                 message=f"Geometry task failed: {e}",
                 error=AgentError.EXECUTION_ERROR
             )
+    
+    def _build_conversation_context_for_geometry(self, new_request: str) -> str:
+        """Build conversation context specifically for geometry agent delegation.
+        
+        This includes relevant context from triage conversation history.
+        
+        Args:
+            new_request: The new geometry request
+            
+        Returns:
+            Request with triage conversation context for geometry continuity
+        """
+        if not self.conversation_history:
+            return new_request
+        
+        # Find relevant geometry-related interactions from history
+        relevant_history = []
+        for interaction in self.conversation_history[-5:]:  # Last 5 interactions
+            if any(keyword in interaction['request'].lower() for keyword in [
+                'geometry', 'point', 'line', 'curve', 'spiral', 'create', 'draw', 
+                'build', 'construct', 'bridge', 'staircase', 'wider', 'bigger', 'smaller'
+            ]):
+                relevant_history.append(interaction)
+        
+        if not relevant_history:
+            return new_request
+        
+        # Build context from relevant history
+        context_parts = ["CONTEXT: Previous related work:"]
+        
+        for i, interaction in enumerate(relevant_history[-3:]):  # Last 3 relevant interactions
+            context_parts.append(f"Previous task {i+1}:")
+            context_parts.append(f"Human: {interaction['request']}")
+            # Include just the key result info for geometry continuity
+            result_text = str(interaction['result'])
+            if "spiral staircase" in result_text.lower():
+                context_parts.append("Assistant: Created spiral staircase Grasshopper component")
+            elif len(result_text) > 150:
+                context_parts.append(f"Assistant: {result_text[:150]}...")
+            else:
+                context_parts.append(f"Assistant: {result_text}")
+            context_parts.append("")
+        
+        context_parts.append("CURRENT TASK:")
+        context_parts.append(new_request)
+        context_parts.append("")
+        context_parts.append("Note: If the current task refers to previous work (like 'make wider', 'change size'), use the context above to understand what to modify.")
+        
+        return "\n".join(context_parts)
+    
+    def _run_with_context(self, request: str) -> AgentResponse:
+        """Run triage agent with conversation context for continuity.
+        
+        Args:
+            request: The user's request
+            
+        Returns:
+            AgentResponse with triage results
+        """
+        try:
+            # Build conversation context for continuity
+            request_with_context = self._build_conversation_context(request)
+            
+            # Create fresh agent for each request to avoid dead tool references
+            # Conversation memory is maintained separately in self.conversation_history
+            fresh_agent = CodeAgent(**self.agent_config)
+            self.logger.info("Created fresh triage agent with conversation context")
+            
+            # Execute request with fresh agent and conversation context
+            result = fresh_agent.run(request_with_context)
+            
+            self.logger.info("✅ Triage request completed with conversation context")
+            
+            return AgentResponse(
+                success=True,
+                message=str(result),
+                data={"result": result, "agent": "triage", "method": "context"}
+            )
+            
+        except Exception as e:
+            self.logger.error(f"❌ Triage request with context failed: {e}")
+            return AgentResponse(
+                success=False,
+                message=f"Triage request failed: {e}",
+                error=AgentError.EXECUTION_ERROR
+            )
+    
+    def _build_conversation_context(self, new_request: str) -> str:
+        """Build conversation context for continuity with fresh agents.
+        
+        This method works with fresh CodeAgent instances by providing conversation
+        history as context rather than relying on agent memory.
+        
+        Args:
+            new_request: The new request to execute
+            
+        Returns:
+            Request with conversation context for continuity
+        """
+        if not self.conversation_history:
+            # First interaction - just return the request
+            return new_request
+        
+        # Build context from recent conversation history (last 3 interactions to avoid context overflow)
+        recent_history = self.conversation_history[-3:]
+        context_parts = []
+        
+        for i, interaction in enumerate(recent_history):
+            context_parts.append(f"Previous interaction {i+1}:")
+            context_parts.append(f"Human: {interaction['request']}")
+            # Truncate long results to keep context manageable
+            result_text = str(interaction['result'])
+            if len(result_text) > 200:
+                context_parts.append(f"Assistant: {result_text[:200]}...")
+            else:
+                context_parts.append(f"Assistant: {result_text}")
+            context_parts.append("")
+        
+        context_parts.append("Current request:")
+        context_parts.append(new_request)
+        
+        return "\n".join(context_parts)
+    
+    def _store_conversation(self, request: str, result: any) -> None:
+        """Store conversation interaction for future reference.
+        
+        Args:
+            request: The request that was executed
+            result: The result from the request execution
+        """
+        import time
+        self.conversation_history.append({
+            "request": request,
+            "result": str(result),
+            "timestamp": time.time()
+        })
+        
+        # Keep only last 10 interactions to prevent memory overflow
+        if len(self.conversation_history) > 10:
+            self.conversation_history = self.conversation_history[-10:]
     
     def reset_all_agents(self):
         """Reset conversation state for all agents."""
@@ -290,6 +492,9 @@ class TriageAgent(BaseAgent):
             else:
                 self.logger.warning(f"Agent {name} does not have reset_conversation method")
         
+        # Reset conversation history
+        self.conversation_history = []
+        
         self.design_state = {
             "current_step": "initial",
             "bridge_type": None,
@@ -298,4 +503,4 @@ class TriageAgent(BaseAgent):
             "materials_checked": False,
             "structural_validated": False
         }
-        self.logger.info("All agents and design state reset")
+        self.logger.info("All agents, conversation history, and design state reset")

@@ -15,11 +15,14 @@ uv venv
 .venv\Scripts\activate
 uv pip install -e .
 
-# 3. Start HTTP MCP server
-uv run python -m bridge_design_system.mcp.http_mcp_server --port 8001
+# 3. Run the interactive agent system
+uv run python -m bridge_design_system.main
 
-# 4. Run test (in new terminal)
-uv run python test_http_simple_fixed.py
+# The system will start in interactive mode where you can:
+# - Create geometry (e.g., "create a spiral staircase")
+# - Modify existing work (e.g., "make the steps wider")
+# - Ask about capabilities (e.g., "what are the available mcp tools?")
+# - Type 'help' for commands, 'exit' to quit
 ```
 
 *For detailed setup including Grasshopper component deployment, see [Installation](#installation) below.*
@@ -44,6 +47,12 @@ uv run python test_http_simple_fixed.py
 - ✅ **AI-generated 3D geometry**: Spirals, bridges, complex structures
 - ✅ **6 core MCP tools** optimized for stability
 - ✅ **Cross-platform**: WSL2 + native Windows support
+
+**New Features (v0.2.0):**
+- 🎉 **Conversation Memory**: Agents remember context between interactions
+- 🎯 **Natural Modifications**: Say "make it wider" and the agent knows what to modify
+- 🔧 **Dynamic Tool Discovery**: Ask "what are the available mcp tools?" for current capabilities
+- 💬 **Interactive CLI**: User-friendly interface with commands and real-time status
 
 ## 🎯 Quick Start
 
@@ -115,44 +124,51 @@ copy "bin\Release\net48\GH_MCP.gha" "%APPDATA%\Grasshopper\Libraries\"
 
 ### Basic Usage
 
-#### Windows (PowerShell/Command Prompt)
+#### Interactive Agent System (Recommended)
 
-**Start HTTP MCP Server (Recommended - Fast):**
+**Windows (PowerShell/Command Prompt) or WSL2:**
+```powershell
+# Run the interactive bridge design system
+uv run python -m bridge_design_system.main
+
+# You'll see a welcome screen with commands
+# Start creating geometry with natural language:
+# Designer> create a spiral staircase
+# Designer> make the steps wider
+# Designer> what are the available mcp tools?
+```
+
+**Available Commands:**
+- `help` or `h` - Show available commands
+- `status` or `st` - Show agent status and MCP connection
+- `reset` or `rs` - Reset conversation history
+- `clear` - Clear screen
+- `exit` or `q` - Exit system
+
+#### Advanced Usage (Development)
+
+**Start HTTP MCP Server Separately:**
 ```powershell
 # Terminal 1 - Start persistent HTTP server
 uv run python -m bridge_design_system.mcp.http_mcp_server --port 8001
 
-# Terminal 2 - Run your agents or tests
-uv run python test_http_simple_fixed.py
+# Terminal 2 - Run with enhanced CLI
+uv run python -m bridge_design_system.main --enhanced-cli
 ```
 
-**Or Use STDIO Mode (Fallback - Reliable):**
-```powershell
-# Run with automatic STDIO server spawning
-uv run python test_simple_working_solution.py
-```
-
-#### WSL2 (Linux Terminal)
-
-**Start HTTP MCP Server:**
-```bash
-# Terminal 1 - Start persistent HTTP server
-uv run python -m bridge_design_system.mcp.http_mcp_server --port 8001
-
-# Terminal 2 - Run your agents or tests
-uv run python test_http_simple_fixed.py
-```
-
-**Note**: WSL2 automatically detects Windows host IP for TCP bridge connection.
-
-**Create Geometry with AI:**
+**Programmatic Usage:**
 ```python
-from bridge_design_system.agents.geometry_agent_mcpadapt import GeometryAgentMCPAdapt
+from bridge_design_system.agents.triage_agent import TriageAgent
 
-# Uses HTTP if server running, falls back to STDIO automatically
-agent = GeometryAgentMCPAdapt()
-result = agent.run('Create a parametric bridge tower with cross-bracing')
+# Initialize the system
+triage = TriageAgent()
+triage.initialize_agent()
+
+# Create geometry through natural language
+response = triage.handle_design_request("Create a parametric bridge tower with cross-bracing")
 ```
+
+**Note**: The system automatically detects Windows host IP from WSL2 for TCP bridge connection.
 
 ## 🏗️ Architecture Details
 
