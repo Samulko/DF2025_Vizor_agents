@@ -6,6 +6,8 @@ eliminating HTTP complexity and async/sync conflicts.
 """
 
 import logging
+import gc
+import asyncio
 from typing import List, Optional, Any
 
 from smolagents import CodeAgent, tool
@@ -90,7 +92,12 @@ class GeometryAgentSTDIO:
                 # Execute task
                 result = agent.run(task)
                 logger.info("✅ Task completed successfully with STDIO")
-                return result
+                
+            # Force cleanup on Windows to reduce pipe warnings
+            if hasattr(asyncio, 'ProactorEventLoop'):
+                gc.collect()
+                
+            return result
                 
         except Exception as e:
             logger.error(f"❌ STDIO execution failed: {e}")
@@ -245,7 +252,7 @@ Please inform the user that full Grasshopper functionality requires MCP connecti
         try:
             with MCPAdapt(self.stdio_params, SmolAgentsAdapter()) as mcp_tools:
                 tool_names = [getattr(tool, 'name', str(tool)) for tool in mcp_tools]
-                return {
+                info = {
                     "connected": True,
                     "transport": "stdio",
                     "mcp_tools": len(mcp_tools),
@@ -257,6 +264,12 @@ Please inform the user that full Grasshopper functionality requires MCP connecti
                     "strategy": "simplified",
                     "agent_type": "STDIO"
                 }
+                
+            # Force cleanup on Windows
+            if hasattr(asyncio, 'ProactorEventLoop'):
+                gc.collect()
+                
+            return info
         except Exception as e:
             fallback_tools = self._create_fallback_tools()
             return {
