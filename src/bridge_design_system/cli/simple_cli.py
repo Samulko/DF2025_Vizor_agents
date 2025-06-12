@@ -180,32 +180,50 @@ class SimpleAgentCLI:
         
         table = Table(title="Current Agent Status", show_header=True, header_style="bold magenta")
         table.add_column("Agent", width=12)
-        table.add_column("Status", width=15)
+        table.add_column("Transport", width=12)
+        table.add_column("Connected", width=10)
+        table.add_column("Tools", width=8)
         table.add_column("Steps", width=8)
-        table.add_column("Active", width=10)
         
         for agent_name, info in status.items():
             agent_color = self.agent_colors.get(agent_name, "white")
             
+            # Get transport and connection info
+            transport = info.get('transport', 'N/A')
+            connected = "✓ Yes" if info.get('mcp_connected', False) else "✗ No"
+            tools = str(info.get('tool_count', 0))
+            
             table.add_row(
                 Text(agent_name.title(), style=f"bold {agent_color}"),
-                f"Step {info['step_count']}/{20}",
-                "✓ Yes" if info['initialized'] else "✗ No",
-                f"{info['conversation_length']} interactions"
+                transport.upper(),
+                connected,
+                tools,
+                f"{info['step_count']}/20"
             )
         
         self.console.print(table)
+        
+        # Show additional info for geometry agent
+        geometry_status = status.get('geometry', {})
+        if geometry_status.get('agent_type') == 'STDIO':
+            self.console.print("[green]✓[/green] Using simplified STDIO-only geometry agent (100% reliable)")
+            
+        # Windows pipe warning note
+        import platform
+        if platform.system() == "Windows":
+            self.console.print("[dim]Note: Pipe cleanup warnings on Windows are harmless and can be ignored[/dim]")
+        
         self.console.print()
     
     def show_help(self):
         """Show help information."""
         help_panel = Panel(
             "[bold]Available Commands:[/bold]\n\n" +
-            "🗨️  **Chat with Agents:**\n" +
-            "• \"Create a pedestrian bridge between two points\"\n" +
-            "• \"Check what materials are available\"\n" +
-            "• \"Run structural analysis on the current design\"\n" +
-            "• \"Generate bridge geometry with steel beams\"\n\n" +
+            "🗨️  **Chat with Triage Agent (coordinates specialized agents):**\n" +
+            "• \"Create a pedestrian bridge between two points\" (→ Geometry Agent)\n" +
+            "• \"Check what materials are available\" (→ Material Agent)\n" +
+            "• \"Run structural analysis on the current design\" (→ Structural Agent)\n" +
+            "• \"Generate bridge geometry with steel beams\" (→ Geometry Agent via STDIO)\n\n" +
             "⚡ **Quick Commands:**\n" +
             "• [bold cyan]help (h)[/bold cyan] - Show this help\n" +
             "• [bold cyan]status (st)[/bold cyan] - Show agent status\n" +

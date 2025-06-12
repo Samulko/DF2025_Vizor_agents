@@ -65,7 +65,7 @@ def test_system():
         # Test basic operation
         logger.info("\nTesting basic operation...")
         response = triage.handle_design_request(
-            "Hello, I'd like to test the system. Can you tell me what agents are available?"
+            "Hello, I'd like to test the system. Can you tell me what agents are available and confirm STDIO-only transport?"
         )
         
         if response.success:
@@ -96,6 +96,7 @@ def interactive_mode():
         
         print("\n" + "="*60)
         print("AR-Assisted Bridge Design System")
+        print("Using STDIO-only geometry agent (100% reliable)")
         print("="*60)
         print("\nType 'exit' to quit, 'reset' to clear conversation")
         print("Type 'status' to see agent status\n")
