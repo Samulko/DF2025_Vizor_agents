@@ -98,14 +98,14 @@ class TriageAgent(BaseAgent):
     def initialize_agent(self):
         """Initialize the triage agent with managed agents."""
         # Import here to avoid circular imports
-        from .geometry_agent_mcpadapt import GeometryAgentMCPAdapt
+        from .geometry_agent_hybrid import GeometryAgentHybrid
         # Temporarily disabled for geometry-only mode
         # from .material_agent import MaterialAgent
         # from .structural_agent import StructuralAgent
         
-        # Initialize geometry agent with MCPAdapt support (robust MCP integration)
-        geometry_agent = GeometryAgentMCPAdapt()
-        self.logger.info("✅ Geometry agent initialized with MCPAdapt support")
+        # Initialize geometry agent with Hybrid strategy (solves async/sync issues)
+        geometry_agent = GeometryAgentHybrid()
+        self.logger.info("✅ Geometry agent initialized with Hybrid strategy (HTTP discovery + STDIO execution)")
         
         # Initialize managed agents - GEOMETRY ONLY MODE
         self.managed_agents = {
@@ -168,18 +168,22 @@ class TriageAgent(BaseAgent):
         status = {}
         for name, agent in self.managed_agents.items():
             if name == "geometry":
-                # Special handling for GeometryAgentMCPAdapt
+                # Special handling for GeometryAgentHybrid
                 tool_info = agent.get_tool_info()
                 status[name] = {
-                    "initialized": True,  # MCPAdapt agent is always initialized
+                    "initialized": True,  # Hybrid agent is always initialized
                     "mcp_connected": tool_info.get("connected", False),
                     "mode": tool_info.get("mode", "unknown"),
+                    "strategy": tool_info.get("strategy", "unknown"),
+                    "transport": tool_info.get("transport", "unknown"),
                     "tool_count": tool_info.get("total_tools", 0),
                     "mcp_tool_count": tool_info.get("mcp_tools", 0),
                     "fallback_tools": tool_info.get("fallback_tools", 0),
                     "custom_tools": tool_info.get("custom_tools", 0),
+                    "cache_status": tool_info.get("cache_status", "unknown"),
+                    "cache_age": tool_info.get("cache_age", None),
                     "message": tool_info.get("message", "No status available"),
-                    "agent_type": "MCPAdapt"
+                    "agent_type": "Hybrid"
                 }
             else:
                 # Standard BaseAgent pattern
@@ -238,7 +242,7 @@ class TriageAgent(BaseAgent):
         return any(keyword in request.lower() for keyword in geometry_keywords)
     
     def _handle_geometry_request(self, request: str) -> AgentResponse:
-        """Handle geometry-specific requests directly with MCPAdapt geometry agent."""
+        """Handle geometry-specific requests directly with Hybrid geometry agent."""
         try:
             if "geometry" not in self.managed_agents:
                 return AgentResponse(
@@ -249,8 +253,8 @@ class TriageAgent(BaseAgent):
             
             geometry_agent = self.managed_agents["geometry"]
             
-            # Execute task directly with MCPAdapt geometry agent
-            self.logger.info(f"Delegating geometry task to MCPAdapt agent: {request[:100]}")
+            # Execute task directly with Hybrid geometry agent (solves async/sync issues)
+            self.logger.info(f"Delegating geometry task to Hybrid agent: {request[:100]}")
             
             result = geometry_agent.run(request)
             
@@ -260,14 +264,14 @@ class TriageAgent(BaseAgent):
                 return AgentResponse(
                     success=True,
                     message=str(result),
-                    data={"result": result, "agent": "geometry", "method": "mcpadapt"}
+                    data={"result": result, "agent": "geometry", "method": "hybrid"}
                 )
             else:
                 self.logger.warning("⚠️ Geometry task completed with issues")
                 return AgentResponse(
                     success=True,  # Still consider success as task was handled
                     message=str(result),
-                    data={"result": result, "agent": "geometry", "method": "mcpadapt", "status": "partial"}
+                    data={"result": result, "agent": "geometry", "method": "hybrid", "status": "partial"}
                 )
                 
         except Exception as e:
