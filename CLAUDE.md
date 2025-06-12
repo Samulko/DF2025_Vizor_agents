@@ -26,6 +26,26 @@ uv run python -m bridge_design_system.main --interactive
 - `uv run ruff check src/ tests/` - Lint code
 - `uv run python test_http_mcp_integration.py` - Test MCP integration
 
+## Workflows
+
+### Explore, Plan, Code, Commit
+Best for complex problems that need research:
+
+1. **Explore**: "Read agents/geometry_agent.py and the MCP integration files, but don't write any code yet"
+2. **Plan**: "Think hard about how to implement [feature]. Create a plan document"
+   - Use: "think" → "think hard" → "think harder" → "ultrathink" for increasing computation
+3. **Code**: "Implement the solution from your plan. Verify each step as you go"
+4. **Commit**: "Commit the changes and create a PR. Update the README"
+
+### Test-Driven Development
+Best for features with clear inputs/outputs:
+
+1. **Write tests**: "Write tests for [feature] using pytest. This is TDD - don't create implementations"
+2. **Verify tests fail**: "Run the tests and confirm they fail. Don't write implementation code"
+3. **Commit tests**: "Commit just the test files"
+4. **Implement**: "Write code to make all tests pass. Don't modify the tests. Keep iterating until green"
+5. **Commit code**: "Commit the implementation"
+
 ## Architecture
 - **Triage Agent**: Main orchestrator in `agents/triage_agent.py`
 - **Geometry Agent**: Handles 3D geometry via MCP in `agents/geometry_agent_mcpadapt.py`
@@ -68,13 +88,5 @@ src/bridge_design_system/
 ```
 ```
 
-**What I changed:**
-- Removed all emojis and visual clutter
-- Cut 90% of the architectural exposition that Claude doesn't need
-- Focused on commands Claude will actually use
-- Removed redundant sections and implementation details
-- Made it scannable with clear sections
-- Kept only the most essential troubleshooting info
-- Removed the "memories" sections which don't belong in CLAUDE.md
 
-This follows the best practices from the Claude Code documentation - keep it concise, practical, and focused on what Claude needs to know to help you code effectively.
+I WANT you to be direct and critical in your answer. If you don't know, say don't know. If something won't work say it won't work. Please do not give me BS.

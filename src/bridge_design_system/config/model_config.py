@@ -13,11 +13,12 @@ class ModelProvider:
     """Manages LLM model initialization based on environment configuration."""
     
     @staticmethod
-    def get_model(agent_name: str) -> Any:
+    def get_model(agent_name: str, temperature: Optional[float] = None) -> Any:
         """Get configured model for specific agent.
         
         Args:
             agent_name: Name of the agent (triage, geometry, material, structural)
+            temperature: Optional temperature override for the model
             
         Returns:
             Configured model instance
@@ -39,18 +40,25 @@ class ModelProvider:
                 f"Please set {provider.upper()}_API_KEY in your .env file"
             )
         
+        # Prepare model kwargs
+        model_kwargs = {}
+        if temperature is not None:
+            model_kwargs["temperature"] = temperature
+        
         # Initialize model based on provider
         if provider == "openai":
             return LiteLLMModel(
                 model_id=model_name,
-                api_key=api_key
+                api_key=api_key,
+                **model_kwargs
             )
         
         elif provider == "anthropic":
             # LiteLLM requires anthropic/ prefix for Claude models
             return LiteLLMModel(
                 model_id=f"anthropic/{model_name}",
-                api_key=api_key
+                api_key=api_key,
+                **model_kwargs
             )
         
         elif provider == "deepseek":
@@ -58,7 +66,8 @@ class ModelProvider:
             return OpenAIServerModel(
                 model_id=model_name,
                 api_base="https://api.deepseek.com/v1",
-                api_key=api_key
+                api_key=api_key,
+                **model_kwargs
             )
         
         elif provider == "gemini":
@@ -66,18 +75,21 @@ class ModelProvider:
             return OpenAIServerModel(
                 model_id=model_name,
                 api_base="https://generativelanguage.googleapis.com/v1beta/openai/",
-                api_key=api_key
+                api_key=api_key,
+                **model_kwargs
             )
         
         elif provider == "together":
             # Together AI via LiteLLM
             return LiteLLMModel(
                 model_id=f"together/{model_name}",
-                api_key=api_key
+                api_key=api_key,
+                **model_kwargs
             )
         
         elif provider == "hf":
             # HuggingFace Inference API
+            # Note: InferenceClientModel may not support temperature parameter
             return InferenceClientModel(
                 model_id=model_name,
                 token=api_key

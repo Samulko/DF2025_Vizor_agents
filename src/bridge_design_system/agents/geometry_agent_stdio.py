@@ -8,9 +8,13 @@ eliminating HTTP complexity and async/sync conflicts.
 import logging
 import gc
 import asyncio
+import time
+from copy import deepcopy
+from pathlib import Path
 from typing import List, Optional, Any
 
 from smolagents import CodeAgent, tool
+from smolagents.agents import PromptTemplates, SystemPromptStep, EMPTY_PROMPT_TEMPLATES
 from mcp import StdioServerParameters
 from mcpadapt.core import MCPAdapt
 from mcpadapt.smolagents_adapter import SmolAgentsAdapter
@@ -54,9 +58,48 @@ class GeometryAgentSTDIO:
             env=None
         )
         
-        # Get model configuration
-        self.model = ModelProvider.get_model(model_name)
-        logger.info(f"Initialized {model_name} agent with STDIO-only transport")
+        # Get model configuration with low temperature for precise instruction following
+        self.model = ModelProvider.get_model(model_name, temperature=0.1)
+        
+        # Load system prompt
+        self.system_prompt = self._load_system_prompt()
+        
+        # Conversation memory for continuous chat
+        self.conversation_history = []
+        self.persistent_agent = None  # Keep agent instance for conversation continuity
+        
+        logger.info(f"Initialized {model_name} agent with STDIO-only transport (temperature=0.1 for precise instruction following)")
+    
+    def _load_system_prompt(self) -> str:
+        """Load the system prompt for the geometry agent."""
+        try:
+            # Get the project root directory
+            current_file = Path(__file__)
+            project_root = current_file.parent.parent.parent.parent  # Go up to vizor_agents/
+            prompt_path = project_root / "system_prompts" / "geometry_agent.md"
+            
+            if prompt_path.exists():
+                return prompt_path.read_text(encoding='utf-8')
+            else:
+                logger.warning(f"System prompt file not found at {prompt_path}")
+                return self._get_default_system_prompt()
+        except Exception as e:
+            logger.warning(f"Failed to load system prompt: {e}")
+            return self._get_default_system_prompt()
+    
+    def _get_default_system_prompt(self) -> str:
+        """Get default system prompt if file loading fails."""
+        return """You are a Geometry Agent specialized in creating 3D geometry in Rhino Grasshopper.
+
+Your role:
+- Create geometric forms methodically, step by step
+- Use MCP tools to generate Python script components in Grasshopper
+- Only model what has been specifically requested
+- Work precisely and follow instructions exactly
+- Use Rhino.Geometry library functions in Python scripts
+- Assign geometry outputs to variable 'a' for Grasshopper output
+
+Always use the available MCP tools to create actual geometry in Grasshopper, not just descriptions."""
     
     def run(self, task: str) -> Any:
         """Execute the geometry task using STDIO transport.
@@ -80,17 +123,29 @@ class GeometryAgentSTDIO:
                 # Combine MCP tools with custom tools
                 all_tools = list(mcp_tools) + self.custom_tools
                 
-                # Create agent with all tools
-                agent = CodeAgent(
-                    tools=all_tools,
-                    model=self.model,
-                    add_base_tools=True,
-                    max_steps=self.max_steps,
-                    additional_authorized_imports=self.SAFE_IMPORTS
-                )
+                # Create or reuse persistent agent for conversation continuity
+                if self.persistent_agent is None:
+                    # TODO: Add custom system prompt when template compilation is fixed
+                    self.persistent_agent = CodeAgent(
+                        tools=all_tools,
+                        model=self.model,
+                        add_base_tools=True,
+                        max_steps=self.max_steps,
+                        additional_authorized_imports=self.SAFE_IMPORTS
+                    )
+                    logger.info("Created new persistent agent for conversation continuity")
+                else:
+                    logger.info("Using existing persistent agent (maintains conversation memory)")
                 
-                # Execute task
-                result = agent.run(task)
+                # Build conversation context for continuity
+                conversation_context = self._build_conversation_context(task)
+                
+                # Execute task with conversation memory (reset=False for continuity)
+                result = self.persistent_agent.run(conversation_context, reset=False)
+                
+                # Store conversation for future reference
+                self._store_conversation(task, result)
+                
                 logger.info("✅ Task completed successfully with STDIO")
                 
             # Force cleanup on Windows to reduce pipe warnings
@@ -118,6 +173,8 @@ class GeometryAgentSTDIO:
             # Create agent with fallback tools
             fallback_tools = self._create_fallback_tools() + self.custom_tools
             
+            # Create fallback agent with low temperature
+            # TODO: Add custom system prompt when template compilation is fixed
             fallback_agent = CodeAgent(
                 tools=fallback_tools,
                 model=self.model,
@@ -241,6 +298,57 @@ Please inform the user that full Grasshopper functionality requires MCP connecti
             }
         
         return [create_point_fallback, create_line_fallback, create_spiral_fallback, get_connection_status]
+    
+    def _build_conversation_context(self, new_task: str) -> str:
+        """Build conversation context for continuity.
+        
+        Args:
+            new_task: The new task to execute
+            
+        Returns:
+            Task with conversation context for continuity
+        """
+        if not self.conversation_history:
+            # First interaction - just return the task
+            return new_task
+        
+        # Build context from recent conversation history (last 3 interactions to avoid context overflow)
+        recent_history = self.conversation_history[-3:]
+        context_parts = []
+        
+        for i, interaction in enumerate(recent_history):
+            context_parts.append(f"Previous interaction {i+1}:")
+            context_parts.append(f"Human: {interaction['task']}")
+            context_parts.append(f"Assistant: {interaction['result'][:200]}..." if len(str(interaction['result'])) > 200 else f"Assistant: {interaction['result']}")
+            context_parts.append("")
+        
+        context_parts.append("Current task:")
+        context_parts.append(new_task)
+        
+        return "\n".join(context_parts)
+    
+    def _store_conversation(self, task: str, result: Any) -> None:
+        """Store conversation interaction for future reference.
+        
+        Args:
+            task: The task that was executed
+            result: The result from the task execution
+        """
+        self.conversation_history.append({
+            "task": task,
+            "result": str(result),
+            "timestamp": time.time()
+        })
+        
+        # Keep only last 10 interactions to prevent memory overflow
+        if len(self.conversation_history) > 10:
+            self.conversation_history = self.conversation_history[-10:]
+    
+    def reset_conversation(self) -> None:
+        """Reset conversation memory and agent state."""
+        self.conversation_history = []
+        self.persistent_agent = None
+        logger.info("🔄 Conversation memory and agent state reset")
     
     def get_tool_info(self) -> dict:
         """Get information about available tools and connection status.

@@ -116,7 +116,8 @@ def interactive_mode():
                     status = triage.get_agent_status()
                     print("\nAgent Status:")
                     for agent, info in status.items():
-                        print(f"  {agent}: Steps={info['step_count']}, Initialized={info['initialized']}")
+                        conversation_len = len(triage.managed_agents[agent].conversation_history) if agent in triage.managed_agents and hasattr(triage.managed_agents[agent], 'conversation_history') else 0
+                        print(f"  {agent}: Steps={info['step_count']}, Initialized={info['initialized']}, Conversations={conversation_len}")
                     continue
                 elif not user_input:
                     continue

@@ -183,22 +183,29 @@ class SimpleAgentCLI:
         table.add_column("Transport", width=12)
         table.add_column("Connected", width=10)
         table.add_column("Tools", width=8)
-        table.add_column("Steps", width=8)
+        table.add_column("Memory", width=8)
         
         for agent_name, info in status.items():
             agent_color = self.agent_colors.get(agent_name, "white")
             
-            # Get transport and connection info
+            # Get transport, connection, and memory info
             transport = info.get('transport', 'N/A')
             connected = "✓ Yes" if info.get('mcp_connected', False) else "✗ No"
             tools = str(info.get('tool_count', 0))
+            
+            # Get conversation memory count
+            memory_count = 0
+            if agent_name in self.triage_agent.managed_agents:
+                agent_instance = self.triage_agent.managed_agents[agent_name]
+                if hasattr(agent_instance, 'conversation_history'):
+                    memory_count = len(agent_instance.conversation_history)
             
             table.add_row(
                 Text(agent_name.title(), style=f"bold {agent_color}"),
                 transport.upper(),
                 connected,
                 tools,
-                f"{info['step_count']}/20"
+                f"{memory_count} msgs"
             )
         
         self.console.print(table)

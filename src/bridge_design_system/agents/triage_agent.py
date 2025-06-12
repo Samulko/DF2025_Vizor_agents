@@ -283,8 +283,13 @@ class TriageAgent(BaseAgent):
     def reset_all_agents(self):
         """Reset conversation state for all agents."""
         self.reset_conversation()
-        for agent in self.managed_agents.values():
-            agent.reset_conversation()
+        for name, agent in self.managed_agents.items():
+            if hasattr(agent, 'reset_conversation'):
+                agent.reset_conversation()
+                self.logger.info(f"Reset conversation for {name} agent")
+            else:
+                self.logger.warning(f"Agent {name} does not have reset_conversation method")
+        
         self.design_state = {
             "current_step": "initial",
             "bridge_type": None,
