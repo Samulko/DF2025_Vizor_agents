@@ -2,6 +2,28 @@
 
 An AI-assisted bridge design system that uses intelligent agents to control Rhino Grasshopper for parametric design generation. Features cost-effective Gemini AI models and dual MCP (Model Context Protocol) transport modes: persistent HTTP servers (60x faster connections) and reliable STDIO fallback.
 
+## 🎯 Quick Start for Windows Users
+
+```powershell
+# 1. Install UV package manager (PowerShell)
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+
+# 2. Clone and setup
+git clone <repository-url>
+cd vizor_agents
+uv venv
+.venv\Scripts\activate
+uv pip install -e .
+
+# 3. Start HTTP MCP server
+uv run python -m bridge_design_system.mcp.http_mcp_server --port 8001
+
+# 4. Run test (in new terminal)
+uv run python test_http_simple_fixed.py
+```
+
+*For detailed setup including Grasshopper component deployment, see [Installation](#installation) below.*
+
 ## 🚀 **Working Architecture**
 
 ```
@@ -26,29 +48,56 @@ An AI-assisted bridge design system that uses intelligent agents to control Rhin
 ## 🎯 Quick Start
 
 ### Prerequisites
-- **Windows 10/11** with WSL2
+- **Windows 10/11** (with optional WSL2)
 - **Rhino 8** with Grasshopper
-- **Python 3.10+** in WSL
-- **UV package manager**
+- **Python 3.10+**
+- **UV package manager** ([install guide](https://docs.astral.sh/uv/))
 
-### Installation
+### Installation - Choose Your Environment
 
-**1. Clone and Setup (in WSL)**
+#### Option A: Native Windows (Recommended for Grasshopper)
+
+**1. Clone and Setup (PowerShell or Command Prompt)**
+```powershell
+git clone <repository-url>
+cd vizor_agents
+
+# Install UV if not already installed
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+
+# Create virtual environment and install
+uv venv
+.venv\Scripts\activate  # Windows activation
+uv pip install -e .
+```
+
+#### Option B: WSL2 Environment
+
+**1. Clone and Setup (in WSL terminal)**
 ```bash
 git clone <repository-url>
 cd vizor_agents
 
 # Install with UV
 uv venv
-source .venv/bin/activate  # WSL/Linux
+source .venv/bin/activate  # Linux activation
 uv pip install -e .
 ```
 
 **2. Configure Environment**
+
+Windows (PowerShell):
+```powershell
+copy .env.example .env
+# Edit .env with notepad or your preferred editor
+notepad .env
+```
+
+WSL/Linux:
 ```bash
 cp .env.example .env
-# Edit .env with your API keys:
-# DEEPSEEK_API_KEY=your_deepseek_key
+# Edit .env with your API keys
+nano .env  # or vim/code
 ```
 
 **3. Deploy Grasshopper Component**
@@ -66,8 +115,10 @@ copy "bin\Release\net48\GH_MCP.gha" "%APPDATA%\Grasshopper\Libraries\"
 
 ### Basic Usage
 
+#### Windows (PowerShell/Command Prompt)
+
 **Start HTTP MCP Server (Recommended - Fast):**
-```bash
+```powershell
 # Terminal 1 - Start persistent HTTP server
 uv run python -m bridge_design_system.mcp.http_mcp_server --port 8001
 
@@ -76,10 +127,23 @@ uv run python test_http_simple_fixed.py
 ```
 
 **Or Use STDIO Mode (Fallback - Reliable):**
-```bash
+```powershell
 # Run with automatic STDIO server spawning
 uv run python test_simple_working_solution.py
 ```
+
+#### WSL2 (Linux Terminal)
+
+**Start HTTP MCP Server:**
+```bash
+# Terminal 1 - Start persistent HTTP server
+uv run python -m bridge_design_system.mcp.http_mcp_server --port 8001
+
+# Terminal 2 - Run your agents or tests
+uv run python test_http_simple_fixed.py
+```
+
+**Note**: WSL2 automatically detects Windows host IP for TCP bridge connection.
 
 **Create Geometry with AI:**
 ```python
@@ -158,23 +222,29 @@ a = rg.NurbsCurve.CreateInterpolatedCurve(points, 3)
 
 ### Integration Tests
 
-**HTTP Transport Tests (Fast):**
-```bash
-# Start HTTP server first
+#### Windows Testing
+
+**HTTP Transport Tests (PowerShell):**
+```powershell
+# Terminal 1 - Start HTTP server
 uv run python -m bridge_design_system.mcp.http_mcp_server --port 8001
 
-# Run HTTP tests (in another terminal)
+# Terminal 2 - Run tests
 uv run python test_http_simple_fixed.py       # Simple performance test
 uv run python test_http_only_geometry.py      # Complex geometry test
-uv run python test_both_transports.py         # Compare HTTP vs STDIO
+uv run python test_both_transports.py         # Compare transports
 ```
 
-**STDIO Transport Tests (Reliable):**
-```bash
+**STDIO Transport Tests:**
+```powershell
 # Automatic server spawning
 uv run python test_simple_working_solution.py  # Complete workflow
-uv run python test_spiral_direct.py            # Direct smolagents test
+uv run python test_spiral_direct.py            # Direct test
 ```
+
+#### WSL2 Testing
+
+Same commands as above, but run in WSL terminal. The system automatically handles Windows/WSL networking.
 
 ### Expected Results
 - **HTTP Connection**: ✅ 0.6s connection time
@@ -215,13 +285,33 @@ The system automatically detects WSL network settings:
 ### Common Issues
 
 **1. Connection Refused**
-```bash
+
+Windows (PowerShell as Administrator):
+```powershell
 # Check Windows firewall for both ports
 New-NetFirewallRule -DisplayName "MCP HTTP Server" -Direction Inbound -Protocol TCP -LocalPort 8001 -Action Allow
 New-NetFirewallRule -DisplayName "MCP TCP Bridge" -Direction Inbound -Protocol TCP -LocalPort 8081 -Action Allow
 ```
 
+WSL2 Specific:
+```bash
+# If WSL2 can't connect to Windows Grasshopper
+# Check Windows host IP detection
+ip route | grep default  # Should show Windows host IP
+```
+
 **2. HTTP Server Not Starting**
+
+Windows (PowerShell):
+```powershell
+# Check if port 8001 is in use
+netstat -an | findstr 8001
+
+# Find and kill process using the port
+Get-Process -Id (Get-NetTCPConnection -LocalPort 8001).OwningProcess | Stop-Process
+```
+
+WSL2/Linux:
 ```bash
 # Check if port 8001 is in use
 netstat -an | grep 8001
@@ -236,10 +326,19 @@ pkill -f "http_mcp_server"
 dir "%APPDATA%\Grasshopper\Libraries\GH_MCP.gha"
 ```
 
-**4. Windows Compatibility**
-- ✅ **TCP Bridge**: Works on Windows (localhost:8081)
-- ✅ **HTTP Server**: Cross-platform Python
-- ⚠️ **Requirement**: UV package manager must be installed on Windows
+**4. Platform-Specific Notes**
+
+Windows Native:
+- ✅ **Best Performance**: Direct localhost connections
+- ✅ **UV Installation**: Use PowerShell installer script
+- ✅ **Path Handling**: Automatic Windows path conversion
+- ⚠️ **Admin Rights**: May need for firewall rules
+
+WSL2:
+- ✅ **Auto-Detection**: Finds Windows host IP automatically
+- ✅ **Cross-Network**: Seamless WSL↔Windows communication
+- ⚠️ **Performance**: Slight network overhead vs native
+- 💡 **Tip**: Use `ip route | grep default` to verify connection
 
 ## 📚 Development
 
