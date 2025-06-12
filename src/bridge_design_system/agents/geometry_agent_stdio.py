@@ -64,9 +64,8 @@ class GeometryAgentSTDIO:
         # Load system prompt
         self.system_prompt = self._load_system_prompt()
         
-        # Conversation memory for continuous chat
+        # Conversation memory for continuous chat (separate from agent lifecycle)
         self.conversation_history = []
-        self.persistent_agent = None  # Keep agent instance for conversation continuity
         
         logger.info(f"Initialized {model_name} agent with STDIO-only transport (temperature=0.1 for precise instruction following)")
     
@@ -123,25 +122,22 @@ Always use the available MCP tools to create actual geometry in Grasshopper, not
                 # Combine MCP tools with custom tools
                 all_tools = list(mcp_tools) + self.custom_tools
                 
-                # Create or reuse persistent agent for conversation continuity
-                if self.persistent_agent is None:
-                    # TODO: Add custom system prompt when template compilation is fixed
-                    self.persistent_agent = CodeAgent(
-                        tools=all_tools,
-                        model=self.model,
-                        add_base_tools=True,
-                        max_steps=self.max_steps,
-                        additional_authorized_imports=self.SAFE_IMPORTS
-                    )
-                    logger.info("Created new persistent agent for conversation continuity")
-                else:
-                    logger.info("Using existing persistent agent (maintains conversation memory)")
+                # Create fresh agent for each request to avoid dead tool references
+                # Conversation memory is maintained separately in self.conversation_history
+                fresh_agent = CodeAgent(
+                    tools=all_tools,
+                    model=self.model,
+                    add_base_tools=True,
+                    max_steps=self.max_steps,
+                    additional_authorized_imports=self.SAFE_IMPORTS
+                )
+                logger.info("Created fresh agent with live MCP tools for reliable execution")
                 
                 # Build conversation context for continuity
                 conversation_context = self._build_conversation_context(task)
                 
-                # Execute task with conversation memory (reset=False for continuity)
-                result = self.persistent_agent.run(conversation_context, reset=False)
+                # Execute task with fresh agent and conversation context
+                result = fresh_agent.run(conversation_context)
                 
                 # Store conversation for future reference
                 self._store_conversation(task, result)
@@ -300,7 +296,10 @@ Please inform the user that full Grasshopper functionality requires MCP connecti
         return [create_point_fallback, create_line_fallback, create_spiral_fallback, get_connection_status]
     
     def _build_conversation_context(self, new_task: str) -> str:
-        """Build conversation context for continuity.
+        """Build conversation context for continuity with fresh agents.
+        
+        This method works with fresh CodeAgent instances by providing conversation
+        history as context rather than relying on agent memory.
         
         Args:
             new_task: The new task to execute
@@ -319,7 +318,12 @@ Please inform the user that full Grasshopper functionality requires MCP connecti
         for i, interaction in enumerate(recent_history):
             context_parts.append(f"Previous interaction {i+1}:")
             context_parts.append(f"Human: {interaction['task']}")
-            context_parts.append(f"Assistant: {interaction['result'][:200]}..." if len(str(interaction['result'])) > 200 else f"Assistant: {interaction['result']}")
+            # Truncate long results to keep context manageable
+            result_text = str(interaction['result'])
+            if len(result_text) > 200:
+                context_parts.append(f"Assistant: {result_text[:200]}...")
+            else:
+                context_parts.append(f"Assistant: {result_text}")
             context_parts.append("")
         
         context_parts.append("Current task:")
@@ -345,10 +349,9 @@ Please inform the user that full Grasshopper functionality requires MCP connecti
             self.conversation_history = self.conversation_history[-10:]
     
     def reset_conversation(self) -> None:
-        """Reset conversation memory and agent state."""
+        """Reset conversation memory."""
         self.conversation_history = []
-        self.persistent_agent = None
-        logger.info("🔄 Conversation memory and agent state reset")
+        logger.info("🔄 Conversation memory reset")
     
     def get_tool_info(self) -> dict:
         """Get information about available tools and connection status.
