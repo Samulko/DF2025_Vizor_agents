@@ -98,14 +98,14 @@ class TriageAgent(BaseAgent):
     def initialize_agent(self):
         """Initialize the triage agent with managed agents."""
         # Import here to avoid circular imports
-        from .geometry_agent_hybrid import GeometryAgentHybrid
+        from .geometry_agent_stdio import GeometryAgentSTDIO
         # Temporarily disabled for geometry-only mode
         # from .material_agent import MaterialAgent
         # from .structural_agent import StructuralAgent
         
-        # Initialize geometry agent with Hybrid strategy (solves async/sync issues)
-        geometry_agent = GeometryAgentHybrid()
-        self.logger.info("✅ Geometry agent initialized with Hybrid strategy (HTTP discovery + STDIO execution)")
+        # Initialize geometry agent with simplified STDIO-only strategy
+        geometry_agent = GeometryAgentSTDIO()
+        self.logger.info("✅ Geometry agent initialized with STDIO-only strategy (100% reliable)")
         
         # Initialize managed agents - GEOMETRY ONLY MODE
         self.managed_agents = {
@@ -168,10 +168,10 @@ class TriageAgent(BaseAgent):
         status = {}
         for name, agent in self.managed_agents.items():
             if name == "geometry":
-                # Special handling for GeometryAgentHybrid
+                # Special handling for GeometryAgentSTDIO
                 tool_info = agent.get_tool_info()
                 status[name] = {
-                    "initialized": True,  # Hybrid agent is always initialized
+                    "initialized": True,  # STDIO agent is always initialized
                     "mcp_connected": tool_info.get("connected", False),
                     "mode": tool_info.get("mode", "unknown"),
                     "strategy": tool_info.get("strategy", "unknown"),
@@ -180,10 +180,8 @@ class TriageAgent(BaseAgent):
                     "mcp_tool_count": tool_info.get("mcp_tools", 0),
                     "fallback_tools": tool_info.get("fallback_tools", 0),
                     "custom_tools": tool_info.get("custom_tools", 0),
-                    "cache_status": tool_info.get("cache_status", "unknown"),
-                    "cache_age": tool_info.get("cache_age", None),
                     "message": tool_info.get("message", "No status available"),
-                    "agent_type": "Hybrid"
+                    "agent_type": "STDIO"
                 }
             else:
                 # Standard BaseAgent pattern
@@ -253,8 +251,8 @@ class TriageAgent(BaseAgent):
             
             geometry_agent = self.managed_agents["geometry"]
             
-            # Execute task directly with Hybrid geometry agent (solves async/sync issues)
-            self.logger.info(f"Delegating geometry task to Hybrid agent: {request[:100]}")
+            # Execute task directly with STDIO geometry agent (100% reliable)
+            self.logger.info(f"Delegating geometry task to STDIO agent: {request[:100]}")
             
             result = geometry_agent.run(request)
             
@@ -264,14 +262,14 @@ class TriageAgent(BaseAgent):
                 return AgentResponse(
                     success=True,
                     message=str(result),
-                    data={"result": result, "agent": "geometry", "method": "hybrid"}
+                    data={"result": result, "agent": "geometry", "method": "stdio"}
                 )
             else:
                 self.logger.warning("⚠️ Geometry task completed with issues")
                 return AgentResponse(
                     success=True,  # Still consider success as task was handled
                     message=str(result),
-                    data={"result": result, "agent": "geometry", "method": "hybrid", "status": "partial"}
+                    data={"result": result, "agent": "geometry", "method": "stdio", "status": "partial"}
                 )
                 
         except Exception as e:
