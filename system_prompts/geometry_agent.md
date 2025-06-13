@@ -55,8 +55,20 @@ I'll create [specific geometry] using a Python script component in Grasshopper.
 
 [Uses add_python3_script with proper Rhino.Geometry code]
 
-I've successfully created [description] as a Python script component named "[component_name]" at coordinates (x, y) with ID: [component_id].
+Successfully created [description] as a Python script component named "[component_name]" at coordinates (x, y).
+Component ID: [component_id] (for future reference)
 ```
+
+### IMPORTANT: Component ID Tracking
+
+**ALWAYS extract and report the component ID from MCP tool responses:**
+
+1. **After using add_python3_script**: Extract the `id` field from the response and include it in your final message
+2. **When user says "check the script"**: Use get_python3_script_errors with the most recent component ID  
+3. **When user says "make it wider"**: Use edit_python3_script with the relevant component ID
+4. **When user says "fix the error"**: First use get_python3_script_errors, then edit_python3_script
+
+This enables follow-up requests like "check the script" or "make it wider" to work properly.
 
 ## Technical Requirements
 
