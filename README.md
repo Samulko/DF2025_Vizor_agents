@@ -234,40 +234,9 @@ for i in range(50):
 a = rg.NurbsCurve.CreateInterpolatedCurve(points, 3)
 ```
 
-## 🧪 Testing
+## 🚨 Known Issues
 
-### Integration Tests
-
-#### Windows Testing
-
-**HTTP Transport Tests (PowerShell):**
-```powershell
-# Terminal 1 - Start HTTP server
-uv run python -m bridge_design_system.mcp.http_mcp_server --port 8001
-
-# Terminal 2 - Run tests
-uv run python test_http_simple_fixed.py       # Simple performance test
-uv run python test_http_only_geometry.py      # Complex geometry test
-uv run python test_both_transports.py         # Compare transports
-```
-
-**STDIO Transport Tests:**
-```powershell
-# Automatic server spawning
-uv run python test_simple_working_solution.py  # Complete workflow
-uv run python test_spiral_direct.py            # Direct test
-```
-
-#### WSL2 Testing
-
-Same commands as above, but run in WSL terminal. The system automatically handles Windows/WSL networking.
-
-### Expected Results
-- **HTTP Connection**: ✅ 0.6s connection time
-- **STDIO Connection**: ✅ 2-3s server startup
-- **Tool Loading**: ✅ 6 optimized MCP tools
-- **Geometry Creation**: ✅ 3D objects appear in Grasshopper
-- **Fallback Chain**: ✅ HTTP → STDIO → Basic tools
+*Currently no known issues. Please report any problems at the project repository.*
 
 ## 🔧 Configuration
 
@@ -353,7 +322,6 @@ Windows Native:
 WSL2:
 - ✅ **Auto-Detection**: Finds Windows host IP automatically
 - ✅ **Cross-Network**: Seamless WSL↔Windows communication
-- ⚠️ **Performance**: Slight network overhead vs native
 - 💡 **Tip**: Use `ip route | grep default` to verify connection
 
 ## 📚 Development
