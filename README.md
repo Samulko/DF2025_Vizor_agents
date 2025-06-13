@@ -1,58 +1,6 @@
 # Vizor Agents - AR Bridge Design System
 
-An AI-assisted bridge design system that uses intelligent agents to control Rhino Grasshopper for parametric design generation. Features cost-effective Gemini AI models and dual MCP (Model Context Protocol) transport modes: persistent HTTP servers (60x faster connections) and reliable STDIO fallback.
-
-## 🎯 Quick Start for Windows Users
-
-```powershell
-# 1. Install UV package manager (PowerShell)
-powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
-
-# 2. Clone and setup
-git clone <repository-url>
-cd vizor_agents
-uv venv
-.venv\Scripts\activate
-uv pip install -e .
-
-# 3. Run the interactive agent system
-uv run python -m bridge_design_system.main
-
-# The system will start in interactive mode where you can:
-# - Create geometry (e.g., "create a spiral staircase")
-# - Modify existing work (e.g., "make the steps wider")
-# - Ask about capabilities (e.g., "what are the available mcp tools?")
-# - Type 'help' for commands, 'exit' to quit
-```
-
-*For detailed setup including Grasshopper component deployment, see [Installation](#installation) below.*
-
-## 🚀 **Working Architecture**
-
-```
-✅ WSL/Windows Environment (smolagents + Gemini AI)
-    ↓ Dual MCP Transport Modes
-    ├─ HTTP MCP Server (Persistent, 60x faster connections)
-    └─ STDIO MCP Server (Reliable fallback, proven)
-✅ TCP Bridge (Port 8081)
-    ↓ JSON command protocol
-✅ Grasshopper MCP Component (C# bridge)
-    ↓ Direct tool execution
-✅ Real-time Geometry Creation
-```
-
-**Proven Results:**
-- ✅ **HTTP Transport**: 0.6s connection time (vs 3s STDIO startup)
-- ✅ **Dual Transport Modes**: Automatic HTTP → STDIO fallback
-- ✅ **AI-generated 3D geometry**: Spirals, bridges, complex structures
-- ✅ **6 core MCP tools** optimized for stability
-- ✅ **Cross-platform**: WSL2 + native Windows support
-
-**New Features (v0.2.0):**
-- 🎉 **Conversation Memory**: Agents remember context between interactions
-- 🎯 **Natural Modifications**: Say "make it wider" and the agent knows what to modify
-- 🔧 **Dynamic Tool Discovery**: Ask "what are the available mcp tools?" for current capabilities
-- 💬 **Interactive CLI**: User-friendly interface with commands and real-time status
+An AI-assisted bridge design system that uses intelligent agents to control Rhino Grasshopper for parametric design generation. Features multi-provider AI model support and MCP (Model Context Protocol) integration via STDIO transport for collaborative, iterative geometry creation.
 
 ## 🎯 Quick Start
 
@@ -62,76 +10,87 @@ uv run python -m bridge_design_system.main
 - **Python 3.10+**
 - **UV package manager** ([install guide](https://docs.astral.sh/uv/))
 
-### Installation - Choose Your Environment
+### Installation
 
-#### Option A: Native Windows (Recommended for Grasshopper)
-
-**1. Clone and Setup (PowerShell or Command Prompt)**
-```powershell
-git clone <repository-url>
-cd vizor_agents
-
-# Install UV if not already installed
-powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
-
-# Create virtual environment and install
-uv venv
-.venv\Scripts\activate  # Windows activation
-uv pip install -e .
-```
-
-#### Option B: WSL2 Environment
-
-**1. Clone and Setup (in WSL terminal)**
-```bash
-git clone <repository-url>
-cd vizor_agents
-
-# Install with UV
-uv venv
-source .venv/bin/activate  # Linux activation
-uv pip install -e .
-```
-
-**2. Configure Environment**
+**1. Clone and Setup**
 
 Windows (PowerShell):
 ```powershell
+# Install UV if not already installed
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+
+# Clone and setup
+git clone <repository-url>
+cd vizor_agents
+uv venv
+.venv\Scripts\activate
+uv pip install -e .
+```
+
+WSL2/Linux:
+```bash
+git clone <repository-url>
+cd vizor_agents
+uv venv
+source .venv/bin/activate
+uv pip install -e .
+```
+
+**2. Configure API Keys**
+
+Copy the example environment file and add your API keys:
+
+Windows:
+```powershell
 copy .env.example .env
-# Edit .env with notepad or your preferred editor
 notepad .env
 ```
 
-WSL/Linux:
+WSL2/Linux:
 ```bash
 cp .env.example .env
-# Edit .env with your API keys
 nano .env  # or vim/code
 ```
 
-**3. Deploy Grasshopper Component**
-```powershell
-# In Windows PowerShell - Build and deploy the component
-cd src\bridge_design_system\mcp\GH_MCP\GH_MCP\
-dotnet build --configuration Release
-copy "bin\Release\net48\GH_MCP.gha" "%APPDATA%\Grasshopper\Libraries\"
+The `.env.example` file contains:
+```bash
+# API Keys for LLM Providers
+OPENAI_API_KEY=your_openai_key_here
+ANTHROPIC_API_KEY=your_anthropic_key_here
+DEEPSEEK_API_KEY=your_deepseek_key_here
+TOGETHER_API_KEY=your_together_key_here
+HF_TOKEN=your_huggingface_token_here
+
+# Model Selection for Each Agent
+TRIAGE_AGENT_PROVIDER=deepseek
+TRIAGE_AGENT_MODEL=deepseek-chat
+
+GEOMETRY_AGENT_PROVIDER=anthropic
+GEOMETRY_AGENT_MODEL=claude-3-5-sonnet-latest
+
+# Additional configuration options...
 ```
 
-**4. Setup Grasshopper**
+**3. Setup Grasshopper Component**
+
+**Option A: Use Pre-built Component**
+- Copy the provided `GH_MCP.gha` file to `%APPDATA%\Grasshopper\Libraries\`
+
+**Option B: For Developers**
+- Open the solution in Visual Studio 2022
+- Run in debug mode with the `.stp` file
+
+**4. Configure Grasshopper**
 - Restart Grasshopper
 - Add "Grasshopper MCP" component to canvas
 - Set: **Enabled=True**, **Port=8081**, **Address=0.0.0.0**
 
-### Basic Usage
+### Usage
 
-#### Interactive Agent System (Recommended)
-
-**Windows (PowerShell/Command Prompt) or WSL2:**
+Start a collaborative design session:
 ```powershell
-# Run the interactive bridge design system
 uv run python -m bridge_design_system.main
 
-# You'll see a welcome screen with commands
 # Start creating geometry with natural language:
 # Designer> create a spiral staircase
 # Designer> make the steps wider
@@ -145,32 +104,30 @@ uv run python -m bridge_design_system.main
 - `clear` - Clear screen
 - `exit` or `q` - Exit system
 
-#### Advanced Usage (Development)
+## 🚀 Architecture
 
-**Start HTTP MCP Server Separately:**
-```powershell
-# Terminal 1 - Start persistent HTTP server
-uv run python -m bridge_design_system.mcp.http_mcp_server --port 8001
-
-# Terminal 2 - Run with enhanced CLI
-uv run python -m bridge_design_system.main --enhanced-cli
+```
+✅ WSL/Windows Environment (Multi-Provider AI)
+    ↓ MCP via STDIO Transport
+✅ STDIO MCP Server (Proven, reliable)
+    ↓ Direct communication
+✅ TCP Bridge (Port 8081)
+    ↓ JSON command protocol
+✅ Grasshopper MCP Component (C# bridge)
+    ↓ Direct tool execution
+✅ Real-time Collaborative Geometry Creation
 ```
 
-**Programmatic Usage:**
-```python
-from bridge_design_system.agents.triage_agent import TriageAgent
-
-# Initialize the system
-triage = TriageAgent()
-triage.initialize_agent()
-
-# Create geometry through natural language
-response = triage.handle_design_request("Create a parametric bridge tower with cross-bracing")
-```
-
-**Note**: The system automatically detects Windows host IP from WSL2 for TCP bridge connection.
-
-## 🏗️ Architecture Details
+**Key Features:**
+- ✅ **Multi-Provider Support**: Gemini, OpenAI, Anthropic, DeepSeek, HuggingFace
+- ✅ **Collaborative Design**: Iterative back-and-forth conversations
+- ✅ **AI-generated 3D geometry**: Spirals, bridges, complex structures
+- ✅ **6 core MCP tools** optimized for stability
+- ✅ **Cross-platform**: WSL2 + native Windows support
+- 🎉 **Conversation Memory**: Agents remember context between interactions
+- 🎯 **Natural Modifications**: Say "make it wider" and the agent knows what to modify
+- 🔧 **Dynamic Tool Discovery**: Ask "what are the available mcp tools?" for current capabilities
+- 💬 **Interactive CLI**: User-friendly interface with commands and real-time status
 
 ### Multi-Agent System
 - **Triage Agent**: Orchestrates complex design workflows
@@ -180,32 +137,28 @@ response = triage.handle_design_request("Create a parametric bridge tower with c
 
 ### MCP Integration (Model Context Protocol)
 
-**Dual Transport Modes:**
-- **HTTP MCP Server**: Persistent server for 60x faster connections
-  - Start once, connect multiple agents
-  - 0.6s connection time vs 3s STDIO startup
-  - Concurrent agent support
-- **STDIO MCP Server**: Reliable fallback with on-demand spawning
-  - Proven architecture, works everywhere
-  - Automatic lifecycle management
+**STDIO Transport:**
+- **Proven Architecture**: Reliable, works everywhere
+- **On-demand Spawning**: Automatic lifecycle management
+- **Direct Communication**: Seamless agent-to-Grasshopper connection
 
 **Core Features:**
 - **6 Optimized Tools**: Python scripting, component info, document management
 - **TCP Bridge**: Custom C# component on port 8081
-- **Automatic Fallback**: HTTP → STDIO → Basic tools
 - **Session Management**: Proper connection lifecycle handling
 
-### Cost-Effective AI
-- **Gemini 2.5 Flash**: Optimal price-performance ratio (default)
-- **DeepSeek Models**: Ultra cost-effective alternative
-- **Multi-Provider Support**: OpenAI, Anthropic, HuggingFace, Together AI
-- **Configurable Models**: Different agents can use different models
+### Multi-Provider AI Support
+- **Anthropic**: Claude models for complex reasoning
+- **DeepSeek**: Cost-effective option for orchestration
+- **OpenAI**: GPT-4, GPT-3.5 models
+- **HuggingFace & Together AI**: Additional options
+- **Configurable Models**: Different agents can use different providers
 
 ## 📖 Available Tools
 
-The system provides optimized MCP tools for stable production use:
+The system provides 6 optimized MCP tools for stable operation:
 
-### Core Tools (6 Active)
+### Core Tools
 - `add_python3_script` ✅ **Primary tool for geometry creation**
 - `get_python3_script` - Retrieve script content
 - `edit_python3_script` - Modify existing scripts
@@ -240,25 +193,6 @@ a = rg.NurbsCurve.CreateInterpolatedCurve(points, 3)
 
 ## 🔧 Configuration
 
-### Model Configuration (`.env`)
-```bash
-# Gemini (Default - Optimal price/performance)
-GEOMETRY_AGENT_MODEL=gemini/gemini-2.5-flash-preview-05-20
-GOOGLE_API_KEY=your_gemini_api_key
-
-# Alternative models
-DEEPSEEK_API_KEY=your_deepseek_key       # Ultra cost-effective
-OPENAI_API_KEY=your_openai_key          # GPT-4, GPT-3.5
-ANTHROPIC_API_KEY=your_anthropic_key     # Claude models
-```
-
-### MCP Transport Configuration
-```python
-# In settings.py - Control transport mode
-mcp_transport_mode: str = "http"  # "http" or "stdio"
-mcp_http_url: str = "http://localhost:8001/mcp"
-```
-
 ### Network Configuration
 The system automatically detects WSL network settings:
 - **Auto-detection**: Uses `ip route` to find Windows host IP
@@ -273,8 +207,7 @@ The system automatically detects WSL network settings:
 
 Windows (PowerShell as Administrator):
 ```powershell
-# Check Windows firewall for both ports
-New-NetFirewallRule -DisplayName "MCP HTTP Server" -Direction Inbound -Protocol TCP -LocalPort 8001 -Action Allow
+# Check Windows firewall for TCP bridge port
 New-NetFirewallRule -DisplayName "MCP TCP Bridge" -Direction Inbound -Protocol TCP -LocalPort 8081 -Action Allow
 ```
 
@@ -285,33 +218,13 @@ WSL2 Specific:
 ip route | grep default  # Should show Windows host IP
 ```
 
-**2. HTTP Server Not Starting**
-
-Windows (PowerShell):
-```powershell
-# Check if port 8001 is in use
-netstat -an | findstr 8001
-
-# Find and kill process using the port
-Get-Process -Id (Get-NetTCPConnection -LocalPort 8001).OwningProcess | Stop-Process
-```
-
-WSL2/Linux:
-```bash
-# Check if port 8001 is in use
-netstat -an | grep 8001
-
-# Kill existing process if needed
-pkill -f "http_mcp_server"
-```
-
-**3. Component Not Found**
+**2. Component Not Found**
 ```powershell
 # Verify component deployment
 dir "%APPDATA%\Grasshopper\Libraries\GH_MCP.gha"
 ```
 
-**4. Platform-Specific Notes**
+**3. Platform-Specific Notes**
 
 Windows Native:
 - ✅ **Best Performance**: Direct localhost connections
@@ -331,13 +244,14 @@ WSL2:
 vizor_agents/
 ├── src/bridge_design_system/          # Main system
 │   ├── agents/                        # AI agents
-│   │   └── simple_geometry_agent.py   # ✅ Working geometry agent
+│   │   ├── triage_agent.py           # Main orchestrator
+│   │   └── geometry_agent_mcpadapt.py # Geometry control agent
 │   ├── config/                        # Model & system configuration
+│   ├── tools/                         # Agent tools
 │   └── mcp/                          # MCP integration
-├── reference/                         # Grasshopper MCP bridge
-│   ├── GH_MCP/                       # C# TCP bridge component
-│   └── grasshopper_mcp/              # Python MCP server
-└── tests/                            # Integration tests
+│       └── GH_MCP/                   # C# Grasshopper component
+├── tests/                            # Integration tests
+└── main.py                           # Entry point
 ```
 
 ### Contributing
@@ -350,29 +264,7 @@ ruff check src/ tests/
 
 # Run tests
 pytest tests/
-python test_simple_working_solution.py
 ```
-
-## 🎯 Production Ready
-
-This system is production-ready for:
-- **Bridge Design Workflows**: AI-generated parametric models
-- **High-Performance MCP**: 60x faster connections with HTTP transport
-- **Cost-Effective AI**: Gemini 2.5 Flash optimal price-performance
-- **Professional Integration**: Direct Rhino/Grasshopper control
-- **Scalable Architecture**: Multi-agent coordination with concurrent support
-
-**Performance Metrics:**
-- **HTTP Mode**: 0.6s connection + task execution time
-- **STDIO Mode**: 2-3s startup + task execution time
-- **Geometry Creation**: Complex 3D structures in seconds
-- **Concurrent Agents**: Multiple agents can share HTTP server
-
-**Next Steps:**
-- Optimize HTTP transport for sub-second total times
-- Enable additional Grasshopper tools as needed
-- Implement material database integration
-- Add structural analysis agents
 
 ## 📄 License
 
