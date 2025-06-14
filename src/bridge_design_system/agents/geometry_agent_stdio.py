@@ -23,7 +23,7 @@ from ..config.model_config import ModelProvider
 from ..config.logging_config import get_logger
 from ..config.settings import settings
 from ..state.component_registry import ComponentRegistry
-from ..tools.memory_tools import remember, recall, search_memory
+from ..tools.memory_tools import remember, recall, search_memory, clear_memory
 
 logger = get_logger(__name__)
 
@@ -73,7 +73,7 @@ class GeometryAgentSTDIO:
         self.conversation_history = []
         
         # Memory tools for persistent context
-        self.memory_tools = [remember, recall, search_memory]
+        self.memory_tools = [remember, recall, search_memory, clear_memory]
         
         logger.info(f"Initialized {model_name} agent with STDIO-only transport (temperature=0.1 for precise instruction following)")
     

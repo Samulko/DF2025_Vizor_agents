@@ -138,6 +138,40 @@ Agent: I'll modify comp_truss_001 to increase height...
 
 **Memory is stored in:** `src/bridge_design_system/data/memory/session_*.json`
 
+### Memory Management
+
+**Memory Tools Available:**
+- `remember(category, key, value)` - Store information
+- `recall(category, key)` - Retrieve stored information  
+- `search_memory(query)` - Search all memories
+- `clear_memory(category, confirm)` - Clear memory data ⚠️
+
+**Clearing Memory:**
+```python
+# Clear specific category (USE WITH CAUTION)
+clear_memory("components", "yes")  # Clear only component memories
+clear_memory("context", "yes")     # Clear only context data
+clear_memory("errors", "yes")      # Clear error logs
+
+# Clear ALL memory (FULL RESET)
+clear_memory(None, "yes")          # Deletes everything - fresh start
+
+# Safety check - requires "yes" confirmation
+clear_memory("components")         # Won't delete - returns abort message
+```
+
+**Manual Memory Cleanup:**
+```bash
+# Option 1: Delete specific session file
+rm src/bridge_design_system/data/memory/session_20241214_*.json
+
+# Option 2: Clear all sessions  
+rm src/bridge_design_system/data/memory/*.json
+
+# Option 3: Set new session ID
+export BRIDGE_SESSION_ID="new_session_name"
+```
+
 ## 🚀 Architecture
 
 ```

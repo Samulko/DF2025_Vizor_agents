@@ -217,6 +217,46 @@ def search_memory(query: str, limit: int = 10) -> str:
     return output
 
 
+@tool
+def clear_memory(category: Optional[str] = None, confirm: str = "no") -> str:
+    """Clear memory data. USE WITH CAUTION - this deletes stored memories.
+    
+    Args:
+        category: Specific category to clear (e.g., "components", "context"). 
+                 If None, clears ALL memory.
+        confirm: Must be "yes" to actually perform the deletion
+        
+    Returns:
+        Status message about what was cleared
+        
+    Examples:
+        clear_memory("components", "yes") -> Clear only component memories
+        clear_memory(None, "yes") -> Clear ALL memories (full reset)
+        clear_memory("errors", "yes") -> Clear error logs
+    """
+    if confirm != "yes":
+        return f"Memory clear aborted. To confirm deletion, use confirm='yes'"
+    
+    memory_data = load_memory()
+    
+    if category is None:
+        # Clear all memory
+        old_count = sum(len(items) for items in memory_data.get("memories", {}).values())
+        memory_data["memories"] = {}
+        save_memory(memory_data)
+        return f"🗑️ Cleared ALL memory ({old_count} items deleted). Fresh start!"
+    
+    elif category in memory_data.get("memories", {}):
+        # Clear specific category
+        old_count = len(memory_data["memories"][category])
+        del memory_data["memories"][category]
+        save_memory(memory_data)
+        return f"🗑️ Cleared category '{category}' ({old_count} items deleted)"
+    
+    else:
+        return f"Category '{category}' not found. Available: {list(memory_data.get('memories', {}).keys())}"
+
+
 # Helper function for Component Registry integration
 def remember_component(component_id: str, component_type: str, description: str) -> None:
     """Helper function to remember a component (used by Component Registry).

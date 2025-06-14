@@ -6,7 +6,7 @@ from smolagents import CodeAgent, Tool
 from ..config.model_config import ModelProvider
 from ..config.settings import settings
 from ..state.component_registry import ComponentRegistry
-from ..tools.memory_tools import remember, recall, search_memory
+from ..tools.memory_tools import remember, recall, search_memory, clear_memory
 from .base_agent import AgentError, AgentResponse, BaseAgent
 
 
@@ -34,7 +34,7 @@ class TriageAgent(BaseAgent):
         self.conversation_history = []
         
         # Memory tools for persistent context
-        self.memory_tools = [remember, recall, search_memory]
+        self.memory_tools = [remember, recall, search_memory, clear_memory]
         
         # Track current design state
         self.design_state = {
@@ -50,9 +50,18 @@ class TriageAgent(BaseAgent):
         """Get the system prompt for the triage agent."""
         # Read from file for easy updates
         try:
-            with open("system_prompts/triage_agent.md", "r") as f:
-                return f.read()
-        except FileNotFoundError:
+            # Get the project root directory  
+            from pathlib import Path
+            current_file = Path(__file__)
+            project_root = current_file.parent.parent.parent.parent  # Go up to vizor_agents/
+            prompt_path = project_root / "system_prompts" / "triage_agent.md"
+            
+            if prompt_path.exists():
+                return prompt_path.read_text(encoding='utf-8')
+            else:
+                self.logger.warning(f"System prompt file not found at {prompt_path}")
+        except Exception as e:
+            self.logger.warning(f"Failed to load system prompt: {e}")
             # Fallback to embedded prompt
             return """You are an expert AI Triage Agent. Your primary mission is to assist a human designer and builder in the step-by-step creation of a bridge. You will achieve this by understanding human instructions, breaking them down into actionable tasks, and strategically delegating these tasks to a team of specialized agents under your coordination.
 
@@ -452,10 +461,16 @@ Note: If the task refers to "it", "the script", or similar, use the Component ID
             
             # Create fresh agent for each request to avoid dead tool references
             # Conversation memory is maintained separately in self.conversation_history
-            # Add memory tools to the agent config
-            agent_config_with_memory = self.agent_config.copy()
-            agent_config_with_memory["tools"] = self.memory_tools
-            fresh_agent = CodeAgent(**agent_config_with_memory)
+            # Create CodeAgent directly with memory tools
+            fresh_agent = CodeAgent(
+                tools=self.memory_tools,
+                model=self.model,
+                add_base_tools=True,
+                max_steps=getattr(settings, 'max_agent_steps', 10),
+                additional_authorized_imports=[
+                    "math", "json", "re", "datetime", "collections", "itertools"
+                ]
+            )
             self.logger.info("Created fresh triage agent with conversation context and memory tools")
             
             # Execute request with fresh agent and conversation context

@@ -39,7 +39,7 @@ class TestTriageAgentMemoryIntegration:
         agent = TriageAgent(component_registry=registry)
         
         # Check memory tools are added
-        assert len(agent.memory_tools) == 3
+        assert len(agent.memory_tools) == 4
         assert remember in agent.memory_tools
         assert recall in agent.memory_tools
         assert search_memory in agent.memory_tools
@@ -51,7 +51,7 @@ class TestTriageAgentMemoryIntegration:
         registry = ComponentRegistry()
         agent = TriageAgent(component_registry=registry)
         
-        # Initialize the agent (required for agent_config)
+        # Initialize the agent (which creates one CodeAgent instance)
         agent.initialize_agent()
         
         # Mock the CodeAgent instance
@@ -59,15 +59,19 @@ class TestTriageAgentMemoryIntegration:
         mock_agent_instance.run.return_value = "Test result"
         mock_codeagent.return_value = mock_agent_instance
         
-        # Run a request
+        # Run a request (which creates a fresh CodeAgent with memory tools)
         agent._run_with_context("Test request")
         
-        # Verify CodeAgent was created with memory tools
-        mock_codeagent.assert_called_once()
-        call_args = mock_codeagent.call_args[1]
-        assert 'tools' in call_args
-        assert len(call_args['tools']) == 3
-        assert remember in call_args['tools']
+        # Verify CodeAgent was called twice: once in initialize, once in _run_with_context
+        assert mock_codeagent.call_count == 2
+        
+        # Check the second call (from _run_with_context) has memory tools
+        second_call_args = mock_codeagent.call_args[1]
+        assert 'tools' in second_call_args
+        assert len(second_call_args['tools']) == 4
+        assert remember in second_call_args['tools']
+        assert recall in second_call_args['tools']
+        assert search_memory in second_call_args['tools']
     
     @patch('bridge_design_system.agents.triage_agent.recall')
     def test_triage_context_includes_memory(self, mock_recall, temp_memory_dir):
@@ -100,7 +104,7 @@ class TestGeometryAgentMemoryIntegration:
         agent = GeometryAgentSTDIO(component_registry=registry)
         
         # Check memory tools are added
-        assert len(agent.memory_tools) == 3
+        assert len(agent.memory_tools) == 4
         assert remember in agent.memory_tools
         assert recall in agent.memory_tools
         assert search_memory in agent.memory_tools
@@ -123,7 +127,7 @@ class TestGeometryAgentMemoryIntegration:
         
         # Run a task
         try:
-            agent.handle_design_request("Create a point")
+            agent.run("Create a point")
         except Exception:
             pass  # We're just testing tool setup
         
@@ -132,7 +136,7 @@ class TestGeometryAgentMemoryIntegration:
         call_args = mock_codeagent.call_args[1]
         assert 'tools' in call_args
         # Should have MCP tools + memory tools
-        assert len(call_args['tools']) >= 5  # At least 2 MCP + 3 memory
+        assert len(call_args['tools']) >= 6  # At least 2 MCP + 4 memory
     
     def test_geometry_context_with_memory(self, temp_memory_dir):
         """Test that geometry agent context includes memory prompts."""
