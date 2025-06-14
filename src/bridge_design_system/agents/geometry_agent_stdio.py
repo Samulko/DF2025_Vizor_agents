@@ -22,6 +22,8 @@ from mcpadapt.smolagents_adapter import SmolAgentsAdapter
 from ..config.model_config import ModelProvider
 from ..config.logging_config import get_logger
 from ..config.settings import settings
+from ..state.component_registry import ComponentRegistry
+from ..tools.memory_tools import remember, recall, search_memory
 
 logger = get_logger(__name__)
 
@@ -34,16 +36,19 @@ class GeometryAgentSTDIO:
     by the smolagents framework.
     """
     
-    def __init__(self, custom_tools: Optional[List] = None, model_name: str = "geometry"):
+    def __init__(self, custom_tools: Optional[List] = None, model_name: str = "geometry", 
+                 component_registry: Optional[ComponentRegistry] = None):
         """Initialize the STDIO Geometry Agent.
         
         Args:
             custom_tools: Additional custom tools to add to the agent
             model_name: Model configuration name (from settings)
+            component_registry: Registry for tracking components across agents
         """
         self.custom_tools = custom_tools or []
         self.model_name = model_name
         self.max_steps = getattr(settings, 'AGENT_MAX_STEPS', 10)
+        self.component_registry = component_registry
         
         # Safe imports for code execution
         self.SAFE_IMPORTS = [
@@ -66,6 +71,9 @@ class GeometryAgentSTDIO:
         
         # Conversation memory for continuous chat (separate from agent lifecycle)
         self.conversation_history = []
+        
+        # Memory tools for persistent context
+        self.memory_tools = [remember, recall, search_memory]
         
         logger.info(f"Initialized {model_name} agent with STDIO-only transport (temperature=0.1 for precise instruction following)")
     
@@ -119,8 +127,8 @@ Always use the available MCP tools to create actual geometry in Grasshopper, not
             ) as mcp_tools:
                 logger.info(f"Connected to MCP via STDIO with {len(mcp_tools)} tools")
                 
-                # Combine MCP tools with custom tools
-                all_tools = list(mcp_tools) + self.custom_tools
+                # Combine MCP tools with custom tools and memory tools
+                all_tools = list(mcp_tools) + self.custom_tools + self.memory_tools
                 
                 # Create fresh agent for each request to avoid dead tool references
                 # Conversation memory is maintained separately in self.conversation_history
@@ -138,6 +146,10 @@ Always use the available MCP tools to create actual geometry in Grasshopper, not
                 
                 # Execute task with fresh agent and conversation context
                 result = fresh_agent.run(conversation_context)
+                
+                # Extract and register components if registry is available
+                if self.component_registry:
+                    self._extract_and_register_components(task, result)
                 
                 # Store conversation for future reference
                 self._store_conversation(task, result)
@@ -172,7 +184,7 @@ Always use the available MCP tools to create actual geometry in Grasshopper, not
             # Create fallback agent with low temperature
             # TODO: Add custom system prompt when template compilation is fixed
             fallback_agent = CodeAgent(
-                tools=fallback_tools,
+                tools=fallback_tools + self.memory_tools,
                 model=self.model,
                 add_base_tools=True,
                 max_steps=self.max_steps,
@@ -299,17 +311,48 @@ Please inform the user that full Grasshopper functionality requires MCP connecti
         """Build conversation context for continuity with fresh agents.
         
         This method works with fresh CodeAgent instances by providing conversation
-        history as context rather than relying on agent memory.
+        history as context rather than relying on agent memory. The new_task may
+        already include structured component references from the TriageAgent.
         
         Args:
-            new_task: The new task to execute
+            new_task: The new task to execute (may include component references)
             
         Returns:
             Task with conversation context for continuity
         """
+        # Check if task already has structured component references from TriageAgent
+        if "COMPONENT REFERENCES:" in new_task:
+            logger.info("Task includes component references from registry")
+        
+        # Try to get previous context from memory
+        memory_context = ""
+        try:
+            # Get component memories
+            component_memories = recall("components")
+            if component_memories and "No memories found" not in component_memories:
+                memory_context += f"\nSTORED COMPONENTS:\n{component_memories}\n"
+            
+            # Get geometry context
+            geometry_context = recall("geometry", "current_work")
+            if geometry_context and "No memory found" not in geometry_context:
+                memory_context += f"\nCURRENT GEOMETRY WORK:\n{geometry_context}\n"
+        except:
+            pass
+            
         if not self.conversation_history:
-            # First interaction - just return the task
-            return new_task
+            # First interaction - include memory prompt
+            return f"""{new_task}
+
+You have access to memory tools to maintain context:
+- remember(category, key, value) - Store important information
+- recall(category, key) - Retrieve stored information  
+- search_memory(query) - Search all memories
+
+IMPORTANT: Use remember() to store:
+- Component IDs when created (category: "components")
+- Current geometry work (category: "geometry", key: "current_work")
+- Any errors and solutions (category: "errors")
+{memory_context}"""
         
         # Build context from recent conversation history (last 3 interactions to avoid context overflow)
         recent_history = self.conversation_history[-3:]
@@ -328,8 +371,9 @@ Please inform the user that full Grasshopper functionality requires MCP connecti
         
         context_parts.append("Current task:")
         context_parts.append(new_task)
+        context_parts.append("\nRemember to use memory tools to store component IDs and geometry work!")
         
-        return "\n".join(context_parts)
+        return memory_context + "\n".join(context_parts)
     
     def _store_conversation(self, task: str, result: Any) -> None:
         """Store conversation interaction for future reference.
@@ -396,17 +440,179 @@ Please inform the user that full Grasshopper functionality requires MCP connecti
                 "strategy": "fallback",
                 "agent_type": "STDIO"
             }
+    
+    def _extract_and_register_components(self, task: str, result: Any) -> None:
+        """
+        Extract component IDs from CodeAgent results and register them.
+        
+        Args:
+            task: The original task description
+            result: Result from CodeAgent execution
+        """
+        try:
+            result_str = str(result)
+            
+            # Look for component ID patterns in the result
+            # Pattern 1: {"id": "uuid-here", ...}
+            import re
+            import json
+            
+            # Try to find JSON with 'id' field
+            json_pattern = r'\{[^{}]*"id"\s*:\s*"([^"]+)"[^{}]*\}'
+            matches = re.findall(json_pattern, result_str)
+            
+            for component_id in matches:
+                # Infer component type and name from task
+                component_type = self._infer_component_type(task)
+                component_name = self._generate_component_name(task, component_type)
+                
+                # Register the component
+                success = self.component_registry.register_component(
+                    component_id=component_id,
+                    component_type=component_type,
+                    name=component_name,
+                    description=task[:200],  # First 200 chars of task as description
+                    properties={"source_task": task}
+                )
+                
+                if success:
+                    logger.info(f"📝 Registered component: {component_id} ({component_type}) - {component_name}")
+                else:
+                    logger.warning(f"⚠️ Failed to register component: {component_id}")
+                    
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to extract components from result: {e}")
+    
+    def _infer_component_type(self, task: str) -> str:
+        """
+        Infer component type from task description.
+        Specialized for timber truss bridge components.
+        
+        Args:
+            task: Task description
+            
+        Returns:
+            Inferred component type
+        """
+        task_lower = task.lower()
+        
+        # Timber truss bridge specific components
+        
+        # Truss elements
+        if any(word in task_lower for word in ["top chord", "upper chord", "compression chord"]):
+            return "top_chord"
+        elif any(word in task_lower for word in ["bottom chord", "lower chord", "tension chord"]):
+            return "bottom_chord"
+        elif any(word in task_lower for word in ["web member", "diagonal member"]):
+            return "web_member"
+        elif any(word in task_lower for word in ["diagonal", "brace", "cross brace"]):
+            return "diagonal"
+        elif any(word in task_lower for word in ["vertical", "post", "vertical post"]):
+            return "vertical"
+        elif any(word in task_lower for word in ["strut", "compression member"]):
+            return "strut"
+        elif any(word in task_lower for word in ["tie", "tension member"]):
+            return "tie"
+        
+        # Bridge structure
+        elif any(word in task_lower for word in ["truss", "triangular truss"]):
+            return "truss"
+        elif any(word in task_lower for word in ["span", "main span"]):
+            return "span"
+        elif any(word in task_lower for word in ["deck", "bridge deck", "roadway"]):
+            return "deck"
+        elif any(word in task_lower for word in ["bearing", "support bearing"]):
+            return "bearing"
+        elif any(word in task_lower for word in ["abutment", "end support"]):
+            return "abutment"
+        elif any(word in task_lower for word in ["pier", "intermediate support"]):
+            return "pier"
+        
+        # Timber elements
+        elif any(word in task_lower for word in ["beam", "timber beam", "rectangular beam"]):
+            return "timber_beam"
+        elif any(word in task_lower for word in ["timber post", "wooden post"]):
+            return "timber_post"
+        elif any(word in task_lower for word in ["plank", "deck plank", "timber plank"]):
+            return "timber_plank"
+        elif any(word in task_lower for word in ["joint", "timber joint", "connection"]):
+            return "timber_joint"
+        elif any(word in task_lower for word in ["gusset", "gusset plate", "connection plate"]):
+            return "gusset_plate"
+        
+        # Generic structural elements (fallback)
+        elif any(word in task_lower for word in ["beam", "girder"]):
+            return "beam"
+        elif any(word in task_lower for word in ["column", "pillar", "support"]):
+            return "column"
+        elif any(word in task_lower for word in ["foundation", "footing"]):
+            return "foundation"
+        elif any(word in task_lower for word in ["cable", "wire"]):
+            return "cable"
+        elif any(word in task_lower for word in ["railing", "barrier", "guard"]):
+            return "railing"
+        elif any(word in task_lower for word in ["point"]):
+            return "point"
+        elif any(word in task_lower for word in ["line", "curve"]):
+            return "curve"
+        elif any(word in task_lower for word in ["spiral", "stair"]):
+            return "spiral_staircase"
+        
+        # Grasshopper component types
+        elif any(word in task_lower for word in ["python script", "script component", "python component"]):
+            return "python3_script"
+        elif any(word in task_lower for word in ["slider", "number slider"]):
+            return "slider"
+        elif any(word in task_lower for word in ["panel", "text panel"]):
+            return "panel"
+        elif any(word in task_lower for word in ["parameter", "input parameter"]):
+            return "input_parameter"
+        elif any(word in task_lower for word in ["grasshopper component", "gh component"]):
+            return "grasshopper_component"
+        else:
+            return "geometry"  # Generic fallback
+    
+    def _generate_component_name(self, task: str, component_type: str) -> str:
+        """
+        Generate a human-readable component name.
+        
+        Args:
+            task: Task description
+            component_type: Inferred component type
+            
+        Returns:
+            Human-readable component name
+        """
+        # Extract key descriptors from task
+        import re
+        
+        # Remove common words and extract meaningful parts
+        task_words = re.findall(r'\b\w+\b', task.lower())
+        meaningful_words = [w for w in task_words if w not in {
+            'create', 'make', 'add', 'build', 'generate', 'the', 'a', 'an', 
+            'with', 'using', 'script', 'component', 'python'
+        }]
+        
+        # Take first few meaningful words + component type
+        if meaningful_words:
+            descriptors = '_'.join(meaningful_words[:2])
+            return f"{descriptors}_{component_type}"
+        else:
+            return component_type
 
 
 # Convenience function for creating the geometry agent
-def create_geometry_agent_stdio(custom_tools: Optional[List] = None, model_name: str = "geometry") -> GeometryAgentSTDIO:
+def create_geometry_agent_stdio(custom_tools: Optional[List] = None, model_name: str = "geometry", 
+                               component_registry: Optional[ComponentRegistry] = None) -> GeometryAgentSTDIO:
     """Create a STDIO-only geometry agent.
     
     Args:
         custom_tools: Additional custom tools to include
         model_name: Model configuration name
+        component_registry: Registry for tracking components
         
     Returns:
         GeometryAgentSTDIO instance
     """
-    return GeometryAgentSTDIO(custom_tools=custom_tools, model_name=model_name)
+    return GeometryAgentSTDIO(custom_tools=custom_tools, model_name=model_name, 
+                             component_registry=component_registry)

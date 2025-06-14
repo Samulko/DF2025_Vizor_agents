@@ -5,6 +5,8 @@ from smolagents import CodeAgent, Tool
 
 from ..config.model_config import ModelProvider
 from ..config.settings import settings
+from ..state.component_registry import ComponentRegistry
+from ..tools.memory_tools import remember, recall, search_memory
 from .base_agent import AgentError, AgentResponse, BaseAgent
 
 
@@ -15,18 +17,24 @@ class TriageAgent(BaseAgent):
     and delegates tasks to appropriate specialized agents.
     """
     
-    def __init__(self):
+    def __init__(self, component_registry: Optional[ComponentRegistry] = None):
         """Initialize the triage agent."""
         super().__init__(
             name="triage_agent",
             description="Expert AI Triage Agent that coordinates bridge design tasks"
         )
         
+        # Component registry for cross-agent state management
+        self.component_registry = component_registry
+        
         # Managed agents will be initialized later
         self.managed_agents: Dict[str, BaseAgent] = {}
         
         # Conversation memory for continuous chat (separate from agent lifecycle)
         self.conversation_history = []
+        
+        # Memory tools for persistent context
+        self.memory_tools = [remember, recall, search_memory]
         
         # Track current design state
         self.design_state = {
@@ -107,7 +115,7 @@ class TriageAgent(BaseAgent):
         # from .structural_agent import StructuralAgent
         
         # Initialize geometry agent with simplified STDIO-only strategy
-        geometry_agent = GeometryAgentSTDIO()
+        geometry_agent = GeometryAgentSTDIO(component_registry=self.component_registry)
         self.logger.info("✅ Geometry agent initialized with STDIO-only strategy (100% reliable)")
         
         # Initialize managed agents - GEOMETRY ONLY MODE
@@ -180,6 +188,7 @@ class TriageAgent(BaseAgent):
                 tool_info = agent.get_tool_info()
                 status[name] = {
                     "initialized": True,  # STDIO agent is always initialized
+                    "step_count": 0,  # STDIO agents don't track steps
                     "mcp_connected": tool_info.get("connected", False),
                     "mode": tool_info.get("mode", "unknown"),
                     "strategy": tool_info.get("strategy", "unknown"),
@@ -339,22 +348,50 @@ class TriageAgent(BaseAgent):
             return AgentResponse(
                 success=False,
                 message=f"Geometry task failed: {e}",
-                error=AgentError.EXECUTION_ERROR
+                error=AgentError.TOOL_EXECUTION_FAILED
             )
     
     def _build_conversation_context_for_geometry(self, new_request: str) -> str:
         """Build conversation context specifically for geometry agent delegation.
         
-        This includes relevant context from triage conversation history.
+        This includes relevant context from triage conversation history and component registry.
         
         Args:
             new_request: The new geometry request
             
         Returns:
-            Request with triage conversation context for geometry continuity
+            Request with triage conversation context and resolved component references
         """
+        # Start with the new request
+        enhanced_request = new_request
+        
+        # Resolve component references using registry if available
+        if self.component_registry:
+            resolved_components = self.component_registry.resolve_reference(new_request)
+            if resolved_components:
+                self.logger.info(f"Resolved component references: {resolved_components}")
+                
+                # Add resolved component IDs to the request context
+                component_context = []
+                for comp_id in resolved_components[:3]:  # Limit to top 3 matches
+                    component = self.component_registry.get_component(comp_id)
+                    if component:
+                        component_context.append(
+                            f"- Component ID: {comp_id} ({component.type}) - {component.name}"
+                        )
+                
+                if component_context:
+                    enhanced_request = f"""COMPONENT REFERENCES:
+{chr(10).join(component_context)}
+
+CURRENT TASK:
+{new_request}
+
+Note: If the task refers to "it", "the script", or similar, use the Component IDs above."""
+        
+        # Add conversation history context if no registry or as fallback
         if not self.conversation_history:
-            return new_request
+            return enhanced_request
         
         # Find relevant geometry-related interactions from history
         relevant_history = []
@@ -366,10 +403,10 @@ class TriageAgent(BaseAgent):
                 relevant_history.append(interaction)
         
         if not relevant_history:
-            return new_request
+            return enhanced_request
         
         # Build context from relevant history
-        context_parts = ["CONTEXT: Previous related work:"]
+        context_parts = ["CONVERSATION CONTEXT:"]
         
         for i, interaction in enumerate(relevant_history[-3:]):  # Last 3 relevant interactions
             context_parts.append(f"Previous task {i+1}:")
@@ -384,12 +421,21 @@ class TriageAgent(BaseAgent):
                 context_parts.append(f"Assistant: {result_text}")
             context_parts.append("")
         
-        context_parts.append("CURRENT TASK:")
-        context_parts.append(new_request)
-        context_parts.append("")
-        context_parts.append("Note: If the current task refers to previous work (like 'make wider', 'change size'), use the context above to understand what to modify.")
+        # Combine registry-resolved components with conversation context
+        if "COMPONENT REFERENCES:" in enhanced_request:
+            # Insert conversation context after component references
+            parts = enhanced_request.split("CURRENT TASK:")
+            context_str = "\n".join(context_parts)
+            enhanced_request = f"{parts[0]}{context_str}\n\nCURRENT TASK:{parts[1]}"
+        else:
+            # Add conversation context
+            context_parts.append("CURRENT TASK:")
+            context_parts.append(new_request)
+            context_parts.append("")
+            context_parts.append("Note: If the current task refers to previous work, use the context above to understand what to modify.")
+            enhanced_request = "\n".join(context_parts)
         
-        return "\n".join(context_parts)
+        return enhanced_request
     
     def _run_with_context(self, request: str) -> AgentResponse:
         """Run triage agent with conversation context for continuity.
@@ -406,8 +452,11 @@ class TriageAgent(BaseAgent):
             
             # Create fresh agent for each request to avoid dead tool references
             # Conversation memory is maintained separately in self.conversation_history
-            fresh_agent = CodeAgent(**self.agent_config)
-            self.logger.info("Created fresh triage agent with conversation context")
+            # Add memory tools to the agent config
+            agent_config_with_memory = self.agent_config.copy()
+            agent_config_with_memory["tools"] = self.memory_tools
+            fresh_agent = CodeAgent(**agent_config_with_memory)
+            self.logger.info("Created fresh triage agent with conversation context and memory tools")
             
             # Execute request with fresh agent and conversation context
             result = fresh_agent.run(request_with_context)
@@ -425,7 +474,7 @@ class TriageAgent(BaseAgent):
             return AgentResponse(
                 success=False,
                 message=f"Triage request failed: {e}",
-                error=AgentError.EXECUTION_ERROR
+                error=AgentError.TOOL_EXECUTION_FAILED
             )
     
     def _build_conversation_context(self, new_request: str) -> str:
@@ -440,9 +489,32 @@ class TriageAgent(BaseAgent):
         Returns:
             Request with conversation context for continuity
         """
+        # Try to get previous context from memory
+        try:
+            previous_context = recall("context", "current_session")
+            if previous_context and "No memory found" not in previous_context:
+                memory_context = f"\nPREVIOUS CONTEXT FROM MEMORY:\n{previous_context}\n"
+            else:
+                memory_context = ""
+        except:
+            memory_context = ""
+        
+        # Build conversation history context
         if not self.conversation_history:
-            # First interaction - just return the request
-            return new_request
+            # First interaction - include memory context and prompt
+            return f"""{new_request}
+
+You have access to memory tools to maintain context across sessions:
+- remember(category, key, value) - Store important information
+- recall(category, key) - Retrieve stored information  
+- search_memory(query) - Search all memories
+
+IMPORTANT: Use remember() to store:
+- Component IDs and descriptions when created
+- Current design goals and requirements
+- Key decisions and their rationale
+- Any errors and how they were resolved
+{memory_context}"""
         
         # Build context from recent conversation history (last 3 interactions to avoid context overflow)
         recent_history = self.conversation_history[-3:]
@@ -461,8 +533,9 @@ class TriageAgent(BaseAgent):
         
         context_parts.append("Current request:")
         context_parts.append(new_request)
+        context_parts.append("\nRemember to use memory tools to store any important information!")
         
-        return "\n".join(context_parts)
+        return memory_context + "\n".join(context_parts)
     
     def _store_conversation(self, request: str, result: any) -> None:
         """Store conversation interaction for future reference.

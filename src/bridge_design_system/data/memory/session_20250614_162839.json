@@ -1,0 +1,58 @@
+{
+  "session_id": "session_20250614_162839",
+  "memories": {
+    "test": {
+      "key1": {
+        "value": "Test value 1",
+        "timestamp": "2025-06-14T16:28:39.886714",
+        "category": "test"
+      }
+    },
+    "components": {
+      "test_comp_001": {
+        "value": "Type: timber_truss, Description: A test timber truss component, Created: 2025-06-14T16:28:39.887996",
+        "timestamp": "2025-06-14T16:28:39.888116",
+        "category": "components",
+        "metadata": {
+          "type": "timber_truss",
+          "description": "A test timber truss component"
+        }
+      },
+      "comp_truss_001": {
+        "value": "Type: timber_truss, Description: 50m span main truss, Created: 2025-06-14T16:28:39.891909",
+        "timestamp": "2025-06-14T16:28:39.892096",
+        "category": "components",
+        "metadata": {
+          "type": "timber_truss",
+          "description": "50m span main truss"
+        }
+      },
+      "comp_deck_001": {
+        "value": "Type: bridge_deck, Description: Wooden deck surface, Created: 2025-06-14T16:28:39.892991",
+        "timestamp": "2025-06-14T16:28:39.893170",
+        "category": "components",
+        "metadata": {
+          "type": "bridge_deck",
+          "description": "Wooden deck surface"
+        }
+      }
+    },
+    "context": {
+      "current_session": {
+        "value": "Designing a timber truss pedestrian bridge",
+        "timestamp": "2025-06-14T16:28:39.890993",
+        "category": "context"
+      },
+      "bridge_type": {
+        "value": "suspension",
+        "timestamp": "2025-06-14T16:28:39.889760",
+        "category": "context"
+      },
+      "span": {
+        "value": "100 meters",
+        "timestamp": "2025-06-14T16:28:39.890335",
+        "category": "context"
+      }
+    }
+  }
+}

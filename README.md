@@ -104,6 +104,40 @@ uv run python -m bridge_design_system.main
 - `clear` - Clear screen
 - `exit` or `q` - Exit system
 
+### Memory System
+
+The bridge design system includes persistent memory that allows agents to remember context across sessions:
+
+**How it works:**
+- Components are automatically remembered when created
+- Design context persists between conversations
+- No more "what were we working on?" moments
+
+**Memory Categories:**
+- `components` - All created Grasshopper components with IDs and descriptions
+- `context` - Current design goals, requirements, and session state
+- `geometry` - Active geometry work and modifications
+- `errors` - Problems encountered and their solutions
+
+**Example Session:**
+```powershell
+# Session 1: Start a design
+Designer> Create a timber truss bridge with 50m span
+Agent: I'll create a timber truss bridge... [creates components]
+       Stored component IDs: comp_truss_001, comp_deck_001
+
+# Session 2: Continue work (even after restart)
+Designer> What components have we created?
+Agent: I can see from memory we have:
+       - comp_truss_001: Main timber truss (50m span)
+       - comp_deck_001: Bridge deck surface
+
+Designer> Make the truss taller
+Agent: I'll modify comp_truss_001 to increase height...
+```
+
+**Memory is stored in:** `src/bridge_design_system/data/memory/session_*.json`
+
 ## 🚀 Architecture
 
 ```

@@ -10,6 +10,7 @@ from .agents.triage_agent import TriageAgent
 from .config.logging_config import get_logger
 from .config.model_config import ModelProvider
 from .config.settings import settings
+from .state.component_registry import initialize_registry, get_global_registry
 
 logger = get_logger(__name__)
 
@@ -58,7 +59,8 @@ def test_system():
         
         # Test agent initialization
         logger.info("\nTesting agent initialization...")
-        triage = TriageAgent()
+        registry = initialize_registry()
+        triage = TriageAgent(component_registry=registry)
         triage.initialize_agent()
         logger.info("✓ Triage agent initialized successfully")
         
@@ -89,8 +91,12 @@ def interactive_mode():
         return
     
     try:
-        # Initialize triage agent
-        triage = TriageAgent()
+        # Initialize component registry
+        registry = initialize_registry()
+        logger.info("Component registry initialized")
+        
+        # Initialize triage agent with registry
+        triage = TriageAgent(component_registry=registry)
         triage.initialize_agent()
         logger.info("System initialized successfully")
         
@@ -110,7 +116,8 @@ def interactive_mode():
                     break
                 elif user_input.lower() == 'reset':
                     triage.reset_all_agents()
-                    print("All agents reset.")
+                    registry.clear()
+                    print("All agents and component registry reset.")
                     continue
                 elif user_input.lower() == 'status':
                     status = triage.get_agent_status()
@@ -118,6 +125,13 @@ def interactive_mode():
                     for agent, info in status.items():
                         conversation_len = len(triage.managed_agents[agent].conversation_history) if agent in triage.managed_agents and hasattr(triage.managed_agents[agent], 'conversation_history') else 0
                         print(f"  {agent}: Steps={info['step_count']}, Initialized={info['initialized']}, Conversations={conversation_len}")
+                    
+                    # Registry status
+                    registry_stats = registry.get_stats()
+                    print(f"\nComponent Registry:")
+                    print(f"  Components: {registry_stats['total_components']}")
+                    print(f"  Types: {', '.join(registry_stats['types'])}")
+                    print(f"  Recent: {registry_stats['recent_components']}")
                     continue
                 elif not user_input:
                     continue

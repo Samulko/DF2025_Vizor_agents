@@ -70,10 +70,13 @@ Best for features with clear inputs/outputs:
 3. Default model: Gemini 2.5 Flash
 
 ## Common Issues
-- WSL2 doesn't work - use native Windows
 - MCP server must be running before agents
 - TCP bridge component must be loaded in Grasshopper
 - Port 8081 must be available for TCP bridge
+
+##Tools
+- USE context7 mcp and git-mcp to find relevant documentation and information about current tasks.
+- Make sure to ask yourself a question if a given task would benefit from more context or beter framework understanding if so you MUST use the mcp tools
 
 ## Project Structure
 ```
