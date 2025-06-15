@@ -1,206 +1,148 @@
-# Current Task: Implement Tool-Based Memory for Agent Context Persistence [60% COMPLETE - CRITICAL ISSUES PREVENT PRODUCTION]
+# Current Task: Fix Geometry Agent STDIO Issues and Evaluate JSON Agent Alternative
 
-## Task Description
+## Problem Summary
 
-**Problem**: Agents lose context between requests. Users repeatedly ask "what were we working on?" and agents can't learn from previous interactions.
+The Geometry Agent STDIO implementation has critical issues with:
+1. **Memory recall returning metadata-polluted values** causing component ID parsing failures
+2. **Agent misunderstanding MCP tool return types** (JSON strings vs dictionaries)
+3. **Duplicate component creation** due to improper error handling
+4. **Code execution context confusion** in the smolagents framework
 
-**Solution**: Implement memory as SmolaGents tools - simple, effective, ships in hours.
+## Should We Use JSON Agent Instead of Code Agent?
 
-## 🚨 **CRITICAL ISSUES BLOCKING PRODUCTION**
+### Analysis: JSON Agent (ToolCallingAgent) vs Code Agent
 
-After **comprehensive critical testing**, severe issues were discovered that **prevent production deployment**:
+**JSON Agent PROS for this use case:**
+- ✅ **Simpler data handling**: JSON agents don't need to understand Python types or parse JSON
+- ✅ **Native tool integration**: Better suited for calling external tools like MCP
+- ✅ **Clearer error boundaries**: Failures are at tool level, not code execution level
+- ✅ **No code execution context issues**: Eliminates the dictionary/string confusion
 
-### ❌ **RACE CONDITIONS** (CRITICAL - DATA LOSS)
-- **99.5% data loss** under concurrent access (only 1 out of 200 memories survived)
-- No file locking or atomic operations
-- Multiple agents will corrupt each other's data
-- **Evidence**: Comprehensive race condition testing shows massive data corruption
+**JSON Agent CONS:**
+- ❌ **Limited flexibility**: Can't do complex logic or data transformations
+- ❌ **No variable handling**: Can't store intermediate results or build complex scripts
+- ❌ **Sequential only**: Can't loop or conditionally execute tools
 
-### ❌ **PERFORMANCE DEGRADATION** (HIGH - SYSTEM UNUSABLE)  
-- **18x worse performance** at moderate scale (1000+ memories)
-- O(n²) complexity due to full file rewrites
-- System becomes unusable with normal usage patterns
-- **Evidence**: Performance drops from 1,205 ops/sec to 75 ops/sec
+### Recommendation: **YES, JSON Agent would work better**
 
-### ❌ **SESSION MANAGEMENT** (HIGH - DATA INTEGRITY)
-- Session ID conflicts cause cross-session data mixing
-- Environment session ID ≠ file session ID
-- No validation of session consistency
-- **Evidence**: Session ID mismatch confirmed in testing
+For the Geometry Agent's primary tasks (calling MCP tools to create Grasshopper components), a JSON Agent is actually MORE appropriate because:
+1. Most operations are simple tool calls with clear parameters
+2. No complex logic or loops needed
+3. Eliminates the JSON parsing confusion entirely
+4. MCP tools are designed for JSON-style invocation
 
-### ❌ **ERROR HANDLING** (MEDIUM - STABILITY)
-- System crashes on permission errors instead of graceful handling
-- Inconsistent corruption recovery behavior
-- **Evidence**: Crashes with "Permission denied" in restricted environments
+## Immediate Tasks (Priority Order)
 
-## ✅ **WHAT WORKS IN IDEAL CONDITIONS**
+### Task 1: Fix Memory Tool Return Format [CRITICAL]
+**Problem**: `recall()` returns strings with metadata like `"270dc13e-b4fb-4802-8441-d4452a8196ae\n(Stored at: 2025-06-15T14:52:25.720584, retrieved in 0.2ms)"`
 
-The basic functionality works well for single-threaded, small-scale usage:
+**Solution**: 
+- Modify `recall()` in `memory_tools.py` to return only the value without metadata
+- Add a `recall_with_metadata()` function if metadata is needed
 
-### ✅ **What Is Now Working (100%)**
-- ✅ Created 3 memory tools (remember, recall, search_memory) - **FULLY FUNCTIONAL**
-- ✅ Component Registry auto-stores components in memory - **FULLY FUNCTIONAL**
-- ✅ Memory tool tests pass (14/14) - **VERIFIED WORKING**
-- ✅ Performance < 10ms per operation - **VALIDATED (0.1-0.7ms actual)**
-- ✅ JSON storage and session management - **WORKING**
-- ✅ Agent integration fixed - **ALL 12/12 integration tests PASS**
-- ✅ TriageAgent `agent_config` bug fixed - **END-TO-END WORKING**
-- ✅ GeometryAgent memory tools properly integrated - **WORKING**
-- ✅ Real user testing completed - **VERIFIED IN PRACTICE**
-- ✅ "No context loss" promise fulfilled - **CORE PROBLEM SOLVED**
+### Task 2: Test JSON Agent Implementation [HIGH]
+**Goal**: Create a proof-of-concept JSON agent for geometry operations
 
-### 🔧 **Critical Issues Fixed**
-1. ✅ **TriageAgent._run_with_context() AttributeError** - Fixed by replacing `self.agent_config` with direct CodeAgent creation
-2. ✅ **Integration test failures** - Fixed by correcting test expectations and method calls
-3. ✅ **End-to-end workflow** - Now working with real agent sessions
-4. ✅ **Manual testing** - Completed with actual bridge design workflow
+**Steps**:
+1. Create `geometry_agent_json.py` using `ToolCallingAgent`
+2. Test with simple MCP tool calls
+3. Compare error rates with Code Agent
 
-## Success Criteria - HONEST ASSESSMENT
+### Task 3: Update System Prompts [HIGH]
+**Goal**: Add explicit instructions for handling MCP responses
 
-- [⚠️] **Agents can remember key information across sessions** - PARTIAL (works single-threaded, breaks with concurrency)
-- [❌] **No more "what were we working on?" moments** - BROKEN (data loss under normal multi-agent usage)
-- [⚠️] **Component tracking persists between agent runs** - PARTIAL (works for demo, fails in production)
-- [x] **Implementation complete in < 8 hours** - ✅ ACHIEVED (6 hours basic implementation)
-- [x] **Zero breaking changes to existing code** - ✅ TRUE (only additions/fixes)
-- [❌] **Memory operations < 10ms** - BROKEN (degrades to >13ms at scale, unusable performance)
+**For Code Agent (if kept)**:
+```
+IMPORTANT MCP Tool Instructions:
+- ALL MCP tools return JSON strings that must be parsed with json.loads()
+- ALWAYS check tool response success before using data
+- Component IDs are UUIDs without any additional formatting
+- If a tool call succeeds, do NOT retry the same operation
+```
 
-## ✅ **COMPLETED TASKS - ALL FIXED**
+### Task 4: Implement Deduplication Logic [MEDIUM]
+**Goal**: Prevent duplicate component creation
 
-### **Phase 1: Fix Agent Integration Bugs - ✅ COMPLETED**
+**Solution**:
+- Before creating components, search memory for existing ones
+- Add component existence checking in the agent logic
 
-- [x] **Task 1.1: Debug TriageAgent `agent_config` error** - ✅ FIXED
-  - **Solution**: Replaced `self.agent_config.copy()` with direct CodeAgent creation
-  - **Location**: `src/bridge_design_system/agents/triage_agent.py:456`
-  - **Result**: TriageAgent now creates fresh CodeAgent instances with memory tools
+## Detailed Implementation Plan
 
-- [x] **Task 1.2: Fix TriageAgent memory tool passing** - ✅ FIXED
-  - **Solution**: Memory tools now properly passed to CodeAgent constructor
-  - **Result**: Agents can access remember(), recall(), search_memory() functions
+### Phase 1: Quick Fixes (Today)
+1. **Fix memory recall format** (30 mins)
+   - Update `recall()` to strip metadata
+   - Test with existing agents
 
-- [x] **Task 1.3: Fix GeometryAgent memory integration** - ✅ FIXED
-  - **Solution**: Fixed test method call from `handle_design_request()` to `run()`
-  - **Result**: GeometryAgent integration tests now pass
+2. **Create JSON agent prototype** (2 hours)
+   - Implement `GeometryAgentJSON` class
+   - Test basic MCP tool calling
+   - Compare with STDIO agent
 
-### **Phase 2: Validate Integration Works - ✅ COMPLETED**
+### Phase 2: Evaluation (Tomorrow)
+1. **Side-by-side testing** (2 hours)
+   - Run same tasks on both agents
+   - Measure error rates
+   - Document pros/cons
 
-- [x] **Task 2.1: Fix failing integration tests** - ✅ ALL PASS
-  - **Result**: All 12/12 integration tests now pass
-  - **Tests**: `test_triage_agent_passes_memory_tools`, `test_geometry_agent_includes_memory_in_tools`, `test_complete_memory_workflow`
+2. **Decision point**
+   - Choose JSON or Code agent based on results
+   - Plan migration if needed
 
-- [x] **Task 2.2: Create real end-to-end test script** - ✅ CREATED
-  - **File**: `test_memory_end_to_end.py`
-  - **Result**: 5/5 tests pass, validates real memory functionality without mocking
+### Phase 3: Production Ready (This Week)
+1. **Implement chosen solution**
+2. **Update all system prompts**
+3. **Add comprehensive error handling**
+4. **Full integration testing**
 
-### **Phase 3: Real User Testing - ✅ COMPLETED**
+## Success Criteria
 
-- [x] **Task 3.1: Manual bridge design session test** - ✅ VERIFIED
-  - **Test**: `manual_memory_test.py`
-  - **Result**: Agents successfully use memory tools in real bridge design workflow
-  - **Proof**: Agent called `remember()` to store design goals and requirements
+- [ ] No more "Invalid component ID format" errors
+- [ ] No duplicate component creation
+- [ ] Clean component ID storage and retrieval
+- [ ] Agent understands MCP tool responses correctly
+- [ ] Error rate < 5% for standard operations
 
-- [x] **Task 3.2: Document working examples** - ✅ UPDATED
-  - **Result**: Tests demonstrate verified working sessions with real memory persistence
+## Code Examples
 
-## **Previous Implementation (Working Parts)**
-
-### Memory Tools Core (WORKING)
+### Memory Tool Fix
 ```python
-# src/bridge_design_system/tools/memory_tools.py - FULLY FUNCTIONAL
+# In memory_tools.py
 @tool
-def remember(category: str, key: str, value: str) -> str:
-    """Store information in persistent memory - WORKS"""
-
-@tool  
 def recall(category: str = None, key: str = None) -> str:
-    """Retrieve information from memory - WORKS"""
-
-@tool
-def search_memory(query: str, limit: int = 10) -> str:
-    """Search across all memories - WORKS"""
+    """Retrieve information from memory without metadata."""
+    memory = MemoryManager.get_instance()
+    result = memory.recall(category, key)
+    
+    # Strip metadata if present
+    if result and "\n(Stored at:" in result:
+        return result.split("\n(Stored at:")[0]
+    return result
 ```
 
-### Component Registry Integration (WORKING)
+### JSON Agent Example
 ```python
-# Auto-storage works correctly
-def register_component(self, component_id: str, component_type: str, ...):
-    # ... component creation logic ...
-    remember_component(component_id, component_type, description)  # WORKS
+from smolagents import ToolCallingAgent
+
+class GeometryAgentJSON:
+    def run(self, task: str):
+        with MCPAdapt(self.stdio_params, SmolAgentsAdapter()) as mcp_tools:
+            agent = ToolCallingAgent(
+                tools=list(mcp_tools) + self.memory_tools,
+                model=self.model
+            )
+            return agent.run(task)
 ```
 
-## **Known Working Test Results**
+## Not Doing
+- ❌ Complex agent architectures
+- ❌ Rewriting the entire system
+- ❌ Adding more complexity to Code Agent
 
-### ✅ Memory Tools Tests (14/14 PASS)
-- `test_remember_and_recall` ✅
-- `test_recall_all_categories` ✅ 
-- `test_search_memory` ✅
-- `test_performance` ✅ (< 10ms validated)
-- `test_corrupted_memory_file` ✅
-- All other memory tool tests ✅
+## Timeline
+- **Today**: Fix memory recall, create JSON agent prototype
+- **Tomorrow**: Test and evaluate both approaches
+- **Day 3**: Implement chosen solution
+- **Day 4-5**: Testing and documentation
 
-### ✅ Integration Tests (12/12 PASS)
-- `test_triage_agent_passes_memory_tools` ✅ **FIXED**
-- `test_geometry_agent_includes_memory_in_tools` ✅ **FIXED**  
-- `test_complete_memory_workflow` ✅ **FIXED**
-
-## **File Structure (Working Parts)**
-```
-src/bridge_design_system/
-├── tools/
-│   ├── __init__.py                 ✅ EXISTS
-│   └── memory_tools.py             ✅ FULLY FUNCTIONAL
-├── data/
-│   └── memory/                     ✅ WORKING
-│       └── session_*.json          ✅ STORES DATA CORRECTLY
-├── state/
-│   └── component_registry.py      ✅ AUTO-MEMORY WORKS
-└── agents/
-    ├── triage_agent.py             ✅ AGENT_CONFIG BUG FIXED
-    └── geometry_agent_stdio.py     ✅ INTEGRATION WORKING
-```
-
-## **Performance Validation (ACCURATE)**
-- Memory operations: 0.1-0.7ms (well under 10ms requirement) ✅
-- JSON file size: ~1.8KB for typical session ✅
-- No memory leaks detected ✅
-
-## **What We're NOT Doing (Still Valid)**
-- ❌ Complex learning algorithms
-- ❌ Failure pattern analysis  
-- ❌ Tool success metrics
-- ❌ Session replay systems
-- ❌ Memory compression algorithms
-
-## **Next Steps to Actually Complete This**
-
-### **Immediate (Today):**
-1. Fix the `agent_config` bug in TriageAgent
-2. Make the 3 failing integration tests pass
-3. Run one real end-to-end test successfully
-
-### **This Week:**
-1. Complete real user testing with bridge design session
-2. Update documentation with verified examples
-3. Mark as genuinely "COMPLETED" only when agents actually remember context
-
----
-
-**FINAL STATUS**: ⚠️ **60% IMPLEMENTED - CRITICAL ISSUES PREVENT PRODUCTION**
-**CORE SOLUTION**: Memory tools work for demo scenarios BUT have critical race conditions and performance issues
-**TIME TAKEN**: 6 hours implementation + 30 minutes system prompt integration + 2 hours critical issue discovery
-**BLOCKING ISSUES**: Race conditions, performance degradation, session conflicts prevent production deployment
-
-## 🛠️ **REQUIRED FIXES FOR PRODUCTION**
-
-### CRITICAL (MUST FIX):
-1. **Implement file locking** or switch to database for concurrency safety
-2. **Fix session ID management** to prevent cross-session data mixing  
-3. **Add atomic write operations** to prevent corruption during writes
-4. **Implement graceful error handling** for permission/filesystem issues
-
-### HIGH PRIORITY:
-1. **Optimize data structure** to avoid O(n²) performance degradation
-2. **Add memory size limits** and cleanup mechanisms
-3. **Implement proper logging** for debugging production issues
-4. **Add retry logic** for transient failures
-
-**RECOMMENDATION**: ❌ **DO NOT DEPLOY TO PRODUCTION** until race conditions are fixed
+**ESTIMATED COMPLETION**: 3-5 days for full fix and optimization

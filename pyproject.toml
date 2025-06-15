@@ -26,6 +26,7 @@ dependencies = [
     "grasshopper-mcp",
     "duckduckgo-search>=8.0.3",
     "mcpadapt[smolagents]>=0.1.9",
+    "psutil>=7.0.0",
 ]
 
 [project.optional-dependencies]
