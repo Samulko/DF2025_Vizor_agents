@@ -118,14 +118,14 @@ class TriageAgent(BaseAgent):
     def initialize_agent(self):
         """Initialize the triage agent with managed agents."""
         # Import here to avoid circular imports
-        from .geometry_agent_stdio import GeometryAgentSTDIO
+        from .geometry_agent_json import GeometryAgentJSON
         # Temporarily disabled for geometry-only mode
         # from .material_agent import MaterialAgent
         # from .structural_agent import StructuralAgent
         
-        # Initialize geometry agent with simplified STDIO-only strategy
-        geometry_agent = GeometryAgentSTDIO(component_registry=self.component_registry)
-        self.logger.info("✅ Geometry agent initialized with STDIO-only strategy (100% reliable)")
+        # Initialize geometry agent with JSON-based strategy
+        geometry_agent = GeometryAgentJSON(component_registry=self.component_registry)
+        self.logger.info("✅ Geometry agent initialized with JSON-based strategy (eliminates parsing errors)")
         
         # Initialize managed agents - GEOMETRY ONLY MODE
         self.managed_agents = {
@@ -143,13 +143,13 @@ class TriageAgent(BaseAgent):
         
         # Create the triage agent with managed agents
         # For smolagents compatibility, we need to extract the internal agent for most agents
-        # but handle GeometryAgentMCPAdapt specially since it uses direct tool execution
+        # but handle GeometryAgentJSON specially since it uses direct tool execution
         managed_agent_instances = []
         for name, agent in self.managed_agents.items():
             if name == "geometry":
-                # GeometryAgentMCPAdapt doesn't need internal agent extraction
-                # It manages its own execution and tool lifecycle
-                self.logger.info("Geometry agent using MCPAdapt - direct execution mode")
+                # GeometryAgentJSON doesn't need internal agent extraction
+                # It manages its own execution and tool lifecycle with native JSON calling
+                self.logger.info("Geometry agent using ToolCallingAgent - native JSON tool calling")
                 # Note: We'll handle geometry tasks differently in handle_design_request
             # Temporarily disabled - no other agents
             # else:
@@ -193,11 +193,11 @@ class TriageAgent(BaseAgent):
         status = {}
         for name, agent in self.managed_agents.items():
             if name == "geometry":
-                # Special handling for GeometryAgentSTDIO
+                # Special handling for GeometryAgentJSON
                 tool_info = agent.get_tool_info()
                 status[name] = {
-                    "initialized": True,  # STDIO agent is always initialized
-                    "step_count": 0,  # STDIO agents don't track steps
+                    "initialized": True,  # JSON agent is always initialized
+                    "step_count": 0,  # JSON agents don't track steps at triage level
                     "mcp_connected": tool_info.get("connected", False),
                     "mode": tool_info.get("mode", "unknown"),
                     "strategy": tool_info.get("strategy", "unknown"),

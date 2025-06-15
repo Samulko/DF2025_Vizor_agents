@@ -285,7 +285,13 @@ def recall(category: Optional[str] = None, key: Optional[str] = None) -> str:
         if key in memories[category]:
             item = memories[category][key]
             elapsed_ms = (time.time() - start_time) * 1000
-            return f"{item['value']}\n(Stored at: {item['timestamp']}, retrieved in {elapsed_ms:.1f}ms)"
+            
+            # CRITICAL FIX: Strip metadata if present to prevent component ID pollution
+            result = item['value']
+            if result and "\n(Stored at:" in result:
+                result = result.split("\n(Stored at:")[0].strip()
+            
+            return result
         else:
             return f"No memory found for key '{key}' in category '{category}'"
     
