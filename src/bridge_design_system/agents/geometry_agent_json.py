@@ -14,8 +14,10 @@ from copy import deepcopy
 from pathlib import Path
 from typing import List, Optional, Any
 
-from smolagents import ToolCallingAgent, MCPClient
+from smolagents import ToolCallingAgent, tool
 from mcp import StdioServerParameters
+from mcpadapt.core import MCPAdapt
+from mcpadapt.smolagents_adapter import SmolAgentsAdapter
 
 from ..config.model_config import ModelProvider
 from ..config.logging_config import get_logger
@@ -119,24 +121,26 @@ Always use the available MCP tools to create actual geometry in Grasshopper, not
         logger.info(f"🎯 Executing task with JSON agent: {task[:100]}...")
         
         try:
-            # Use MCPClient for native smolagents MCP integration
-            with MCPClient(self.stdio_params) as mcp_tools:
-                logger.info(f"Connected to MCP via MCPClient with {len(mcp_tools)} tools")
+            # Use MCPAdapt with STDIO for reliable MCP integration (same as STDIO agent)
+            with MCPAdapt(
+                self.stdio_params,
+                SmolAgentsAdapter(),
+            ) as mcp_tools:
+                logger.info(f"Connected to MCP via STDIO with {len(mcp_tools)} tools")
                 
                 # Combine MCP tools with custom tools and memory tools
                 all_tools = list(mcp_tools) + self.custom_tools + self.memory_tools
                 
-                # Create ToolCallingAgent for JSON-based tool calling
-                # ToolCallingAgent handles JSON natively, eliminating parsing issues
+                # Create ToolCallingAgent instead of CodeAgent (main difference from STDIO agent)
                 json_agent = ToolCallingAgent(
                     tools=all_tools,
                     model=self.model,
                     max_steps=self.max_steps
                 )
-                logger.info("Created ToolCallingAgent with native JSON tool calling")
+                logger.info("Created ToolCallingAgent with live MCP tools for reliable execution")
                 
-                # Build conversation context for continuity
-                conversation_context = self._build_conversation_context(task)
+                # Build conversation context for continuity with system prompt embedded
+                conversation_context = self._build_conversation_context_with_system_prompt(task)
                 
                 # Execute task with JSON agent and conversation context
                 result = json_agent.run(conversation_context)
@@ -300,6 +304,23 @@ Please inform the user that full Grasshopper functionality requires MCP connecti
         
         return [create_point_fallback, create_line_fallback, create_spiral_fallback, get_connection_status]
     
+    def _build_conversation_context_with_system_prompt(self, new_task: str) -> str:
+        """Build conversation context with embedded system prompt.
+        
+        Args:
+            new_task: The new task to execute
+            
+        Returns:
+            Task with system prompt and conversation context
+        """
+        # Embed system prompt in context since ToolCallingAgent doesn't accept system_prompt param
+        conversation_context = self._build_conversation_context(new_task)
+        
+        # Add system prompt at the beginning
+        return f"""{self.system_prompt}
+
+{conversation_context}"""
+    
     def _build_conversation_context(self, new_task: str) -> str:
         """Build conversation context for continuity with ToolCallingAgent.
         
@@ -345,9 +366,6 @@ IMPORTANT: Use remember() to store:
 - Component IDs when created (category: "components")
 - Current geometry work (category: "geometry", key: "current_work")
 - Any errors and solutions (category: "errors")
-
-Remember: You are a ToolCallingAgent that makes JSON tool calls.
-The LLM generates Python scripts dynamically as tool arguments.
 {memory_context}"""
         
         # Build context from recent conversation history (last 3 interactions to avoid context overflow)
@@ -401,7 +419,7 @@ The LLM generates Python scripts dynamically as tool arguments.
         """
         # Test MCP connection to get current status
         try:
-            with MCPClient(self.stdio_params) as mcp_tools:
+            with MCPAdapt(self.stdio_params, SmolAgentsAdapter()) as mcp_tools:
                 tool_names = [getattr(tool, 'name', str(tool)) for tool in mcp_tools]
                 info = {
                     "connected": True,

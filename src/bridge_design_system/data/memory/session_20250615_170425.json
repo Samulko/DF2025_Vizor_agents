@@ -1,0 +1,22 @@
+{
+  "session_id": "session_20250615_170425",
+  "memories": {
+    "materials": {
+      "recent_decisions": {
+        "value": "Cut 30cm from piece_005. Cut 150cm from piece_026 (after adding new 200cm piece as piece_026 because piece_002 was too short).",
+        "timestamp": "2025-06-15T17:05:19.525976",
+        "category": "materials"
+      },
+      "waste_analysis": {
+        "value": "Piece piece_001 became waste after cutting 25cm, remaining length 10.0cm (less than 15.0cm threshold).",
+        "timestamp": "2025-06-15T17:04:58.784902",
+        "category": "materials"
+      },
+      "alerts": {
+        "value": "Attempted to find best piece to cut with a negative length (-10cm). This is an invalid input.",
+        "timestamp": "2025-06-15T17:05:20.958211",
+        "category": "materials"
+      }
+    }
+  }
+}

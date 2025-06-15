@@ -1,243 +1,412 @@
-# Current Task: Implement JSON Agent for Geometry Operations
+# Current Task: Refactor Agent Architecture Using Smolagents Best Practices
 
 ## Context & Background
 
-**Problem**: Current CodeAgent-based geometry agent has critical errors:
-1. **Memory recall pollution**: Component IDs include metadata causing MCP tool failures
-2. **JSON parsing confusion**: Agent treats JSON strings as dictionaries  
-3. **Duplicate component creation**: Error handling retries create multiple components
-4. **Code execution issues**: smolagents CodeAgent struggles with MCP tool responses
+**Problem**: Current agent architecture violates smolagents best practices and creates unnecessary complexity:
 
-**Root Cause**: CodeAgent architecture adds unnecessary complexity for MCP tool calling
+1. **Over-abstraction**: `BaseAgent` wraps smolagents unnecessarily, contradicting minimalist philosophy
+2. **Inconsistent patterns**: Mixing `CodeAgent` (TriageAgent) and `ToolCallingAgent` (GeometryAgentJSON) without proper architecture
+3. **Duplicate functionality**: Each agent reimplements conversation history, memory management, and error handling
+4. **Complex initialization**: Two-step initialization (init + initialize_agent) is confusing and fragile
+5. **Custom error handling**: Using custom `AgentError` enum instead of smolagents' built-in exception hierarchy
 
-**Solution**: Switch to ToolCallingAgent which is purpose-built for external tool integration
+**Root Cause**: Architecture doesn't follow smolagents patterns, creating 30% more LLM calls and maintenance overhead
 
-## Should We Use JSON Agent Instead of Code Agent?
+**Solution**: Implement smolagents best practices with factory pattern, ManagedAgent coordination, and proper error handling
 
-### 🚨 **CRITICAL DISCOVERY: JSON Agents CAN Generate Dynamic Code!**
+## 🎯 **SMOLAGENTS BEST PRACTICES TO IMPLEMENT**
 
-**Previous assumption was WRONG**: JSON agents are NOT limited to pre-made templates. The LLM dynamically generates the entire Python script as part of the JSON tool call!
+### Key Patterns from Analysis:
+1. **Factory Pattern**: Replace inheritance hierarchy with factory methods
+2. **ManagedAgent Pattern**: Use smolagents' built-in multi-agent coordination  
+3. **Memory Separation**: Centralize conversation management in orchestrator
+4. **Proper Error Handling**: Use smolagents' exception hierarchy
+5. **Production Patterns**: Add monitoring, logging, and security
 
-**Example JSON Agent Flow:**
-1. User: "Create a spiral in Grasshopper"
-2. LLM generates: 
-```json
-{
-  "name": "add_python3_script",
-  "arguments": {
-    "x": 100, "y": 100,
-    "name": "Spiral Generator",
-    "script": "import Rhino.Geometry as rg\nimport math\n\npoints = []\nfor i in range(100):\n    angle = i * 0.1\n    radius = i * 0.5\n    x = radius * math.cos(angle)\n    y = radius * math.sin(angle)\n    z = i * 0.2\n    points.append(rg.Point3d(x, y, z))\n\nspiral = rg.Curve.CreateInterpolatedCurve(points, 3)\na = spiral"
-  }
-}
-```
+### Expected Benefits:
+- **30% fewer LLM calls** (smolagents efficiency)
+- **Reduced complexity** (eliminate custom abstractions)
+- **Better error handling** (use smolagents patterns)
+- **Improved maintainability** (standardized patterns)
+- **Production readiness** (monitoring, security)
 
-### Analysis: JSON Agent (ToolCallingAgent) vs Code Agent
+## 📋 **IMPLEMENTATION PLAN**
 
-**JSON Agent PROS for this use case:**
-- ✅ **Simpler data handling**: No Python execution context confusion
-- ✅ **Native tool integration**: Perfect for calling external MCP tools
-- ✅ **Clearer error boundaries**: Failures are at tool level, not code execution level
-- ✅ **No JSON parsing issues**: Eliminates dictionary/string confusion entirely
-- ✅ **Same code generation capability**: LLM generates Python scripts dynamically
-- ✅ **Better suited for MCP**: Tools expect JSON calls, not Python execution
+### Phase 1: Replace BaseAgent with AgentFactory (HIGH PRIORITY)
 
-**JSON Agent CONS:**
-- ✅ **Has state management**: ToolCallingAgent maintains state dictionary for variables across steps
-- ❌ **Linear execution only**: Follows ReAct pattern - no loops or complex branching across steps  
-- ❌ **Single tool per step**: Sequential execution only, no parallel tool calls
+**Goal**: Replace complex inheritance with factory pattern
 
-**Corrected Facts:**
-- **WRONG**: "No intermediate variables" - JSON agents DO have state management
-- **TRUE**: "No complex control flow" - Limited to linear ReAct pattern
-- **TRUE**: "Single tool per step" - Cannot execute multiple tools in parallel
+#### 1.1 Create AgentFactory Module
+- **File**: `src/bridge_design_system/agents/agent_factory.py`
+- **Purpose**: Factory functions for creating specialized agents
+- **Features**:
+  - `create_code_agent()` - For Python-based tasks (structural, material analysis)
+  - `create_tool_calling_agent()` - For MCP/JSON integration (geometry)
+  - Unified configuration (model, security, monitoring)
+  - Built-in error handling using smolagents exceptions
 
-### Recommendation: **STRONGLY YES - JSON Agent is ideal**
-
-For Geometry Agent tasks (MCP tool calls with dynamically generated scripts), JSON Agent is **significantly better** because:
-1. **Eliminates current errors**: No more JSON parsing confusion
-2. **Perfect MCP match**: MCP tools expect JSON calls
-3. **Same script generation**: LLM creates complex Python scripts dynamically
-4. **Simpler architecture**: Direct tool calls without Python execution layer
-5. **Native smolagents pattern**: Official documentation shows MCP + JSON agent examples
-
-## Action Plan - Execute in Order
-
-### ✅ CRITICAL: Create JSON Agent Implementation
-
-**File to create**: `src/bridge_design_system/agents/geometry_agent_json.py`
-
-**Requirements**:
-- Use `ToolCallingAgent` from smolagents
-- Connect to MCP via MCPAdapt with STDIO transport
-- Include memory tools (remember, recall, search_memory)
-- Same model configuration as current STDIO agent
-- Handle conversation context like current implementation
-
-**DO**:
-- Use MCPAdapt context manager for connection lifecycle
-- Set temperature=0.1 for precise instruction following
-- Include all memory tools in agent initialization
-- Implement conversation context building
-- Use same system prompt approach as current agent
-
-**DON'T**:
-- Don't use CodeAgent - we're switching to ToolCallingAgent
-- Don't try to fix JSON parsing - JSON agent handles this natively
-- Don't add Python execution context - not needed for JSON agent
-- Don't modify MCP tools - they work correctly
-
-### ✅ HIGH: Fix Memory Tool Metadata Pollution
-
-**File to modify**: `src/bridge_design_system/tools/memory_tools.py`
-
-**Problem**: `recall()` returns component IDs with metadata like:
-```
-"270dc13e-b4fb-4802-8441-d4452a8196ae\n(Stored at: 2025-06-15T14:52:25.720584, retrieved in 0.2ms)"
-```
-
-**Requirements**:
-- Modify `recall()` function to strip metadata from returned values
-- Preserve clean UUID format for component IDs
-- Maintain backward compatibility
-
-**Implementation**:
+**Template**:
 ```python
-# Strip metadata if present
-if result and "\n(Stored at:" in result:
-    return result.split("\n(Stored at:")[0].strip()
-```
-
-### ✅ MEDIUM: Update Triage Agent Integration
-
-**File to modify**: `src/bridge_design_system/agents/triage_agent.py`
-
-**Requirements**:
-- Update triage agent to use new `GeometryAgentJSON` instead of `GeometryAgentSTDIO`
-- Test integration works correctly
-- Ensure no breaking changes to existing workflows
-
-### ✅ LOW: Add Component Deduplication (Optional)
-
-**Goal**: Prevent duplicate component creation in error scenarios
-
-**Implementation**: Add memory checks before component creation:
-```python
-# Before creating new component, check if similar exists
-existing = search_memory("bridge_points")
-if not existing:
-    # Create new component
-```
-
-## TODO Checklist
-
-- [ ] **Create `geometry_agent_json.py`** with ToolCallingAgent implementation
-- [ ] **Fix memory recall metadata** in `memory_tools.py` 
-- [ ] **Test JSON agent** with simple MCP tool calls
-- [ ] **Compare error rates** between JSON and Code agents
-- [ ] **Update triage agent** to use JSON agent
-- [ ] **Run end-to-end test** of bridge design workflow
-- [ ] **Commit working solution** and update documentation
-
-## Success Criteria - Definition of Done
-
-### Primary Goals (Must Have)
-- [ ] **Zero component ID parsing errors** - No more "Invalid component ID format" failures
-- [ ] **Clean memory recall** - Component IDs returned without metadata pollution
-- [ ] **Single component creation** - No duplicate components from error retries
-- [ ] **Successful script generation** - JSON agent generates valid Rhino Python scripts
-- [ ] **MCP tool integration** - All 6 MCP tools work correctly with JSON agent
-
-### Secondary Goals (Should Have)  
-- [ ] **Error rate < 5%** for standard bridge design operations
-- [ ] **Same functionality** as current STDIO agent
-- [ ] **Faster execution** due to simplified architecture
-- [ ] **Maintainable code** with clear separation of concerns
-
-### Test Scenarios
-1. **Basic**: "Create two bridge points" - should create single component successfully
-2. **Complex**: "Create bridge points and connect with curve" - should handle multi-step operations
-3. **Memory**: Component IDs stored and retrieved correctly across agent runs
-4. **Error handling**: Graceful failure when MCP server unavailable
-
-## Implementation Templates
-
-### 1. Geometry Agent JSON (Template)
-```python
-# src/bridge_design_system/agents/geometry_agent_json.py
-from smolagents import ToolCallingAgent
-from mcpadapt.core import MCPAdapt
-from mcpadapt.smolagents_adapter import SmolAgentsAdapter
-from mcp import StdioServerParameters
-
-class GeometryAgentJSON:
-    def __init__(self, model_name: str = "geometry"):
-        self.stdio_params = StdioServerParameters(
-            command="uv",
-            args=["run", "python", "-m", "grasshopper_mcp.bridge"], 
-            env=None
-        )
-        self.model = ModelProvider.get_model(model_name, temperature=0.1)
-        self.memory_tools = [remember, recall, search_memory, clear_memory]
-        self.conversation_history = []
+def create_agent(agent_type="code", model_type="hf", tools=None, **kwargs):
+    """Factory method for creating different agent types"""
     
-    def run(self, task: str):
-        try:
-            with MCPAdapt(self.stdio_params, SmolAgentsAdapter()) as mcp_tools:
-                agent = ToolCallingAgent(
-                    tools=list(mcp_tools) + self.memory_tools,
-                    model=self.model
-                )
-                result = agent.run(self._build_conversation_context(task))
-                self._store_conversation(task, result)
-                return result
-        except Exception as e:
-            return self._handle_error(e, task)
+    # Model selection
+    if model_type == "hf":
+        model = InferenceClientModel(**kwargs.get('model_kwargs', {}))
+    elif model_type == "openai":
+        model = LiteLLMModel(model_id="gpt-4", **kwargs.get('model_kwargs', {}))
+    
+    # Agent type selection
+    if agent_type == "code":
+        return CodeAgent(tools=tools or [], model=model, **kwargs)
+    elif agent_type == "tool_calling":
+        return ToolCallingAgent(tools=tools or [], model=model, **kwargs)
 ```
 
-### 2. Memory Tool Fix (Exact Change)
-```python
-# In src/bridge_design_system/tools/memory_tools.py  
-# Find the recall function and update it:
+#### 1.2 Agent Configuration Template
+- **File**: `src/bridge_design_system/agents/agent_templates.py`
+- **Purpose**: Standardized configuration templates for different agent types
+- **Features**:
+  - Security settings (sandboxing, authorized imports)
+  - Tool loading and validation
+  - Model configuration per agent type
+  - Production monitoring setup
 
+### Phase 2: Refactor TriageAgent to ManagedAgent Pattern (HIGH PRIORITY)
+
+**Goal**: Use smolagents' built-in multi-agent coordination
+
+#### 2.1 Simplify TriageAgent
+- Remove custom BaseAgent inheritance
+- Use smolagents `ManagedAgent` pattern for coordination
+- Centralize conversation history and memory management
+- Implement proper error recovery using smolagents exceptions
+
+**Template**:
+```python
+# Create specialized agents
+geometry_agent = create_agent(
+    agent_type="tool_calling",
+    tools=mcp_tools + memory_tools,
+    model=model,
+    name="geometry",
+    description="Creates 3D geometry in Rhino Grasshopper"
+)
+
+structural_agent = create_agent(
+    agent_type="code", 
+    tools=structural_tools,
+    model=model,
+    name="structural",
+    description="Performs structural analysis"
+)
+
+# Create manager agent with hierarchical delegation
+triage_agent = CodeAgent(
+    tools=coordination_tools,
+    model=model,
+    managed_agents=[geometry_agent, structural_agent]
+)
+```
+
+#### 2.2 Memory and State Management
+- Move conversation history to TriageAgent only
+- Use memory tools consistently across all agents
+- Implement state separation between agents
+- Add component registry integration at triage level
+
+### Phase 3: Refactor GeometryAgent (MEDIUM PRIORITY)
+
+**Goal**: Standardize on ToolCallingAgent, remove custom abstractions
+
+#### 3.1 Simplify GeometryAgent  
+- Remove custom wrapper classes
+- Use AgentFactory to create ToolCallingAgent directly
+- Integrate MCP tools using smolagents patterns
+- Remove duplicate conversation/memory management
+
+#### 3.2 Tool Integration
+- Standardize MCP tool loading
+- Implement proper fallback tool patterns
+- Add tool health monitoring
+- Use smolagents tool decoration patterns
+
+**Tool Template**:
+```python
 @tool
-def recall(category: str = None, key: str = None) -> str:
-    """Retrieve information from persistent memory without metadata."""
-    memory = MemoryManager.get_instance()
-    result = memory.recall(category, key)
+def create_geometry(geometry_type: str, **params) -> dict:
+    """Create geometry using MCP tools.
     
-    # CRITICAL FIX: Strip metadata if present
-    if result and "\n(Stored at:" in result:
-        return result.split("\n(Stored at:")[0].strip()
+    Args:
+        geometry_type: Type of geometry to create
+        **params: Geometry parameters
     
+    Returns:
+        Result from geometry creation
+    """
+    # All imports within function for Hub sharing
+    import json
+    # Implementation here
     return result
 ```
 
-### 3. Triage Agent Integration (Update)
-```python
-# In src/bridge_design_system/agents/triage_agent.py
-# Replace GeometryAgentSTDIO import with:
-from .geometry_agent_json import GeometryAgentJSON
+### Phase 4: Add Production Features (LOW PRIORITY)
 
-# Update the geometry agent initialization
-self.geometry_agent = GeometryAgentJSON(model_name="geometry")
+**Goal**: Production-ready monitoring and security
+
+#### 4.1 Security and Sandboxing
+- Configure execution environments (local/docker/e2b)
+- Set up proper import restrictions
+- Add input validation and sanitization
+- Implement rate limiting
+
+**Security Template**:
+```python
+# Production agent with E2B sandboxing
+agent = CodeAgent(
+    tools=validated_tools,
+    model=model,
+    executor_type="e2b",
+    executor_kwargs={"api_key": os.environ["E2B_API_KEY"]},
+    additional_authorized_imports=["requests", "pandas", "numpy.*"]
+)
 ```
 
-## Key Architectural Insight
+#### 4.2 Monitoring and Logging
+- Add OpenTelemetry instrumentation
+- Implement structured logging
+- Add performance metrics
+- Create agent health dashboards
 
-**Why JSON Agent Eliminates Errors**:
-- Current: CodeAgent executes `json.loads(mcp_result)` → parsing errors
-- New: ToolCallingAgent directly receives JSON from MCP → no parsing needed
-- MCP tools designed for JSON calling, not Python execution context
+**Monitoring Template**:
+```python
+from openinference.instrumentation.smolagents import SmolagentsInstrumentor
 
-## Risk Mitigation
+SmolagentsInstrumentor().instrument()
 
-**Potential Issues**:
-- JSON agent state management might differ from CodeAgent
-- Tool call patterns may need adjustment
-- System prompts may need optimization for JSON format
+# Agent with comprehensive monitoring
+agent = CodeAgent(
+    tools=tools,
+    model=model,
+    max_steps=10,
+    stream_outputs=True  # Real-time monitoring
+)
+```
 
-**Mitigation**:
-- Keep existing CodeAgent as fallback during testing
-- Implement identical conversation context handling
-- Use same memory tools and system prompt approach
+## ✅ **ACTION ITEMS - EXECUTE IN ORDER**
+
+### Phase 1 Tasks:
+- [ ] **Create `agent_factory.py`** - Factory methods for creating agents
+- [ ] **Create `agent_templates.py`** - Standardized configuration templates  
+- [ ] **Update error handling** - Switch to smolagents exception hierarchy
+- [ ] **Add security configurations** - Sandboxing and import restrictions
+
+### Phase 2 Tasks:
+- [ ] **Refactor `triage_agent.py`** - Remove BaseAgent inheritance
+- [ ] **Implement ManagedAgent pattern** - Use smolagents coordination
+- [ ] **Centralize memory management** - Move to triage level only
+- [ ] **Add proper error recovery** - Use smolagents patterns
+
+### Phase 3 Tasks:
+- [ ] **Simplify `geometry_agent_json.py`** - Remove custom wrappers
+- [ ] **Standardize MCP integration** - Use factory patterns
+- [ ] **Add tool health monitoring** - Connection status checks
+- [ ] **Implement fallback patterns** - Graceful degradation
+
+### Phase 4 Tasks:
+- [ ] **Add OpenTelemetry instrumentation** - Production monitoring
+- [ ] **Configure execution environments** - Docker/E2B sandboxing
+- [ ] **Implement rate limiting** - Prevent abuse
+- [ ] **Create health dashboards** - Agent performance metrics
+
+## 🧪 **TESTING STRATEGY**
+
+### Migration Strategy:
+- Keep existing agents working during transition
+- Test each phase independently  
+- Gradual rollout with feature flags
+- Comprehensive testing at each phase
+
+### Test Scenarios:
+1. **Factory Pattern**: Create agents using factory methods
+2. **ManagedAgent**: Test hierarchical task delegation
+3. **Error Handling**: Verify smolagents exception handling
+4. **Security**: Test sandboxing and import restrictions
+5. **Performance**: Compare efficiency vs current implementation
+
+### Success Criteria:
+- [ ] **30% fewer LLM calls** (measured via logging)
+- [ ] **Reduced code complexity** (lines of code, cyclomatic complexity)
+- [ ] **Better error handling** (proper exception hierarchy)
+- [ ] **Production readiness** (monitoring, security)
+- [ ] **Maintainable architecture** (clear separation of concerns)
+
+## 🔧 **IMPLEMENTATION TEMPLATES**
+
+### 1. Agent Factory Implementation
+```python
+# src/bridge_design_system/agents/agent_factory.py
+from typing import List, Optional, Dict, Any
+from smolagents import CodeAgent, ToolCallingAgent, Tool
+from ..config.model_config import ModelProvider
+
+class AgentFactory:
+    """Factory for creating specialized agents following smolagents patterns."""
+    
+    @staticmethod
+    def create_geometry_agent(tools: List[Tool], **kwargs) -> ToolCallingAgent:
+        """Create ToolCallingAgent for MCP geometry operations."""
+        model = ModelProvider.get_model("geometry", temperature=0.1)
+        return ToolCallingAgent(
+            tools=tools,
+            model=model,
+            max_steps=kwargs.get('max_steps', 10)
+        )
+    
+    @staticmethod  
+    def create_structural_agent(tools: List[Tool], **kwargs) -> CodeAgent:
+        """Create CodeAgent for Python-based structural analysis."""
+        model = ModelProvider.get_model("structural")
+        return CodeAgent(
+            tools=tools,
+            model=model,
+            max_steps=kwargs.get('max_steps', 10),
+            additional_authorized_imports=["numpy", "scipy", "pandas"]
+        )
+```
+
+### 2. Simplified Triage Agent
+```python
+# src/bridge_design_system/agents/triage_agent.py
+from smolagents import CodeAgent
+from .agent_factory import AgentFactory
+
+class TriageAgent:
+    """Simplified triage agent using smolagents ManagedAgent pattern."""
+    
+    def __init__(self):
+        # Create specialized agents using factory
+        self.geometry_agent = AgentFactory.create_geometry_agent(
+            tools=self._load_mcp_tools() + memory_tools
+        )
+        
+        self.structural_agent = AgentFactory.create_structural_agent(
+            tools=structural_tools + memory_tools
+        )
+        
+        # Create manager agent with delegation
+        self.manager = CodeAgent(
+            tools=coordination_tools,
+            model=ModelProvider.get_model("triage"),
+            managed_agents=[self.geometry_agent, self.structural_agent]
+        )
+    
+    def run(self, task: str) -> Any:
+        """Execute task using managed agents."""
+        return self.manager.run(task)
+```
+
+### 3. Production Security Config
+```python
+# src/bridge_design_system/agents/agent_templates.py
+from typing import Dict, Any
+
+class ProductionConfig:
+    """Production-ready agent configurations."""
+    
+    @staticmethod
+    def get_secure_config() -> Dict[str, Any]:
+        """Get security configuration for production."""
+        return {
+            "executor_type": "e2b",
+            "executor_kwargs": {"api_key": os.environ["E2B_API_KEY"]},
+            "additional_authorized_imports": [
+                "json", "datetime", "pathlib", "typing", 
+                "dataclasses", "enum", "math", "re"
+            ],
+            "max_steps": 10
+        }
+    
+    @staticmethod
+    def get_monitoring_config() -> Dict[str, Any]:
+        """Get monitoring configuration."""
+        return {
+            "stream_outputs": True,
+            "enable_logging": True,
+            "log_level": "INFO"
+        }
+```
+
+## 🚨 **RISK MITIGATION**
+
+### Technical Risks:
+- **Breaking existing workflows** - Keep current agents as fallback during migration
+- **Performance degradation** - Benchmark each phase before deployment
+- **Integration issues** - Test with existing MCP and component registry systems
+- **Security vulnerabilities** - Implement proper sandboxing from day one
+
+### Mitigation Strategies:
+- **Feature flags** - Enable new architecture gradually
+- **A/B testing** - Compare performance with current implementation
+- **Rollback plan** - Quick revert to current architecture if needed
+- **Comprehensive testing** - Unit, integration, and end-to-end tests
+
+## 📈 **EXPECTED OUTCOMES**
+
+### Immediate Benefits:
+- **Simplified codebase** - Remove custom abstractions
+- **Better error handling** - Use smolagents exception hierarchy
+- **Standardized patterns** - Follow established smolagents practices
+
+### Long-term Benefits:
+- **30% efficiency improvement** - Fewer LLM calls through proper patterns
+- **Production readiness** - Monitoring, security, and scalability
+- **Maintainability** - Clear separation of concerns and standardized interfaces
+- **Community alignment** - Follow established open-source patterns
+
+## 🔄 **MIGRATION TIMELINE**
+
+### Week 1: Foundation (Phase 1)
+- Implement agent factory and templates
+- Update error handling to use smolagents exceptions
+- Add basic security configurations
+
+### Week 2: Core Refactor (Phase 2)  
+- Refactor TriageAgent to use ManagedAgent pattern
+- Centralize memory and state management
+- Test integration with existing systems
+
+### Week 3: Geometry Agent (Phase 3)
+- Simplify GeometryAgent using factory patterns
+- Standardize MCP tool integration
+- Add health monitoring and fallback patterns
+
+### Week 4: Production Features (Phase 4)
+- Add comprehensive monitoring and logging
+- Configure production security (sandboxing)
+- Performance testing and optimization
+
+### Week 5: Testing & Deployment
+- End-to-end testing of new architecture
+- Performance comparison with current system
+- Gradual rollout to production
+
+## 📝 **SUCCESS METRICS**
+
+### Performance Metrics:
+- **LLM Call Reduction**: Target 30% fewer calls
+- **Response Time**: Maintain or improve current latency  
+- **Error Rate**: Reduce to <5% for standard operations
+- **Memory Usage**: Optimize through proper state separation
+
+### Code Quality Metrics:
+- **Lines of Code**: Reduce through elimination of duplication
+- **Cyclomatic Complexity**: Simplify through factory patterns
+- **Test Coverage**: Maintain >80% coverage
+- **Documentation**: Update to reflect new patterns
+
+### Production Metrics:
+- **Uptime**: 99.9% availability
+- **Security**: Zero vulnerabilities in security audit
+- **Monitoring**: Complete observability of agent operations
+- **Scalability**: Support 10x current load

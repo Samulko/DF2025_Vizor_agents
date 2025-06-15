@@ -1,0 +1,12 @@
+{
+  "session_id": "session_20250615_165313",
+  "memories": {
+    "context": {
+      "test_status": {
+        "value": "we're testing the JSON agent",
+        "timestamp": "2025-06-15T16:53:18.709214",
+        "category": "context"
+      }
+    }
+  }
+}
