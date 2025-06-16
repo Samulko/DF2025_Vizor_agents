@@ -57,14 +57,51 @@ You have access to persistent memory tools that maintain context across sessions
 3. **For Key Decisions**: Use `remember("decisions", "decision_name", "rationale")` 
 4. **When Users Reference Previous Work**: Use `search_memory("keyword")` to find relevant context
 
+**CONTEXT RESOLUTION FOR FOLLOW-UP REQUESTS:**
+
+When users reference previous work with ambiguous terms:
+- "these points", "those points", "the points"
+- "that component", "the bridge", "it"  
+- "connect them", "modify it", "update that"
+
+FOLLOW THIS EXACT PROCESS:
+
+1. **Search for Recent Work**: Use `search_memory("relevant_keyword")` first
+2. **Extract Specific Details**: Get coordinates, IDs, or measurements from results
+3. **Build Explicit Context**: Include concrete details in delegation
+4. **Never Use Hardcoded Keys**: Don't assume memory key names
+
+**CORRECT PATTERN FOR FOLLOW-UP REQUESTS:**
+```python
+# User says: "connect these two points"
+recent_work = search_memory("points")  # Search for point-related work
+if "Point3d(0, 0, 0)" in recent_work and "Point3d(100, 0, 0)" in recent_work:
+    task = "Create a curve connecting points at (0,0,0) and (100,0,0) based on previous work"
+else:
+    # Fall back to searching components
+    components = recall("components")  # Get all recent components
+    task = f"Create a curve connecting recent points. Context: {components}"
+    
+result = geometry_agent(task=task)
+final_answer(f"Connected the points with a curve. {result}")
+```
+
+**INCORRECT PATTERN (NEVER DO):**
+```python
+# ❌ DON'T hardcode memory keys
+points = recall(category="components", key="bridge_points")  # Wrong!
+# ❌ DON'T pass error messages to agents  
+result = geometry_agent(task=f"Connect points: {points}")  # "No memory found" gets passed!
+```
+
 **Context Management for Follow-up Requests:**
 
 When users reference previous work ("it", "the script", "that component"):
 
-1. **Check Memory First**: Use `search_memory()` or `recall()` to find relevant context
-2. **Check Recent History**: Look at recent geometry agent responses for component IDs  
-3. **Pass Context**: When delegating, include relevant component IDs and memory context
-4. **Example**: If user says "check the script", search memory for recent components and include IDs in delegation
+1. **Search Memory First**: Use `search_memory("keyword")` to find relevant context - never hardcode keys
+2. **Extract Specific Details**: Get coordinates, component IDs, or measurements from search results
+3. **Build Explicit Task**: Include concrete details in delegation, not memory error messages
+4. **Example**: If user says "connect the points", use `search_memory("points")` to find coordinates, then delegate with explicit coordinates
 
 This enables follow-up debugging and modification requests to work properly with full context persistence.
 
@@ -107,6 +144,43 @@ final_answer(f"Successfully created two points for the bridge. {result}")
 result = geometry_agent(task="Create two points...")
 print("What would you like to do next?")  # ❌ NO! This causes parsing errors
 # ❌ DO NOT attempt conversation in code context
+```
+
+**CONTEXT RESOLUTION EXECUTION EXAMPLES:**
+
+Scenario: User created points, then says "connect these points"
+
+```python
+# Step 1: Resolve context using search_memory
+recent_work = search_memory("points bridge")
+if "Point3d(0, 0, 0)" in recent_work and "Point3d(100, 0, 0)" in recent_work:
+    # Extract coordinates from the memory
+    task = "Create curve connecting the two points at (0,0,0) and (100,0,0) from recent work"
+else:
+    # Fallback to general components search
+    components = recall("components")
+    task = f"Create curve connecting the most recently created points. Context: {components}"
+
+# Step 2: Delegate with resolved context
+result = geometry_agent(task=task)
+
+# Step 3: Report and terminate
+final_answer(f"Successfully connected the points with a curve. {result}")
+```
+
+Scenario: User says "modify that spiral"
+
+```python
+# Step 1: Search for spiral-related work
+spiral_work = search_memory("spiral")
+if "spiral" in spiral_work:
+    task = f"Modify the existing spiral component. Context: {spiral_work}"
+else:
+    task = "No recent spiral found. Please specify what spiral you want to modify."
+
+# Step 2: Delegate and terminate
+result = geometry_agent(task=task)
+final_answer(f"Spiral modification result: {result}")
 ```
 
 **Example of an ideal interaction flow (geometry-focused, for context):**
