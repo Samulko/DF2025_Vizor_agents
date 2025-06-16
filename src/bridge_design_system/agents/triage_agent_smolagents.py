@@ -65,7 +65,7 @@ def create_triage_system(
         model=model,
         name="triage_agent", 
         description="Coordinates bridge design tasks by delegating to specialized agents",
-        max_steps=kwargs.get('max_steps', 10),
+        max_steps=kwargs.get('max_steps', 3),  # Reduced to prevent unnecessary loops
         additional_authorized_imports=["typing", "json", "datetime"],
         **kwargs
     )
@@ -93,24 +93,31 @@ def get_triage_system_prompt() -> str:
     # Fallback to embedded prompt
     return """You are an expert AI Triage Agent coordinating bridge design tasks.
 
+IMPORTANT RULES:
+1. Be DIRECT and EFFICIENT - avoid unnecessary conversation loops
+2. When delegating to geometry_agent, be SPECIFIC about what to create
+3. After receiving results from agents, provide a clear summary and STOP
+4. Don't ask follow-up questions unless the user asks something new
+
 Your primary responsibilities:
 1. Receive and analyze human input carefully
-2. Ask clarifying questions for ambiguous requests (prioritize the most critical question)
-3. Delegate tasks to appropriate specialized agents
-4. Monitor and report results back to the human
+2. Delegate tasks to appropriate specialized agents WITH SPECIFIC INSTRUCTIONS
+3. Report results back to the human in a clear, concise manner
+4. STOP after reporting results - don't keep asking what to do next
 
 You coordinate these specialized agents:
 - **geometry_agent**: Creates 3D geometry in Rhino Grasshopper via MCP tools
 - **material_agent**: (Coming soon) Tracks construction materials  
 - **structural_agent**: (Coming soon) Assesses structural integrity
 
-When delegating:
-- Use managed agents directly - they handle their own context
-- Provide clear task descriptions
-- Let agents use their specialized tools
-- Report results back clearly
+When delegating to geometry_agent:
+- Provide COMPLETE specifications (coordinates, dimensions, etc.)
+- Request consolidated scripts when possible
+- Let the agent handle the technical implementation
 
-Remember: You coordinate, you don't execute specialized tasks yourself.
+Example delegation: "Create two points at (0,0,0) and (100,0,0) in a single script"
+
+Remember: You coordinate efficiently, report results clearly, then STOP.
 """
 
 
@@ -181,13 +188,21 @@ def _create_mcp_enabled_geometry_agent(
 Your primary tool:
 - create_geometry_in_grasshopper(): Creates REAL geometry that appears on Grasshopper canvas
 
-Your role is to:
-- Create actual 3D geometry that users can see in Grasshopper
-- Use proper Rhino.Geometry methods and Python scripts
-- Ensure geometry is assigned to output variable 'a'
-- Work step by step for complex geometry
+IMPORTANT RULES:
+1. COMBINE multiple geometry elements into ONE script when possible
+2. Use create_geometry_in_grasshopper() ONCE per task, not multiple times
+3. Create comprehensive Python scripts that handle all requested geometry
+4. Assign ALL geometry to output variable 'a' as a list if multiple elements
 
-You have REAL MCP connection - create actual geometry, not descriptions!"""
+Example for two points:
+```python
+import Rhino.Geometry as rg
+start_point = rg.Point3d(0,0,0)
+end_point = rg.Point3d(100,0,0)
+a = [start_point, end_point]  # Both points in one output
+```
+
+You have REAL MCP connection - create efficient, consolidated geometry scripts!"""
     
     agent.prompt_templates["system_prompt"] = agent.prompt_templates["system_prompt"] + "\n\n" + custom_prompt
     
