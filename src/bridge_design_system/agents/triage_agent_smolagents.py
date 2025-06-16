@@ -43,8 +43,8 @@ def create_triage_system(
     # Get model
     model = ModelProvider.get_model(model_name)
     
-    # Create specialized geometry agent for native managed_agents pattern
-    geometry_agent = _create_native_geometry_agent(
+    # Create specialized geometry agent using working MCP wrapper approach
+    geometry_agent = _create_mcp_enabled_geometry_agent(
         custom_tools=_create_registry_tools(component_registry) if component_registry else None,
         component_registry=component_registry
     )
@@ -114,106 +114,84 @@ Remember: You coordinate, you don't execute specialized tasks yourself.
 """
 
 
-def _create_native_geometry_agent(
+def _create_mcp_enabled_geometry_agent(
     custom_tools: Optional[List] = None,
     component_registry: Optional[Any] = None
 ) -> ToolCallingAgent:
     """
-    Create geometry agent as native ToolCallingAgent for managed_agents pattern.
+    Create geometry agent that uses the working MCP wrapper for managed_agents pattern.
     
-    Following smolagents best practices: create direct agent instances that can
-    be used in managed_agents parameter for proper hierarchical delegation.
+    This directly integrates the working SmolagentsGeometryAgent wrapper into
+    the managed_agents pattern, ensuring real MCP functionality.
     
     Args:
         custom_tools: Additional tools to include
         component_registry: Registry for tracking components
         
     Returns:
-        ToolCallingAgent configured for geometry tasks with MCP tools
+        ToolCallingAgent that creates real geometry via MCP
     """
     from .geometry_agent_smolagents import create_geometry_agent
     
-    # Use the existing wrapper that handles MCP lifecycle properly
-    # Extract the internal agent for managed_agents pattern
+    # Create the working MCP wrapper that we know works
     geometry_wrapper = create_geometry_agent(
         custom_tools=custom_tools,
         component_registry=component_registry
     )
     
-    # For now, return a simplified agent until MCP lifecycle is resolved
-    # in managed_agents context. We'll create fallback tools.
+    # Create a tool that delegates directly to the working wrapper
+    @tool
+    def create_geometry_in_grasshopper(task_description: str) -> str:
+        """
+        Create actual geometry in Grasshopper using the working MCP wrapper.
+        
+        Args:
+            task_description: Detailed description of the geometry to create
+            
+        Returns:
+            Result from the MCP-enabled geometry agent (real geometry creation)
+        """
+        logger.info(f"🎯 Delegating to MCP geometry wrapper: {task_description[:100]}...")
+        try:
+            result = geometry_wrapper.run(task_description)
+            logger.info("✅ MCP geometry wrapper executed successfully")
+            return str(result)
+        except Exception as e:
+            logger.error(f"❌ MCP geometry wrapper failed: {e}")
+            raise e  # Don't hide the error - let it bubble up
+    
+    # Get model and create tools
     model = ModelProvider.get_model("geometry", temperature=0.1)
-    
-    # Create fallback geometry tools
-    fallback_tools = _create_geometry_fallback_tools()
     memory_tools = [remember, recall, search_memory, clear_memory]
-    all_tools = fallback_tools + memory_tools + (custom_tools or [])
+    mcp_tools = [create_geometry_in_grasshopper]
+    all_tools = mcp_tools + memory_tools + (custom_tools or [])
     
+    # Create agent that uses the working MCP wrapper
     agent = ToolCallingAgent(
         tools=all_tools,
         model=model,
         max_steps=10,
         name="geometry_agent",
-        description="Creates 3D geometry descriptions (MCP integration pending for managed_agents)"
+        description="Creates real 3D geometry in Grasshopper via MCP wrapper"
     )
     
-    # Add custom system prompt
-    from .geometry_agent_smolagents import get_fallback_system_prompt
-    custom_prompt = get_fallback_system_prompt()
+    # Add system prompt emphasizing real geometry creation
+    custom_prompt = """You are a Geometry Agent with DIRECT ACCESS to Grasshopper via MCP.
+
+Your primary tool:
+- create_geometry_in_grasshopper(): Creates REAL geometry that appears on Grasshopper canvas
+
+Your role is to:
+- Create actual 3D geometry that users can see in Grasshopper
+- Use proper Rhino.Geometry methods and Python scripts
+- Ensure geometry is assigned to output variable 'a'
+- Work step by step for complex geometry
+
+You have REAL MCP connection - create actual geometry, not descriptions!"""
+    
     agent.prompt_templates["system_prompt"] = agent.prompt_templates["system_prompt"] + "\n\n" + custom_prompt
     
     return agent
-
-
-def _create_geometry_fallback_tools() -> List:
-    """Create fallback tools for geometry agent in managed_agents context."""
-    
-    @tool
-    def create_bridge_geometry(geometry_type: str, parameters: dict) -> dict:
-        """
-        Create bridge geometry (fallback mode for managed_agents).
-        
-        Args:
-            geometry_type: Type of geometry to create
-            parameters: Parameters for the geometry
-            
-        Returns:
-            Geometry description and next steps
-        """
-        return {
-            "status": "managed_agent_fallback",
-            "geometry_type": geometry_type,
-            "parameters": parameters,
-            "description": f"Would create {geometry_type} with parameters: {parameters}",
-            "next_steps": "Use wrapper pattern for full MCP integration",
-            "note": "This is fallback mode - full MCP integration requires wrapper pattern"
-        }
-    
-    @tool
-    def describe_geometry_task(task_description: str) -> str:
-        """
-        Describe geometry task and provide implementation guidance.
-        
-        Args:
-            task_description: Description of the geometry task
-            
-        Returns:
-            Task analysis and implementation guidance
-        """
-        return f"""
-Task Analysis: {task_description}
-
-Implementation Plan:
-1. Parse geometry requirements from task
-2. Identify Rhino.Geometry methods needed
-3. Generate Python script for Grasshopper
-4. Execute via MCP connection (requires wrapper pattern)
-
-Note: This is managed_agents fallback mode. For full MCP integration,
-use the geometry wrapper pattern that handles MCPAdapt lifecycle properly.
-"""
-    
-    return [create_bridge_geometry, describe_geometry_task]
 
 
 def _create_coordination_tools() -> List:
@@ -432,7 +410,7 @@ class TriageSystemWrapper:
             "geometry_agent": {
                 "initialized": True,
                 "type": "ToolCallingAgent",
-                "mcp_integration": "fallback_mode"
+                "mcp_integration": "enabled"
             }
         }
     
