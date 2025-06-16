@@ -1,412 +1,190 @@
-# Current Task: Refactor Agent Architecture Using Smolagents Best Practices
+# Fix Agent Memory Loss Issue - Critical Memory Architecture Problem
 
-## Context & Background
+## 🔍 DEEP ANALYSIS - ROOT CAUSE IDENTIFIED (REVISED)
 
-**Problem**: Current agent architecture violates smolagents best practices and creates unnecessary complexity:
+### The Memory System Confusion ❌
 
-1. **Over-abstraction**: `BaseAgent` wraps smolagents unnecessarily, contradicting minimalist philosophy
-2. **Inconsistent patterns**: Mixing `CodeAgent` (TriageAgent) and `ToolCallingAgent` (GeometryAgentJSON) without proper architecture
-3. **Duplicate functionality**: Each agent reimplements conversation history, memory management, and error handling
-4. **Complex initialization**: Two-step initialization (init + initialize_agent) is confusing and fragile
-5. **Custom error handling**: Using custom `AgentError` enum instead of smolagents' built-in exception hierarchy
+After reviewing smolagents documentation, discovered a **fundamental memory architecture misunderstanding**:
 
-**Root Cause**: Architecture doesn't follow smolagents patterns, creating 30% more LLM calls and maintenance overhead
+**DUAL MEMORY SYSTEMS**: We're mixing smolagents native memory with custom memory tools
 
-**Solution**: Implement smolagents best practices with factory pattern, ManagedAgent coordination, and proper error handling
+### Critical Discovery from Smolagents Docs:
+- **Smolagents Native Memory**: Each agent automatically has `agent.memory.steps` that stores conversation history
+- **Our Custom Memory Tools**: Using separate `remember`, `recall`, `search_memory` tools  
+- **The Problem**: Two memory systems that don't communicate with each other!
 
-## 🎯 **SMOLAGENTS BEST PRACTICES TO IMPLEMENT**
+### Evidence from Interactive Session:
+1. **Geometry Agent**: Stores info in `agent.memory.steps` (smolagents native) - PERSISTS ✅
+2. **Triage Agent**: Searches using `search_memory()` (custom tools) - SEPARATE SYSTEM ❌
+3. **Result**: Geometry agent remembers, but triage agent can't find memories
 
-### Key Patterns from Analysis:
-1. **Factory Pattern**: Replace inheritance hierarchy with factory methods
-2. **ManagedAgent Pattern**: Use smolagents' built-in multi-agent coordination  
-3. **Memory Separation**: Centralize conversation management in orchestrator
-4. **Proper Error Handling**: Use smolagents' exception hierarchy
-5. **Production Patterns**: Add monitoring, logging, and security
-
-### Expected Benefits:
-- **30% fewer LLM calls** (smolagents efficiency)
-- **Reduced complexity** (eliminate custom abstractions)
-- **Better error handling** (use smolagents patterns)
-- **Improved maintainability** (standardized patterns)
-- **Production readiness** (monitoring, security)
-
-## 📋 **IMPLEMENTATION PLAN**
-
-### Phase 1: Replace BaseAgent with AgentFactory (HIGH PRIORITY)
-
-**Goal**: Replace complex inheritance with factory pattern
-
-#### 1.1 Create AgentFactory Module
-- **File**: `src/bridge_design_system/agents/agent_factory.py`
-- **Purpose**: Factory functions for creating specialized agents
-- **Features**:
-  - `create_code_agent()` - For Python-based tasks (structural, material analysis)
-  - `create_tool_calling_agent()` - For MCP/JSON integration (geometry)
-  - Unified configuration (model, security, monitoring)
-  - Built-in error handling using smolagents exceptions
-
-**Template**:
+### Memory Architecture Analysis:
 ```python
-def create_agent(agent_type="code", model_type="hf", tools=None, **kwargs):
-    """Factory method for creating different agent types"""
-    
-    # Model selection
-    if model_type == "hf":
-        model = InferenceClientModel(**kwargs.get('model_kwargs', {}))
-    elif model_type == "openai":
-        model = LiteLLMModel(model_id="gpt-4", **kwargs.get('model_kwargs', {}))
-    
-    # Agent type selection
-    if agent_type == "code":
-        return CodeAgent(tools=tools or [], model=model, **kwargs)
-    elif agent_type == "tool_calling":
-        return ToolCallingAgent(tools=tools or [], model=model, **kwargs)
+# SMOLAGENTS NATIVE MEMORY (automatically persistent):
+geometry_agent.memory.steps  # Contains all geometry agent conversation history
+triage_agent.memory.steps    # Contains all triage agent conversation history
+
+# CUSTOM MEMORY TOOLS (separate system):
+search_memory("curve")       # Searches custom memory storage, not agent.memory.steps
+remember("key", "value")     # Stores in custom memory, not agent.memory.steps
 ```
 
-#### 1.2 Agent Configuration Template
-- **File**: `src/bridge_design_system/agents/agent_templates.py`
-- **Purpose**: Standardized configuration templates for different agent types
-- **Features**:
-  - Security settings (sandboxing, authorized imports)
-  - Tool loading and validation
-  - Model configuration per agent type
-  - Production monitoring setup
+### The Real Issue:
+- **Geometry Agent**: Has persistent `agent.memory.steps` with all curve creation context
+- **Triage Agent**: Searches custom memory tools that don't see geometry agent's native memory
+- **Mixed Systems**: Two memory systems operating independently
 
-### Phase 2: Refactor TriageAgent to ManagedAgent Pattern (HIGH PRIORITY)
+## 🛠️ SOLUTION STRATEGY (REVISED)
 
-**Goal**: Use smolagents' built-in multi-agent coordination
+### Three Possible Approaches:
 
-#### 2.1 Simplify TriageAgent
-- Remove custom BaseAgent inheritance
-- Use smolagents `ManagedAgent` pattern for coordination
-- Centralize conversation history and memory management
-- Implement proper error recovery using smolagents exceptions
+#### Option 1: Use Smolagents Native Memory (RECOMMENDED)
+**Advantages**: Leverages built-in persistence, simpler architecture
+- Access `geometry_agent.memory.steps` to find previous curve creation
+- Use `agent.memory.get_full_steps()` for searching conversation history
+- Eliminate custom memory tools dependency
 
-**Template**:
-```python
-# Create specialized agents
-geometry_agent = create_agent(
-    agent_type="tool_calling",
-    tools=mcp_tools + memory_tools,
-    model=model,
-    name="geometry",
-    description="Creates 3D geometry in Rhino Grasshopper"
-)
+#### Option 2: Fix Custom Memory Tools 
+**Advantages**: Keeps current custom memory system
+- Restore memory tools to geometry agent (`memory_tools = [remember, recall, ...]`)
+- Fix tool access isolation issue
+- Improve memory key patterns
 
-structural_agent = create_agent(
-    agent_type="code", 
-    tools=structural_tools,
-    model=model,
-    name="structural",
-    description="Performs structural analysis"
-)
+#### Option 3: Hybrid Memory Bridge
+**Advantages**: Best of both worlds
+- Use smolagents native memory for conversation context
+- Use custom memory tools for cross-agent component tracking
+- Create bridge between the two systems
 
-# Create manager agent with hierarchical delegation
-triage_agent = CodeAgent(
-    tools=coordination_tools,
-    model=model,
-    managed_agents=[geometry_agent, structural_agent]
-)
-```
+### Recommended Approach: Option 1 + Option 3 Hybrid
 
-#### 2.2 Memory and State Management
-- Move conversation history to TriageAgent only
-- Use memory tools consistently across all agents
-- Implement state separation between agents
-- Add component registry integration at triage level
+1. **Primary**: Use smolagents native memory for conversation persistence
+2. **Secondary**: Keep custom memory tools for cross-agent component registry
+3. **Bridge**: Create memory search that checks both systems
 
-### Phase 3: Refactor GeometryAgent (MEDIUM PRIORITY)
+## 📋 IMPLEMENTATION PLAN (REVISED)
 
-**Goal**: Standardize on ToolCallingAgent, remove custom abstractions
+### Phase 1: Implement Hybrid Memory Search ⚡ (QUICK WIN)
+- **Create memory bridge function** that searches both systems:
+  1. Search smolagents native memory (`geometry_agent.memory.steps`)
+  2. Fallback to custom memory tools (`search_memory()`)
+- **Add to triage agent** as new coordination tool
+- **Test immediately** with existing conversation history
 
-#### 3.1 Simplify GeometryAgent  
-- Remove custom wrapper classes
-- Use AgentFactory to create ToolCallingAgent directly
-- Integrate MCP tools using smolagents patterns
-- Remove duplicate conversation/memory management
+### Phase 2: Enhanced Native Memory Access 🧠
+- **Add tools for accessing geometry agent memory** from triage agent
+- **Implement memory step parsing** to extract component information
+- **Create intelligent memory search** across conversation history
 
-#### 3.2 Tool Integration
-- Standardize MCP tool loading
-- Implement proper fallback tool patterns
-- Add tool health monitoring
-- Use smolagents tool decoration patterns
+### Phase 3: Improve Custom Memory Tools (Secondary) 📊
+- **Restore memory tools to geometry agent** (`memory_tools = [remember, recall, ...]`)
+- **Use for cross-agent component registry** only
+- **Maintain for complex project state tracking**
 
-**Tool Template**:
+### Phase 4: Testing & Validation ✅
+- **Test native memory search** with geometry agent conversation history
+- **Validate hybrid approach** across multiple conversation sessions
+- **Benchmark memory retrieval performance** across both systems
+
+### Phase 5: Memory System Optimization 🚀
+- **Consolidate to single memory system** if hybrid works well
+- **Add memory persistence** across application restarts
+- **Implement memory cleanup** for long conversations
+
+## 🎯 EXPECTED OUTCOMES
+
+### Immediate Fixes:
+- ✅ Geometry agent can store and retrieve memories properly
+- ✅ Component context preserved between tasks  
+- ✅ "Curve created in python script" will be findable
+- ✅ Iterative design workflow fully functional
+
+### Architecture Benefits:
+- 🚀 Robust memory architecture for complex projects
+- 🧠 Enhanced context awareness across all agents
+- 🔄 Reliable iterative design capabilities  
+- 📊 Better component relationship tracking
+
+## 🔧 TECHNICAL IMPLEMENTATION (REVISED)
+
+### Phase 1: Hybrid Memory Bridge Tool
 ```python
 @tool
-def create_geometry(geometry_type: str, **params) -> dict:
-    """Create geometry using MCP tools.
+def search_all_memories(query: str) -> str:
+    """Search both smolagents native memory and custom memory tools."""
+    results = []
     
-    Args:
-        geometry_type: Type of geometry to create
-        **params: Geometry parameters
+    # 1. Search geometry agent's native memory
+    if hasattr(self, 'managed_agents') and self.managed_agents:
+        geometry_agent = self.managed_agents[0]
+        if hasattr(geometry_agent, 'memory') and hasattr(geometry_agent.memory, 'steps'):
+            for step in geometry_agent.memory.steps:
+                step_text = str(step)
+                if query.lower() in step_text.lower():
+                    results.append(f"Geometry Agent Memory: {step_text[:200]}...")
     
-    Returns:
-        Result from geometry creation
-    """
-    # All imports within function for Hub sharing
-    import json
-    # Implementation here
-    return result
+    # 2. Fallback to custom memory tools
+    custom_results = search_memory(query)
+    if custom_results and "No memories found" not in custom_results:
+        results.append(f"Custom Memory: {custom_results}")
+    
+    return "\n".join(results) if results else f"No memories found for '{query}'"
 ```
 
-### Phase 4: Add Production Features (LOW PRIORITY)
-
-**Goal**: Production-ready monitoring and security
-
-#### 4.1 Security and Sandboxing
-- Configure execution environments (local/docker/e2b)
-- Set up proper import restrictions
-- Add input validation and sanitization
-- Implement rate limiting
-
-**Security Template**:
+### Phase 2: Enhanced Memory Access
 ```python
-# Production agent with E2B sandboxing
-agent = CodeAgent(
-    tools=validated_tools,
-    model=model,
-    executor_type="e2b",
-    executor_kwargs={"api_key": os.environ["E2B_API_KEY"]},
-    additional_authorized_imports=["requests", "pandas", "numpy.*"]
-)
+@tool  
+def get_geometry_agent_context() -> str:
+    """Get recent context from geometry agent's conversation history."""
+    if hasattr(self, 'managed_agents') and self.managed_agents:
+        geometry_agent = self.managed_agents[0]
+        if hasattr(geometry_agent, 'memory'):
+            recent_steps = geometry_agent.memory.get_full_steps()[-3:]  # Last 3 steps
+            context = []
+            for step in recent_steps:
+                if 'observations' in step:
+                    context.append(step['observations'])
+            return "\n".join(context)
+    return "No geometry agent context available"
 ```
 
-#### 4.2 Monitoring and Logging
-- Add OpenTelemetry instrumentation
-- Implement structured logging
-- Add performance metrics
-- Create agent health dashboards
-
-**Monitoring Template**:
+### Phase 3: Dual Memory System (Optional)
 ```python
-from openinference.instrumentation.smolagents import SmolagentsInstrumentor
+# Keep custom memory tools for cross-agent tracking
+memory_tools = [remember, recall, search_memory, clear_memory]
 
-SmolagentsInstrumentor().instrument()
-
-# Agent with comprehensive monitoring
-agent = CodeAgent(
-    tools=tools,
-    model=model,
-    max_steps=10,
-    stream_outputs=True  # Real-time monitoring
-)
+# Use native memory for conversation persistence (automatic)
+# geometry_agent.memory.steps  # Automatically maintained by smolagents
 ```
 
-## ✅ **ACTION ITEMS - EXECUTE IN ORDER**
+## 🚨 CURRENT STATUS
 
-### Phase 1 Tasks:
-- [ ] **Create `agent_factory.py`** - Factory methods for creating agents
-- [ ] **Create `agent_templates.py`** - Standardized configuration templates  
-- [ ] **Update error handling** - Switch to smolagents exception hierarchy
-- [ ] **Add security configurations** - Sandboxing and import restrictions
+### Persistent MCP Connections: ✅ WORKING
+- Agents reuse same instances across requests
+- No more fresh connections per request
+- MCP session persistence established
 
-### Phase 2 Tasks:
-- [ ] **Refactor `triage_agent.py`** - Remove BaseAgent inheritance
-- [ ] **Implement ManagedAgent pattern** - Use smolagents coordination
-- [ ] **Centralize memory management** - Move to triage level only
-- [ ] **Add proper error recovery** - Use smolagents patterns
+### Memory Architecture: ❌ BROKEN  
+- Geometry agent cannot store memories
+- Context lost between related tasks
+- Iterative design partially working (MCP level) but memory-blind
 
-### Phase 3 Tasks:
-- [ ] **Simplify `geometry_agent_json.py`** - Remove custom wrappers
-- [ ] **Standardize MCP integration** - Use factory patterns
-- [ ] **Add tool health monitoring** - Connection status checks
-- [ ] **Implement fallback patterns** - Graceful degradation
+### Next Action: Fix memory tool access immediately
 
-### Phase 4 Tasks:
-- [ ] **Add OpenTelemetry instrumentation** - Production monitoring
-- [ ] **Configure execution environments** - Docker/E2B sandboxing
-- [ ] **Implement rate limiting** - Prevent abuse
-- [ ] **Create health dashboards** - Agent performance metrics
+## ⚠️ IMPACT ASSESSMENT
 
-## 🧪 **TESTING STRATEGY**
+### What's Working:
+- ✅ MCP persistent connections
+- ✅ Component modification (edit existing scripts)
+- ✅ Basic iterative design at MCP level
 
-### Migration Strategy:
-- Keep existing agents working during transition
-- Test each phase independently  
-- Gradual rollout with feature flags
-- Comprehensive testing at each phase
+### What's Broken:
+- ❌ Memory storage from geometry agent
+- ❌ Context preservation between tasks
+- ❌ Agent awareness of previous work
+- ❌ Smart component discovery
 
-### Test Scenarios:
-1. **Factory Pattern**: Create agents using factory methods
-2. **ManagedAgent**: Test hierarchical task delegation
-3. **Error Handling**: Verify smolagents exception handling
-4. **Security**: Test sandboxing and import restrictions
-5. **Performance**: Compare efficiency vs current implementation
+### Critical Path:
+**Fix memory tools → Test memory storage → Validate iterative design → Production ready**
 
-### Success Criteria:
-- [ ] **30% fewer LLM calls** (measured via logging)
-- [ ] **Reduced code complexity** (lines of code, cyclomatic complexity)
-- [ ] **Better error handling** (proper exception hierarchy)
-- [ ] **Production readiness** (monitoring, security)
-- [ ] **Maintainable architecture** (clear separation of concerns)
-
-## 🔧 **IMPLEMENTATION TEMPLATES**
-
-### 1. Agent Factory Implementation
-```python
-# src/bridge_design_system/agents/agent_factory.py
-from typing import List, Optional, Dict, Any
-from smolagents import CodeAgent, ToolCallingAgent, Tool
-from ..config.model_config import ModelProvider
-
-class AgentFactory:
-    """Factory for creating specialized agents following smolagents patterns."""
-    
-    @staticmethod
-    def create_geometry_agent(tools: List[Tool], **kwargs) -> ToolCallingAgent:
-        """Create ToolCallingAgent for MCP geometry operations."""
-        model = ModelProvider.get_model("geometry", temperature=0.1)
-        return ToolCallingAgent(
-            tools=tools,
-            model=model,
-            max_steps=kwargs.get('max_steps', 10)
-        )
-    
-    @staticmethod  
-    def create_structural_agent(tools: List[Tool], **kwargs) -> CodeAgent:
-        """Create CodeAgent for Python-based structural analysis."""
-        model = ModelProvider.get_model("structural")
-        return CodeAgent(
-            tools=tools,
-            model=model,
-            max_steps=kwargs.get('max_steps', 10),
-            additional_authorized_imports=["numpy", "scipy", "pandas"]
-        )
-```
-
-### 2. Simplified Triage Agent
-```python
-# src/bridge_design_system/agents/triage_agent.py
-from smolagents import CodeAgent
-from .agent_factory import AgentFactory
-
-class TriageAgent:
-    """Simplified triage agent using smolagents ManagedAgent pattern."""
-    
-    def __init__(self):
-        # Create specialized agents using factory
-        self.geometry_agent = AgentFactory.create_geometry_agent(
-            tools=self._load_mcp_tools() + memory_tools
-        )
-        
-        self.structural_agent = AgentFactory.create_structural_agent(
-            tools=structural_tools + memory_tools
-        )
-        
-        # Create manager agent with delegation
-        self.manager = CodeAgent(
-            tools=coordination_tools,
-            model=ModelProvider.get_model("triage"),
-            managed_agents=[self.geometry_agent, self.structural_agent]
-        )
-    
-    def run(self, task: str) -> Any:
-        """Execute task using managed agents."""
-        return self.manager.run(task)
-```
-
-### 3. Production Security Config
-```python
-# src/bridge_design_system/agents/agent_templates.py
-from typing import Dict, Any
-
-class ProductionConfig:
-    """Production-ready agent configurations."""
-    
-    @staticmethod
-    def get_secure_config() -> Dict[str, Any]:
-        """Get security configuration for production."""
-        return {
-            "executor_type": "e2b",
-            "executor_kwargs": {"api_key": os.environ["E2B_API_KEY"]},
-            "additional_authorized_imports": [
-                "json", "datetime", "pathlib", "typing", 
-                "dataclasses", "enum", "math", "re"
-            ],
-            "max_steps": 10
-        }
-    
-    @staticmethod
-    def get_monitoring_config() -> Dict[str, Any]:
-        """Get monitoring configuration."""
-        return {
-            "stream_outputs": True,
-            "enable_logging": True,
-            "log_level": "INFO"
-        }
-```
-
-## 🚨 **RISK MITIGATION**
-
-### Technical Risks:
-- **Breaking existing workflows** - Keep current agents as fallback during migration
-- **Performance degradation** - Benchmark each phase before deployment
-- **Integration issues** - Test with existing MCP and component registry systems
-- **Security vulnerabilities** - Implement proper sandboxing from day one
-
-### Mitigation Strategies:
-- **Feature flags** - Enable new architecture gradually
-- **A/B testing** - Compare performance with current implementation
-- **Rollback plan** - Quick revert to current architecture if needed
-- **Comprehensive testing** - Unit, integration, and end-to-end tests
-
-## 📈 **EXPECTED OUTCOMES**
-
-### Immediate Benefits:
-- **Simplified codebase** - Remove custom abstractions
-- **Better error handling** - Use smolagents exception hierarchy
-- **Standardized patterns** - Follow established smolagents practices
-
-### Long-term Benefits:
-- **30% efficiency improvement** - Fewer LLM calls through proper patterns
-- **Production readiness** - Monitoring, security, and scalability
-- **Maintainability** - Clear separation of concerns and standardized interfaces
-- **Community alignment** - Follow established open-source patterns
-
-## 🔄 **MIGRATION TIMELINE**
-
-### Week 1: Foundation (Phase 1)
-- Implement agent factory and templates
-- Update error handling to use smolagents exceptions
-- Add basic security configurations
-
-### Week 2: Core Refactor (Phase 2)  
-- Refactor TriageAgent to use ManagedAgent pattern
-- Centralize memory and state management
-- Test integration with existing systems
-
-### Week 3: Geometry Agent (Phase 3)
-- Simplify GeometryAgent using factory patterns
-- Standardize MCP tool integration
-- Add health monitoring and fallback patterns
-
-### Week 4: Production Features (Phase 4)
-- Add comprehensive monitoring and logging
-- Configure production security (sandboxing)
-- Performance testing and optimization
-
-### Week 5: Testing & Deployment
-- End-to-end testing of new architecture
-- Performance comparison with current system
-- Gradual rollout to production
-
-## 📝 **SUCCESS METRICS**
-
-### Performance Metrics:
-- **LLM Call Reduction**: Target 30% fewer calls
-- **Response Time**: Maintain or improve current latency  
-- **Error Rate**: Reduce to <5% for standard operations
-- **Memory Usage**: Optimize through proper state separation
-
-### Code Quality Metrics:
-- **Lines of Code**: Reduce through elimination of duplication
-- **Cyclomatic Complexity**: Simplify through factory patterns
-- **Test Coverage**: Maintain >80% coverage
-- **Documentation**: Update to reflect new patterns
-
-### Production Metrics:
-- **Uptime**: 99.9% availability
-- **Security**: Zero vulnerabilities in security audit
-- **Monitoring**: Complete observability of agent operations
-- **Scalability**: Support 10x current load
+This memory architecture fix is the final piece needed for fully functional iterative design workflow.

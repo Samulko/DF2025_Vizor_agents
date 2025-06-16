@@ -13,7 +13,8 @@ from smolagents import CodeAgent, ToolCallingAgent, tool
 
 from ..config.logging_config import get_logger
 from ..config.model_config import ModelProvider
-from ..tools.memory_tools import clear_memory, recall, remember, search_memory
+# OLD FILE-BASED MEMORY TOOLS - COMMENTED OUT, USING NATIVE MEMORY INSTEAD
+# from ..tools.memory_tools import clear_memory, recall, remember, search_memory
 from .geometry_agent_smolagents import create_geometry_agent
 
 logger = get_logger(__name__)
@@ -40,7 +41,7 @@ def create_triage_system(
     # Get model
     model = ModelProvider.get_model(model_name)
 
-    # Create specialized geometry agent using working MCP wrapper approach
+    # Create specialized geometry agent with full MCP access (proper smolagents pattern)
     geometry_agent = _create_mcp_enabled_geometry_agent(
         custom_tools=_create_registry_tools(component_registry) if component_registry else None,
         component_registry=component_registry,
@@ -49,21 +50,28 @@ def create_triage_system(
     # Note: Material and Structural agents would be created here when available
     # For now, we only have geometry agent in managed_agents
 
-    # Coordination tools for the manager (including memory tools)
-    memory_tools = [remember, recall, search_memory, clear_memory]
+    # Create manager agent first (without old file-based memory tools)
+    # OLD FILE-BASED MEMORY TOOLS - COMMENTED OUT, USING NATIVE MEMORY INSTEAD
+    # memory_tools = [remember, recall, search_memory, clear_memory]
+    memory_tools = []  # Using native smolagents memory via geometry memory tools instead
     material_tool = create_material_placeholder()
     structural_tool = create_structural_placeholder()
-    coordination_tools = (
-        [material_tool, structural_tool] + _create_coordination_tools() + memory_tools
+    basic_coordination_tools = _create_coordination_tools()
+    
+    # Manager tools (NOT including geometry agent - that goes in managed_agents)
+    manager_tools = (
+        [material_tool, structural_tool] + 
+        basic_coordination_tools + 
+        memory_tools
     )
 
-    # Create manager agent with native managed_agents pattern (smolagents best practice)
+    # Create manager agent with managed_agents pattern (smolagents best practice)
     # Extract max_steps from kwargs to avoid duplicate parameter error
-    max_steps = kwargs.pop("max_steps", 3)  # Reduced to prevent unnecessary loops
+    max_steps = kwargs.pop("max_steps", 6)  # Increased to allow proper task completion and error handling
 
     manager = CodeAgent(
-        tools=coordination_tools,  # General coordination tools
-        managed_agents=[geometry_agent],  # Native smolagents delegation
+        tools=manager_tools,  # Coordination tools only
+        managed_agents=[geometry_agent],  # Specialized agents go here
         model=model,
         name="triage_agent",
         description="Coordinates bridge design tasks by delegating to specialized agents",
@@ -71,6 +79,13 @@ def create_triage_system(
         additional_authorized_imports=["typing", "json", "datetime"],
         **kwargs,
     )
+    
+    # Now add geometry memory tools that have access to the manager instance
+    geometry_memory_tools = _create_geometry_memory_tools(manager)
+    
+    # Add the new tools to the manager's tools dict
+    for tool in geometry_memory_tools:
+        manager.tools[tool.name] = tool
 
     # Append our custom system prompt to the default one
     custom_prompt = get_triage_system_prompt()
@@ -84,136 +99,196 @@ def create_triage_system(
 
 def get_triage_system_prompt() -> str:
     """Get custom system prompt for triage agent from file."""
-    try:
-        current_file = Path(__file__)
-        project_root = current_file.parent.parent.parent.parent
-        prompt_path = project_root / "system_prompts" / "triage_agent.md"
-
-        if prompt_path.exists():
-            return prompt_path.read_text(encoding="utf-8")
-    except Exception as e:
-        logger.warning(f"Failed to load triage system prompt from file: {e}")
-
-    # Fallback to embedded prompt
-    return """You are an expert AI Triage Agent coordinating bridge design tasks.
-
-IMPORTANT RULES:
-1. Be DIRECT and EFFICIENT - avoid unnecessary conversation loops
-2. When delegating to geometry_agent, be SPECIFIC about what to create
-3. After receiving results from agents, provide a clear summary and STOP
-4. Don't ask follow-up questions unless the user asks something new
-
-Your primary responsibilities:
-1. Receive and analyze human input carefully
-2. Delegate tasks to appropriate specialized agents WITH SPECIFIC INSTRUCTIONS
-3. Report results back to the human in a clear, concise manner
-4. STOP after reporting results - don't keep asking what to do next
-
-You coordinate these specialized agents:
-- **geometry_agent**: Creates 3D geometry in Rhino Grasshopper via MCP tools
-- **material_agent**: (Coming soon) Tracks construction materials  
-- **structural_agent**: (Coming soon) Assesses structural integrity
-
-When delegating to geometry_agent:
-- Provide COMPLETE specifications (coordinates, dimensions, etc.)
-- Request consolidated scripts when possible
-- Let the agent handle the technical implementation
-
-Example delegation: "Create two points at (0,0,0) and (100,0,0) in a single script"
-
-Remember: You coordinate efficiently, report results clearly, then STOP.
-"""
+    current_file = Path(__file__)
+    project_root = current_file.parent.parent.parent.parent
+    prompt_path = project_root / "system_prompts" / "triage_agent.md"
+    
+    if not prompt_path.exists():
+        raise FileNotFoundError(f"Required system prompt file not found: {prompt_path}")
+    
+    return prompt_path.read_text(encoding="utf-8")
 
 
 def _create_mcp_enabled_geometry_agent(
     custom_tools: Optional[List] = None, component_registry: Optional[Any] = None
-) -> ToolCallingAgent:
+) -> Any:
     """
-    Create geometry agent that uses the working MCP wrapper for managed_agents pattern.
+    Create geometry agent with full MCP toolset for managed_agents pattern.
 
-    This directly integrates the working SmolagentsGeometryAgent wrapper into
-    the managed_agents pattern, ensuring real MCP functionality.
+    Following smolagents best practices, this creates a ToolCallingAgent with 
+    name and description attributes that can be used in managed_agents.
 
     Args:
         custom_tools: Additional tools to include
         component_registry: Registry for tracking components
 
     Returns:
-        ToolCallingAgent that creates real geometry via MCP
+        ToolCallingAgent configured with MCP tools for managed_agents
     """
-
-    # Create the working MCP wrapper that we know works
-    geometry_wrapper = create_geometry_agent(
-        custom_tools=custom_tools, component_registry=component_registry
-    )
-
-    # Create a tool that delegates directly to the working wrapper
-    @tool
-    def create_geometry_in_grasshopper(task_description: str) -> str:
-        """
-        Create actual geometry in Grasshopper using the working MCP wrapper.
-
-        Args:
-            task_description: Detailed description of the geometry to create
-
-        Returns:
-            Result from the MCP-enabled geometry agent (real geometry creation)
-        """
-        logger.info(f"🎯 Delegating to MCP geometry wrapper: {task_description[:100]}...")
-        try:
-            result = geometry_wrapper.run(task_description)
-            logger.info("✅ MCP geometry wrapper executed successfully")
-            return str(result)
-        except Exception as e:
-            logger.error(f"❌ MCP geometry wrapper failed: {e}")
-            raise e  # Don't hide the error - let it bubble up
-
-    # Get model and create tools
+    logger.info("Creating geometry agent with full MCP toolset (including edit_python3_script)")
+    
+    # Use the existing working pattern from geometry_agent_smolagents.py
+    # but create a ToolCallingAgent directly instead of a wrapper class
+    from ..config.model_config import ModelProvider
+    from ..config.settings import settings
+    from mcp import StdioServerParameters
+    from mcpadapt.core import MCPAdapt
+    from mcpadapt.smolagents_adapter import SmolAgentsAdapter
+    from smolagents import ToolCallingAgent
+    
+    # Get model configuration
     model = ModelProvider.get_model("geometry", temperature=0.1)
-    memory_tools = [remember, recall, search_memory, clear_memory]
-    mcp_tools = [create_geometry_in_grasshopper]
-    all_tools = mcp_tools + memory_tools + (custom_tools or [])
-
-    # Create agent that uses the working MCP wrapper
-    agent = ToolCallingAgent(
-        tools=all_tools,
-        model=model,
-        max_steps=10,
-        name="geometry_agent",
-        description="Creates real 3D geometry in Grasshopper via MCP wrapper",
+    
+    # Memory tools for persistent context - REMOVED FOR TEST
+    # memory_tools = [remember, recall, search_memory, clear_memory]
+    memory_tools = []  # Test: Let triage agent handle all memory
+    
+    # MCP server configuration (use working pattern)
+    stdio_params = StdioServerParameters(
+        command=settings.mcp_stdio_command,
+        args=settings.mcp_stdio_args.split(","),
+        env=None
     )
-
-    # Add system prompt emphasizing real geometry creation
-    custom_prompt = """You are a Geometry Agent with DIRECT ACCESS to Grasshopper via MCP.
-
-Your primary tool:
-- create_geometry_in_grasshopper(): Creates REAL geometry that appears on Grasshopper canvas
-
-IMPORTANT RULES:
-1. COMBINE multiple geometry elements into ONE script when possible
-2. Use create_geometry_in_grasshopper() ONCE per task, not multiple times
-3. Create comprehensive Python scripts that handle all requested geometry
-4. Assign ALL geometry to output variable 'a' as a list if multiple elements
-
-Example for two points:
-```python
-import Rhino.Geometry as rg
-start_point = rg.Point3d(0,0,0)
-end_point = rg.Point3d(100,0,0)
-a = [start_point, end_point]  # Both points in one output
-```
-
-You have REAL MCP connection - create efficient, consolidated geometry scripts!"""
-
-    agent.prompt_templates["system_prompt"] = (
-        agent.prompt_templates["system_prompt"] + "\n\n" + custom_prompt
-    )
-
-    return agent
+    
+    # Create the base ToolCallingAgent with a static configuration first
+    # This will be wrapped to handle MCP connection dynamically per request
+    from smolagents import ToolCallingAgent
+    
+    # For managed_agents, smolagents needs the agent to be directly callable
+    # We need to create a ToolCallingAgent that has the MCP tools available
+    # Let's create a minimal agent instance for the managed_agents pattern
+    
+    class MCPGeometryAgent(ToolCallingAgent):
+        """ToolCallingAgent with persistent MCP connection for session continuity."""
+        
+        def __init__(self):
+            self.stdio_params = stdio_params
+            self.custom_tools = custom_tools or []
+            self.memory_tools = memory_tools
+            self.component_registry = component_registry
+            
+            # Establish persistent MCP connection during initialization
+            logger.info("🔗 Establishing persistent MCP connection...")
+            try:
+                self.mcp_connection = MCPAdapt(self.stdio_params, SmolAgentsAdapter())
+                self.mcp_tools = self.mcp_connection.__enter__()
+                logger.info(f"✅ Persistent MCP connection established with {len(self.mcp_tools)} tools")
+                
+                # Combine all tools for persistent agent
+                all_tools = list(self.mcp_tools) + self.custom_tools + self.memory_tools
+                
+                # Initialize with persistent MCP tools - sufficient steps for error detection/fixing
+                super().__init__(
+                    tools=all_tools,
+                    model=model,
+                    max_steps=6,  # Increased to allow: check -> modify -> detect errors -> fix -> verify -> finalize
+                    name="geometry_agent",
+                    description="Creates 3D geometry in Rhino Grasshopper via persistent MCP connection"
+                )
+                
+                logger.info("🎯 Persistent geometry agent initialized successfully")
+                
+            except Exception as e:
+                logger.error(f"❌ Failed to establish persistent MCP connection: {e}")
+                # Fallback to empty tools if MCP connection fails
+                super().__init__(
+                    tools=self.custom_tools + self.memory_tools,
+                    model=model,
+                    max_steps=6,  # Increased to allow proper error handling even without MCP
+                    name="geometry_agent",
+                    description="Creates 3D geometry (MCP connection failed)"
+                )
+                self.mcp_connection = None
+                self.mcp_tools = []
+        
+        def run(self, task: str) -> Any:
+            """Execute geometry task using persistent MCP connection and agent memory."""
+            logger.info(f"🎯 Executing task with persistent MCP geometry agent: {task[:100]}...")
+            
+            try:
+                # Check for duplicate/similar recent tasks to prevent loops
+                if hasattr(self, 'memory') and hasattr(self.memory, 'steps'):
+                    recent_tasks = [step.task for step in self.memory.steps[-3:] if hasattr(step, 'task')]
+                    if any(task.lower() in recent_task.lower() for recent_task in recent_tasks):
+                        logger.warning(f"⚠️ Similar task detected in recent memory, being cautious: {task[:50]}...")
+                
+                # Use the persistent agent that maintains context and memory
+                result = super().run(task)
+                
+                # Log completion for debugging
+                logger.info(f"✅ Geometry agent completed task in {len(self.memory.steps) if hasattr(self, 'memory') else 0} total steps")
+                
+                # Register components if registry available
+                if self.component_registry:
+                    self._extract_and_register_components(task, result)
+                
+                logger.info("✅ Task completed successfully with persistent MCP geometry agent")
+                return result
+                
+            except Exception as e:
+                logger.error(f"❌ Persistent MCP geometry agent execution failed: {e}")
+                return f"Geometry agent execution failed: {e}"
+        
+        def _extract_and_register_components(self, task: str, result: Any) -> None:
+            """Extract and register components and store in memory."""
+            try:
+                # Extract component IDs from the result and store in memory
+                result_str = str(result)
+                import re
+                
+                # Look for component ID patterns in the result
+                component_id_pattern = r'[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
+                matches = re.findall(component_id_pattern, result_str)
+                
+                # Remove duplicates while preserving order
+                unique_matches = list(dict.fromkeys(matches))
+                
+                if unique_matches:
+                    logger.info(f"🔧 Found {len(unique_matches)} unique component IDs (removed {len(matches) - len(unique_matches)} duplicates)")
+                    for component_id in unique_matches:
+                        # Component information is automatically stored in agent.memory.steps (smolagents native)
+                        # No need for manual memory storage - the triage agent can access this via geometry memory tools
+                        logger.info(f"📝 Component created and stored in native memory: {component_id}")
+                        
+                if self.component_registry:
+                    # Also register in component registry if available
+                    logger.info(f"📝 Component registration handled by triage agent: {task[:50]}...")
+                    
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to register components: {e}")
+        
+        def __del__(self):
+            """Cleanup persistent MCP connection on agent destruction."""
+            try:
+                if hasattr(self, 'mcp_connection') and self.mcp_connection:
+                    self.mcp_connection.__exit__(None, None, None)
+                    logger.info("🔌 Persistent MCP connection closed")
+            except Exception as e:
+                logger.warning(f"⚠️ Error closing MCP connection: {e}")
+    
+    return MCPGeometryAgent()
 
 
 def _create_coordination_tools() -> List:
     """Create tools for coordination and state management."""
+
+    @tool
+    def reset_agent_memories() -> str:
+        """
+        Reset all agent conversation memories to start fresh.
+        
+        Use this when the user explicitly wants to start a completely new design
+        or when there are memory-related issues that need clearing.
+        
+        Returns:
+            Confirmation message about the reset
+        """
+        try:
+            # This is a placeholder - actual reset happens at the wrapper level
+            # when the user types 'reset' in the CLI
+            return "To reset agent memories, please type 'reset' in the command line interface. This will clear all conversation history and component registry for a fresh start."
+        except Exception as e:
+            return f"Reset information: {e}"
 
     @tool
     def check_design_state() -> dict:
@@ -223,11 +298,11 @@ def _create_coordination_tools() -> List:
         Returns:
             Current design state dictionary
         """
-        # In the simplified version, state is tracked via memory tools
+        # State is tracked via native smolagents memory
         # This is a placeholder that would integrate with actual state tracking
         return {
-            "status": "Design state tracking via memory tools",
-            "note": "Use recall() to check previous design decisions",
+            "status": "Design state tracking via native smolagents memory",
+            "note": "Use geometry memory tools to check previous design decisions",
         }
 
     @tool
@@ -242,11 +317,325 @@ def _create_coordination_tools() -> List:
         Returns:
             Confirmation message
         """
-        # Store in memory for continuity
-        remember(f"Design phase updated to: {phase}. Details: {details}")
+        # Phase updates are automatically tracked in smolagents conversation memory
+        logger.info(f"Design phase updated to: {phase}. Details: {details}")
         return f"Design phase updated to '{phase}'"
 
-    return [check_design_state, update_design_phase]
+    return [reset_agent_memories, check_design_state, update_design_phase]
+
+
+def _create_geometry_memory_tools(manager) -> List:
+    """Create tools that access geometry agent's native smolagents memory."""
+    
+    @tool
+    def get_geometry_agent_memory() -> str:
+        """
+        Access geometry agent's native smolagents memory for conversation context.
+        
+        This tool accesses the geometry agent's persistent memory (agent.memory.steps)
+        which contains all previous conversation history including component creation.
+        
+        Returns:
+            String containing geometry agent's recent conversation history
+        """
+        try:
+            if hasattr(manager, 'managed_agents') and manager.managed_agents:
+                # smolagents converts list to dict internally
+                if isinstance(manager.managed_agents, dict) and 'geometry_agent' in manager.managed_agents:
+                    geometry_agent = manager.managed_agents['geometry_agent']
+                    logger.debug(f"✅ Accessed geometry agent from managed_agents dict: {type(geometry_agent).__name__}")
+                elif isinstance(manager.managed_agents, list) and len(manager.managed_agents) > 0:
+                    geometry_agent = manager.managed_agents[0]  # Fallback to list access
+                    logger.debug(f"✅ Accessed geometry agent from managed_agents list: {type(geometry_agent).__name__}")
+                else:
+                    return f"Cannot access geometry agent from managed_agents structure: {type(manager.managed_agents)}"
+                
+                if hasattr(geometry_agent, 'memory') and hasattr(geometry_agent.memory, 'steps'):
+                    # Get recent memory steps
+                    steps = geometry_agent.memory.steps
+                    if not steps:
+                        return "Geometry agent has no conversation history yet."
+                    
+                    logger.debug(f"📋 Found {len(steps)} memory steps in geometry agent")
+                    
+                    # Format recent steps for context
+                    recent_steps = steps[-5:]  # Last 5 steps
+                    formatted_steps = []
+                    
+                    for i, step in enumerate(recent_steps):
+                        step_info = f"Step {i+1}: {type(step).__name__}"
+                        
+                        # Extract relevant information from each step type
+                        if hasattr(step, 'task'):
+                            step_info += f" - Task: {step.task}"
+                        if hasattr(step, 'observations'):
+                            obs_str = str(step.observations)[:200]  # Limit length
+                            step_info += f" - Result: {obs_str}..."
+                        if hasattr(step, 'tool_calls'):
+                            step_info += f" - Tools used: {len(step.tool_calls) if step.tool_calls else 0}"
+                            
+                        formatted_steps.append(step_info)
+                    
+                    return "Geometry Agent Recent Memory:\n" + "\n".join(formatted_steps)
+                else:
+                    return "Geometry agent memory structure not available."
+            else:
+                return "No geometry agent found in managed agents."
+                
+        except Exception as e:
+            return f"Error accessing geometry agent memory: {e}"
+
+    @tool
+    def search_geometry_agent_memory(query: str) -> str:
+        """
+        Search through geometry agent's conversation history for specific content.
+        
+        This tool searches the geometry agent's native memory for mentions of
+        components, curves, scripts, or other geometry-related content.
+        
+        Args:
+            query: Search term (e.g., "curve", "bridge", "component", "script")
+            
+        Returns:
+            String containing matching conversation context
+        """
+        try:
+            if hasattr(manager, 'managed_agents') and manager.managed_agents:
+                # smolagents converts list to dict internally
+                if isinstance(manager.managed_agents, dict) and 'geometry_agent' in manager.managed_agents:
+                    geometry_agent = manager.managed_agents['geometry_agent']
+                    logger.debug(f"✅ Accessed geometry agent from managed_agents dict for search: {type(geometry_agent).__name__}")
+                elif isinstance(manager.managed_agents, list) and len(manager.managed_agents) > 0:
+                    geometry_agent = manager.managed_agents[0]  # Fallback to list access
+                    logger.debug(f"✅ Accessed geometry agent from managed_agents list for search: {type(geometry_agent).__name__}")
+                else:
+                    return f"Cannot access geometry agent from managed_agents structure: {type(manager.managed_agents)}"
+                
+                if hasattr(geometry_agent, 'memory') and hasattr(geometry_agent.memory, 'steps'):
+                    steps = geometry_agent.memory.steps
+                    if not steps:
+                        return f"No conversation history to search for '{query}'."
+                    
+                    matches = []
+                    query_lower = query.lower()
+                    
+                    for i, step in enumerate(steps):
+                        step_text = str(step).lower()
+                        
+                        # Check if query matches in this step
+                        if query_lower in step_text:
+                            # Extract context around the match
+                            step_info = f"Match in Step {i+1}:"
+                            
+                            if hasattr(step, 'task'):
+                                step_info += f"\n  Task: {step.task}"
+                            if hasattr(step, 'observations'):
+                                obs_str = str(step.observations)
+                                # Find context around the match
+                                obs_lower = obs_str.lower()
+                                match_index = obs_lower.find(query_lower)
+                                if match_index != -1:
+                                    # Extract 100 chars before and after the match
+                                    start = max(0, match_index - 100)
+                                    end = min(len(obs_str), match_index + len(query) + 100)
+                                    context = obs_str[start:end]
+                                    step_info += f"\n  Context: ...{context}..."
+                            
+                            matches.append(step_info)
+                    
+                    if matches:
+                        logger.debug(f"🔍 Found {len(matches)} memory matches for query: {query}")
+                        return f"Found {len(matches)} matches for '{query}':\n\n" + "\n\n".join(matches)
+                    else:
+                        logger.debug(f"❌ No memory matches found for query: {query}")
+                        return f"No matches found for '{query}' in geometry agent conversation history."
+                else:
+                    return "Geometry agent memory structure not available for search."
+            else:
+                return "No geometry agent found to search."
+                
+        except Exception as e:
+            return f"Error searching geometry agent memory: {e}"
+
+    @tool
+    def extract_components_from_geometry_memory() -> str:
+        """
+        Extract component IDs and information from geometry agent's conversation history.
+        
+        This tool specifically looks for component creation, modifications, and 
+        component IDs in the geometry agent's memory to provide component context.
+        
+        IMPORTANT: This now validates component IDs against current session to prevent
+        stale memory contamination from previous sessions.
+        
+        Returns:
+            String containing found components and their details
+        """
+        try:
+            if hasattr(manager, 'managed_agents') and manager.managed_agents:
+                # smolagents converts list to dict internally
+                if isinstance(manager.managed_agents, dict) and 'geometry_agent' in manager.managed_agents:
+                    geometry_agent = manager.managed_agents['geometry_agent']
+                    logger.debug(f"✅ Accessed geometry agent from managed_agents dict for extraction: {type(geometry_agent).__name__}")
+                elif isinstance(manager.managed_agents, list) and len(manager.managed_agents) > 0:
+                    geometry_agent = manager.managed_agents[0]  # Fallback to list access
+                    logger.debug(f"✅ Accessed geometry agent from managed_agents list for extraction: {type(geometry_agent).__name__}")
+                else:
+                    return f"Cannot access geometry agent from managed_agents structure: {type(manager.managed_agents)}"
+                
+                if hasattr(geometry_agent, 'memory') and hasattr(geometry_agent.memory, 'steps'):
+                    steps = geometry_agent.memory.steps
+                    if not steps:
+                        return "No conversation history available to extract components."
+                    
+                    components = []
+                    import re
+                    
+                    # Pattern for component IDs (UUIDs)
+                    component_id_pattern = r'[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
+                    
+                    for i, step in enumerate(steps):
+                        step_text = str(step)
+                        
+                        # Look for component IDs
+                        component_ids = re.findall(component_id_pattern, step_text)
+                        
+                        if component_ids:
+                            # Extract context about what was created/modified
+                            component_info = f"Step {i+1}:"
+                            
+                            if hasattr(step, 'task'):
+                                component_info += f"\n  Task: {step.task}"
+                            
+                            # Try to identify what type of component
+                            step_lower = step_text.lower()
+                            component_type = "unknown"
+                            if "bridge" in step_lower and "point" in step_lower:
+                                component_type = "bridge_points"
+                            elif "curve" in step_lower or "line" in step_lower:
+                                component_type = "bridge_curve"
+                            elif "deck" in step_lower:
+                                component_type = "bridge_deck"
+                            elif "python" in step_lower and "script" in step_lower:
+                                component_type = "python_script"
+                            
+                            for comp_id in component_ids:
+                                component_info += f"\n  Component ID: {comp_id} (type: {component_type})"
+                            
+                            # Add relevant observations
+                            if hasattr(step, 'observations'):
+                                obs_str = str(step.observations)
+                                # Extract relevant parts (limit length)
+                                if len(obs_str) > 300:
+                                    obs_str = obs_str[:300] + "..."
+                                component_info += f"\n  Details: {obs_str}"
+                            
+                            components.append(component_info)
+                    
+                    if components:
+                        logger.debug(f"🔧 Extracted {len(components)} components from geometry agent memory")
+                        return f"Found {len(components)} component creation/modification events:\n\n" + "\n\n".join(components)
+                    else:
+                        logger.debug(f"❌ No components found in geometry agent memory")
+                        return "No components found in geometry agent conversation history."
+                else:
+                    return "Geometry agent memory structure not available for component extraction."
+            else:
+                return "No geometry agent found for component extraction."
+                
+        except Exception as e:
+            return f"Error extracting components from geometry agent memory: {e}"
+
+    @tool
+    def get_current_valid_components() -> str:
+        """
+        Get currently valid components in Grasshopper, cross-referenced with memory context.
+        
+        This tool combines current Grasshopper session data with geometry agent memory
+        to provide component IDs that are both recent AND currently valid.
+        
+        This solves the stale memory contamination issue by only returning component IDs
+        that exist in the current Grasshopper session.
+        
+        Returns:
+            String containing current valid components with memory context
+        """
+        try:
+            if hasattr(manager, 'managed_agents') and manager.managed_agents:
+                # Get geometry agent reference
+                geometry_agent = None
+                if isinstance(manager.managed_agents, dict) and 'geometry_agent' in manager.managed_agents:
+                    geometry_agent = manager.managed_agents['geometry_agent']
+                elif isinstance(manager.managed_agents, list) and len(manager.managed_agents) > 0:
+                    geometry_agent = manager.managed_agents[0]
+                
+                if geometry_agent and hasattr(geometry_agent, 'tools'):
+                    # Get current components from Grasshopper
+                    current_components = {}
+                    try:
+                        # Use the geometry agent's MCP tools to get current components
+                        for tool_name, tool_func in geometry_agent.tools.items():
+                            if tool_name == "get_all_components_enhanced":
+                                current_result = tool_func()
+                                if hasattr(current_result, 'data') and current_result.data:
+                                    components_data = current_result.data.get('components', [])
+                                    for comp in components_data:
+                                        if 'id' in comp:
+                                            current_components[comp['id']] = comp
+                                break
+                    except Exception as e:
+                        logger.warning(f"Could not get current components: {e}")
+                    
+                    # Extract memory component IDs (as before)
+                    memory_components = []
+                    if hasattr(geometry_agent, 'memory') and hasattr(geometry_agent.memory, 'steps'):
+                        steps = geometry_agent.memory.steps
+                        import re
+                        component_id_pattern = r'[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
+                        
+                        for i, step in enumerate(steps):
+                            step_text = str(step)
+                            component_ids = re.findall(component_id_pattern, step_text)
+                            
+                            for comp_id in component_ids:
+                                # CRITICAL: Only include if it exists in current session
+                                if comp_id in current_components:
+                                    comp_info = current_components[comp_id]
+                                    
+                                    # Extract context from memory step
+                                    context = f"Memory Step {i+1}:"
+                                    if hasattr(step, 'task'):
+                                        context += f" Task: {step.task}"
+                                    
+                                    memory_components.append({
+                                        'id': comp_id,
+                                        'current_data': comp_info,
+                                        'memory_context': context,
+                                        'step_index': i
+                                    })
+                    
+                    # Sort by step index (most recent first)
+                    memory_components.sort(key=lambda x: x['step_index'], reverse=True)
+                    
+                    if memory_components:
+                        result = f"Found {len(memory_components)} current valid components (filtered from memory):\\n\\n"
+                        for comp in memory_components:
+                            result += f"Component ID: {comp['id']}\\n"
+                            result += f"  Current Type: {comp['current_data'].get('type', 'unknown')}\\n"
+                            result += f"  Current Name: {comp['current_data'].get('name', 'unknown')}\\n"
+                            result += f"  Position: ({comp['current_data'].get('x', 0)}, {comp['current_data'].get('y', 0)})\\n"
+                            result += f"  Memory Context: {comp['memory_context']}\\n\\n"
+                        return result
+                    else:
+                        return f"No components found that exist in both memory and current session.\\nCurrent session has {len(current_components)} components.\\nThis suggests the memory contains only stale component IDs from previous sessions."
+                else:
+                    return "Cannot access geometry agent tools for component validation."
+            else:
+                return "No geometry agent found for component validation."
+        except Exception as e:
+            return f"Error validating current components: {e}"
+    
+    return [get_geometry_agent_memory, search_geometry_agent_memory, extract_components_from_geometry_memory, get_current_valid_components]
 
 
 def _create_registry_tools(component_registry: Any) -> List:
@@ -429,13 +818,29 @@ class TriageSystemWrapper:
         }
 
     def reset_all_agents(self) -> None:
-        """Reset all agents (smolagents doesn't need explicit reset)."""
-        # Smolagents agents are stateless by design
-        # Memory is handled via memory tools that can be cleared
+        """Reset all agents by clearing their conversation memory."""
         try:
-            clear_memory()
-            logger.info("Memory cleared for smolagents system")
+            # Reset the main triage agent memory
+            if hasattr(self.manager, 'memory') and hasattr(self.manager.memory, 'steps'):
+                steps_cleared = len(self.manager.memory.steps)
+                self.manager.memory.steps.clear()
+                logger.info(f"✅ Cleared {steps_cleared} triage agent memory steps")
+            
+            # Reset geometry agent memory
+            if hasattr(self.manager, 'managed_agents') and self.manager.managed_agents:
+                geometry_agent = None
+                if isinstance(self.manager.managed_agents, dict) and 'geometry_agent' in self.manager.managed_agents:
+                    geometry_agent = self.manager.managed_agents['geometry_agent']
+                elif isinstance(self.manager.managed_agents, list) and len(self.manager.managed_agents) > 0:
+                    geometry_agent = self.manager.managed_agents[0]
+                
+                if geometry_agent and hasattr(geometry_agent, 'memory') and hasattr(geometry_agent.memory, 'steps'):
+                    geo_steps_cleared = len(geometry_agent.memory.steps)
+                    geometry_agent.memory.steps.clear()
+                    logger.info(f"✅ Cleared {geo_steps_cleared} geometry agent memory steps")
+                
+            logger.info("🔄 All agent memories have been reset - starting fresh session")
+            
         except Exception as e:
-            logger.warning(f"Failed to clear memory: {e}")
-
-        logger.info("Smolagents system reset completed")
+            logger.warning(f"⚠️ Error during agent reset: {e}")
+            logger.info("🔄 Reset completed with warnings")

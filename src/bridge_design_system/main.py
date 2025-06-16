@@ -83,13 +83,14 @@ def test_system():
         return False
 
 
-def interactive_mode(use_smolagents=False):
+def interactive_mode(use_legacy=False, reset_memory=False):
     """Run the system in interactive mode.
     
     Args:
-        use_smolagents: If True, use new smolagents-native implementation
+        use_legacy: If True, use legacy triage agent (default is smolagents-native)
+        reset_memory: If True, start with fresh agent memories
     """
-    mode = "smolagents-native" if use_smolagents else "standard"
+    mode = "legacy" if use_legacy else "smolagents-native"
     logger.info(f"Starting Bridge Design System in interactive mode ({mode})...")
     
     if not validate_environment():
@@ -100,27 +101,38 @@ def interactive_mode(use_smolagents=False):
         registry = initialize_registry()
         logger.info("Component registry initialized")
         
-        if use_smolagents:
-            # Use new smolagents-native implementation
+        if use_legacy:
+            # Use legacy implementation
+            triage = TriageAgent(component_registry=registry)
+            triage.initialize_agent()
+            logger.info("System initialized with legacy implementation")
+        else:
+            # Use default smolagents-native implementation
             from .agents.triage_agent_smolagents import TriageSystemWrapper
             triage = TriageSystemWrapper(component_registry=registry)
             logger.info("System initialized with smolagents-native patterns")
-        else:
-            # Use existing implementation
-            triage = TriageAgent(component_registry=registry)
-            triage.initialize_agent()
-            logger.info("System initialized successfully")
+        
+        # Reset memory if requested
+        if reset_memory:
+            logger.info("🔄 Resetting agent memories as requested...")
+            triage.reset_all_agents()
+            registry.clear()
+            logger.info("✅ Started with fresh agent memories")
         
         print("\n" + "="*60)
         print("AR-Assisted Bridge Design System")
-        if use_smolagents:
-            print("🚀 Using NEW smolagents-native implementation")
-            print("✨ 75% less code, 30% more efficient!")
+        if use_legacy:
+            print("⚙️ Using LEGACY implementation")
+            print("🔧 STDIO-only geometry agent")
         else:
-            print("Using STDIO-only geometry agent (100% reliable)")
+            print("🚀 Using smolagents-native implementation (DEFAULT)")
+            print("✨ 75% less code, 30% more efficient!")
         print("="*60)
-        print("\nType 'exit' to quit, 'reset' to clear conversation")
-        print("Type 'status' to see agent status\n")
+        print("\nType 'exit' to quit, 'reset' to clear all agent memories")
+        print("Type 'status' to see agent status")
+        if reset_memory:
+            print("✅ Started with fresh memories (--reset flag used)")
+        print()
         
         while True:
             try:
@@ -130,24 +142,25 @@ def interactive_mode(use_smolagents=False):
                     print("Exiting Bridge Design System...")
                     break
                 elif user_input.lower() == 'reset':
+                    print("🔄 Resetting all agent memories...")
                     triage.reset_all_agents()
                     registry.clear()
-                    print("All agents and component registry reset.")
+                    print("✅ All agent memories and component registry reset - starting fresh!")
                     continue
                 elif user_input.lower() == 'status':
-                    if use_smolagents:
-                        # Smolagents status
+                    if use_legacy:
+                        # Legacy status
+                        status = triage.get_agent_status()
+                        print("\nAgent Status (Legacy):")
+                        for agent, info in status.items():
+                            conversation_len = len(triage.managed_agents[agent].conversation_history) if agent in triage.managed_agents and hasattr(triage.managed_agents[agent], 'conversation_history') else 0
+                            print(f"  {agent}: Steps={info['step_count']}, Initialized={info['initialized']}, Conversations={conversation_len}")
+                    else:
+                        # Smolagents status (default)
                         status = triage.get_status()
                         print("\nAgent Status (Smolagents Native):")
                         for agent, info in status.items():
                             print(f"  {agent}: {info}")
-                    else:
-                        # Original status
-                        status = triage.get_agent_status()
-                        print("\nAgent Status:")
-                        for agent, info in status.items():
-                            conversation_len = len(triage.managed_agents[agent].conversation_history) if agent in triage.managed_agents and hasattr(triage.managed_agents[agent], 'conversation_history') else 0
-                            print(f"  {agent}: Steps={info['step_count']}, Initialized={info['initialized']}, Conversations={conversation_len}")
                     
                     # Registry status
                     registry_stats = registry.get_stats()
@@ -186,7 +199,7 @@ def main():
     """Main entry point."""
     import argparse
     
-    parser = argparse.ArgumentParser(description="Bridge Design System")
+    parser = argparse.ArgumentParser(description="Bridge Design System (smolagents-native by default)")
     parser.add_argument(
         "--test",
         action="store_true",
@@ -196,12 +209,17 @@ def main():
         "--interactive",
         "-i",
         action="store_true",
-        help="Run in interactive mode"
+        help="Run in interactive mode (uses smolagents-native by default)"
     )
     parser.add_argument(
-        "--smolagents",
+        "--legacy",
         action="store_true",
-        help="Use new smolagents-native implementation (experimental)"
+        help="Use legacy triage agent implementation (instead of default smolagents)"
+    )
+    parser.add_argument(
+        "--reset",
+        action="store_true",
+        help="Start with fresh agent memories (clears previous conversation history)"
     )
     parser.add_argument(
         "--enhanced-cli",
@@ -312,16 +330,11 @@ def main():
         from .cli.enhanced_interface import run_enhanced_cli
         run_enhanced_cli(simple_mode=False)
     elif args.interactive:
-        interactive_mode(use_smolagents=args.smolagents)
+        interactive_mode(use_legacy=args.legacy, reset_memory=args.reset)
     else:
-        # Default to simple CLI
-        try:
-            from .cli.simple_cli import run_simple_cli
-            run_simple_cli()
-        except Exception as e:
-            logger.warning(f"Enhanced CLI failed: {e}")
-            logger.info("Falling back to basic interactive mode")
-            interactive_mode()
+        # Default to smolagents interactive mode
+        logger.info("No specific mode specified - starting default smolagents interactive mode")
+        interactive_mode(use_legacy=False, reset_memory=args.reset)
 
 
 if __name__ == "__main__":
