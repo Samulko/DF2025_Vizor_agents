@@ -7,10 +7,10 @@ instead of custom coordination code.
 """
 
 import logging
-from typing import List, Optional, Any, Dict
+from typing import List, Optional, Any, Dict, Union
 from pathlib import Path
 
-from smolagents import CodeAgent, tool, PromptTemplates
+from smolagents import CodeAgent, ToolCallingAgent, tool, PromptTemplates
 from ..config.model_config import ModelProvider
 from ..config.logging_config import get_logger
 from ..config.settings import settings
@@ -43,41 +43,25 @@ def create_triage_system(
     # Get model
     model = ModelProvider.get_model(model_name)
     
-    # Create specialized agents using the wrapper pattern for proper MCP lifecycle
-    geometry_agent_wrapper = create_geometry_agent(
+    # Create specialized geometry agent for native managed_agents pattern
+    geometry_agent = _create_native_geometry_agent(
         custom_tools=_create_registry_tools(component_registry) if component_registry else None,
         component_registry=component_registry
     )
     
-    # Create a tool that delegates to the geometry agent wrapper
-    @tool
-    def geometry_agent(task: str) -> str:
-        """
-        Delegate geometry tasks to the specialized geometry agent.
-        
-        Args:
-            task: Detailed description of the geometry task to perform
-            
-        Returns:
-            Result from the geometry agent execution
-        """
-        try:
-            result = geometry_agent_wrapper.run(task)
-            return str(result)
-        except Exception as e:
-            return f"Geometry agent error: {e}"
-    
     # Note: Material and Structural agents would be created here when available
-    # For now, we'll add placeholder tools that indicate these agents are coming
+    # For now, we only have geometry agent in managed_agents
+    
+    # Coordination tools for the manager (including memory tools)
+    memory_tools = [remember, recall, search_memory, clear_memory]
     material_tool = create_material_placeholder()
     structural_tool = create_structural_placeholder()
+    coordination_tools = [material_tool, structural_tool] + _create_coordination_tools() + memory_tools
     
-    # Coordination tools for the manager
-    coordination_tools = [geometry_agent, material_tool, structural_tool] + _create_coordination_tools()
-    
-    # Create manager agent with tool-based delegation (smolagents pattern)
+    # Create manager agent with native managed_agents pattern (smolagents best practice)
     manager = CodeAgent(
-        tools=coordination_tools,  # All delegation via tools
+        tools=coordination_tools,  # General coordination tools
+        managed_agents=[geometry_agent],  # Native smolagents delegation
         model=model,
         name="triage_agent", 
         description="Coordinates bridge design tasks by delegating to specialized agents",
@@ -128,6 +112,108 @@ When delegating:
 
 Remember: You coordinate, you don't execute specialized tasks yourself.
 """
+
+
+def _create_native_geometry_agent(
+    custom_tools: Optional[List] = None,
+    component_registry: Optional[Any] = None
+) -> ToolCallingAgent:
+    """
+    Create geometry agent as native ToolCallingAgent for managed_agents pattern.
+    
+    Following smolagents best practices: create direct agent instances that can
+    be used in managed_agents parameter for proper hierarchical delegation.
+    
+    Args:
+        custom_tools: Additional tools to include
+        component_registry: Registry for tracking components
+        
+    Returns:
+        ToolCallingAgent configured for geometry tasks with MCP tools
+    """
+    from .geometry_agent_smolagents import create_geometry_agent
+    
+    # Use the existing wrapper that handles MCP lifecycle properly
+    # Extract the internal agent for managed_agents pattern
+    geometry_wrapper = create_geometry_agent(
+        custom_tools=custom_tools,
+        component_registry=component_registry
+    )
+    
+    # For now, return a simplified agent until MCP lifecycle is resolved
+    # in managed_agents context. We'll create fallback tools.
+    model = ModelProvider.get_model("geometry", temperature=0.1)
+    
+    # Create fallback geometry tools
+    fallback_tools = _create_geometry_fallback_tools()
+    memory_tools = [remember, recall, search_memory, clear_memory]
+    all_tools = fallback_tools + memory_tools + (custom_tools or [])
+    
+    agent = ToolCallingAgent(
+        tools=all_tools,
+        model=model,
+        max_steps=10,
+        name="geometry_agent",
+        description="Creates 3D geometry descriptions (MCP integration pending for managed_agents)"
+    )
+    
+    # Add custom system prompt
+    from .geometry_agent_smolagents import get_fallback_system_prompt
+    custom_prompt = get_fallback_system_prompt()
+    agent.prompt_templates["system_prompt"] = agent.prompt_templates["system_prompt"] + "\n\n" + custom_prompt
+    
+    return agent
+
+
+def _create_geometry_fallback_tools() -> List:
+    """Create fallback tools for geometry agent in managed_agents context."""
+    
+    @tool
+    def create_bridge_geometry(geometry_type: str, parameters: dict) -> dict:
+        """
+        Create bridge geometry (fallback mode for managed_agents).
+        
+        Args:
+            geometry_type: Type of geometry to create
+            parameters: Parameters for the geometry
+            
+        Returns:
+            Geometry description and next steps
+        """
+        return {
+            "status": "managed_agent_fallback",
+            "geometry_type": geometry_type,
+            "parameters": parameters,
+            "description": f"Would create {geometry_type} with parameters: {parameters}",
+            "next_steps": "Use wrapper pattern for full MCP integration",
+            "note": "This is fallback mode - full MCP integration requires wrapper pattern"
+        }
+    
+    @tool
+    def describe_geometry_task(task_description: str) -> str:
+        """
+        Describe geometry task and provide implementation guidance.
+        
+        Args:
+            task_description: Description of the geometry task
+            
+        Returns:
+            Task analysis and implementation guidance
+        """
+        return f"""
+Task Analysis: {task_description}
+
+Implementation Plan:
+1. Parse geometry requirements from task
+2. Identify Rhino.Geometry methods needed
+3. Generate Python script for Grasshopper
+4. Execute via MCP connection (requires wrapper pattern)
+
+Note: This is managed_agents fallback mode. For full MCP integration,
+use the geometry wrapper pattern that handles MCPAdapt lifecycle properly.
+"""
+    
+    return [create_bridge_geometry, describe_geometry_task]
 
 
 def _create_coordination_tools() -> List:
@@ -266,6 +352,34 @@ def create_structural_placeholder() -> Any:
     return analyze_structure
 
 
+class ResponseCompatibilityWrapper:
+    """
+    Wrapper to provide .success and .message attributes for backward compatibility.
+    
+    Smolagents agents return various types (AgentText, dict, str), but the existing
+    interface expects response objects with .success and .message attributes.
+    """
+    
+    def __init__(self, result: Any, success: bool = True, error_type: Optional[str] = None):
+        """Initialize compatibility wrapper."""
+        self.result = result
+        self.success = success
+        self.error = error_type
+        
+        # Extract message from various result types
+        if hasattr(result, 'text'):
+            self.message = result.text
+        elif isinstance(result, dict):
+            self.message = result.get('message', str(result))
+        elif isinstance(result, str):
+            self.message = result
+        else:
+            self.message = str(result)
+        
+        # Set data for backward compatibility
+        self.data = result if isinstance(result, dict) else {"result": result}
+
+
 # Optional: Create a wrapper for backward compatibility during transition
 class TriageSystemWrapper:
     """
@@ -281,7 +395,7 @@ class TriageSystemWrapper:
         self.component_registry = component_registry
         self.logger = logger
     
-    def handle_design_request(self, request: str) -> Dict[str, Any]:
+    def handle_design_request(self, request: str) -> ResponseCompatibilityWrapper:
         """
         Handle design request using smolagents manager.
         
@@ -289,25 +403,22 @@ class TriageSystemWrapper:
             request: Human designer's request
             
         Returns:
-            Response dictionary for backward compatibility
+            ResponseCompatibilityWrapper for backward compatibility
         """
         try:
             # Use native smolagents execution
             result = self.manager.run(request)
             
-            return {
-                "success": True,
-                "message": str(result),
-                "data": result if isinstance(result, dict) else {"result": result}
-            }
+            # Return compatibility wrapper
+            return ResponseCompatibilityWrapper(result, success=True)
             
         except Exception as e:
             logger.error(f"Request handling failed: {e}")
-            return {
-                "success": False,
-                "message": f"Error: {str(e)}",
-                "error": type(e).__name__
+            error_result = {
+                "error": f"Error: {str(e)}",
+                "error_type": type(e).__name__
             }
+            return ResponseCompatibilityWrapper(error_result, success=False, error_type=type(e).__name__)
     
     def get_status(self) -> Dict[str, Any]:
         """Get status of the triage system."""
@@ -315,12 +426,24 @@ class TriageSystemWrapper:
             "triage": {
                 "initialized": True,
                 "type": "smolagents_manager",
-                "managed_agents": len(self.manager.managed_agents),
+                "managed_agents": len(self.manager.managed_agents) if hasattr(self.manager, 'managed_agents') else 0,
                 "max_steps": self.manager.max_steps
             },
             "geometry_agent": {
                 "initialized": True,
                 "type": "ToolCallingAgent",
-                "mcp_integration": True
+                "mcp_integration": "fallback_mode"
             }
         }
+    
+    def reset_all_agents(self) -> None:
+        """Reset all agents (smolagents doesn't need explicit reset)."""
+        # Smolagents agents are stateless by design
+        # Memory is handled via memory tools that can be cleared
+        try:
+            clear_memory()
+            logger.info("Memory cleared for smolagents system")
+        except Exception as e:
+            logger.warning(f"Failed to clear memory: {e}")
+        
+        logger.info("Smolagents system reset completed")
