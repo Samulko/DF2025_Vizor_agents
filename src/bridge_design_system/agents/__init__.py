@@ -1,16 +1,8 @@
 """Bridge Design System Agents."""
-from .base_agent import AgentError, AgentResponse, BaseAgent
-from .geometry_agent_stdio import GeometryAgentSTDIO
-# from .material_agent import MaterialAgent  # Temporarily disabled - missing material_tools
-from .structural_agent import StructuralAgent
-from .triage_agent import TriageAgent
+from .triage_agent_smolagents import TriageSystemWrapper as TriageAgent
+from .geometry_agent_smolagents import create_geometry_agent
 
 __all__ = [
-    "BaseAgent",
-    "AgentError", 
-    "AgentResponse",
-    "GeometryAgentSTDIO",
-    # "MaterialAgent",  # Temporarily disabled
-    "StructuralAgent",
     "TriageAgent",
+    "create_geometry_agent",
 ]

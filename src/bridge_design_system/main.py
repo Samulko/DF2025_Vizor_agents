@@ -6,7 +6,7 @@ providing stable async/sync handling and eliminating event loop issues.
 import logging
 from pathlib import Path
 
-from .agents.triage_agent import TriageAgent
+from .agents import TriageAgent
 from .config.logging_config import get_logger
 from .config.model_config import ModelProvider
 from .config.settings import settings
@@ -61,7 +61,6 @@ def test_system():
         logger.info("\nTesting agent initialization...")
         registry = initialize_registry()
         triage = TriageAgent(component_registry=registry)
-        triage.initialize_agent()
         logger.info("✓ Triage agent initialized successfully")
         
         # Test basic operation
@@ -102,14 +101,13 @@ def interactive_mode(use_legacy=False, reset_memory=False):
         logger.info("Component registry initialized")
         
         if use_legacy:
-            # Use legacy implementation
+            # Legacy is no longer supported - use smolagents implementation
+            logger.warning("Legacy implementation has been removed - using smolagents-native implementation")
             triage = TriageAgent(component_registry=registry)
-            triage.initialize_agent()
-            logger.info("System initialized with legacy implementation")
+            logger.info("System initialized with smolagents-native patterns")
         else:
             # Use default smolagents-native implementation
-            from .agents.triage_agent_smolagents import TriageSystemWrapper
-            triage = TriageSystemWrapper(component_registry=registry)
+            triage = TriageAgent(component_registry=registry)
             logger.info("System initialized with smolagents-native patterns")
         
         # Reset memory if requested
@@ -148,19 +146,11 @@ def interactive_mode(use_legacy=False, reset_memory=False):
                     print("✅ All agent memories and component registry reset - starting fresh!")
                     continue
                 elif user_input.lower() == 'status':
-                    if use_legacy:
-                        # Legacy status
-                        status = triage.get_agent_status()
-                        print("\nAgent Status (Legacy):")
-                        for agent, info in status.items():
-                            conversation_len = len(triage.managed_agents[agent].conversation_history) if agent in triage.managed_agents and hasattr(triage.managed_agents[agent], 'conversation_history') else 0
-                            print(f"  {agent}: Steps={info['step_count']}, Initialized={info['initialized']}, Conversations={conversation_len}")
-                    else:
-                        # Smolagents status (default)
-                        status = triage.get_status()
-                        print("\nAgent Status (Smolagents Native):")
-                        for agent, info in status.items():
-                            print(f"  {agent}: {info}")
+                    # Always use smolagents status (legacy removed)
+                    status = triage.get_status()
+                    print("\nAgent Status (Smolagents Native):")
+                    for agent, info in status.items():
+                        print(f"  {agent}: {info}")
                     
                     # Registry status
                     registry_stats = registry.get_stats()
