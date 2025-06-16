@@ -12,6 +12,14 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 import time
+# Platform-specific imports for file locking
+try:
+    import fcntl
+    HAS_FCNTL = True
+except ImportError:
+    HAS_FCNTL = False
+import tempfile
+import shutil
 
 from smolagents import tool
 
@@ -27,22 +35,164 @@ def get_memory_file() -> Path:
     return MEMORY_PATH / f'{SESSION_ID}.json'
 
 
-def load_memory() -> Dict[str, Any]:
-    """Load memory from JSON file."""
-    memory_file = get_memory_file()
-    if memory_file.exists():
+def get_lock_file() -> Path:
+    """Get the path to the lock file for the current session."""
+    return MEMORY_PATH / f'.{SESSION_ID}.lock'
+
+
+def acquire_lock(timeout: float = 5.0) -> Optional[Any]:
+    """Acquire a file lock for memory operations.
+    
+    Returns:
+        Lock object if successful, None if failed
+    """
+    lock_file = get_lock_file()
+    start_time = time.time()
+    
+    while time.time() - start_time < timeout:
         try:
-            return json.loads(memory_file.read_text())
-        except json.JSONDecodeError:
-            print(f"Warning: Corrupted memory file {memory_file}, starting fresh")
-            return {"session_id": SESSION_ID, "memories": {}}
-    return {"session_id": SESSION_ID, "memories": {}}
+            # Try to create lock file exclusively
+            fd = os.open(str(lock_file), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            # Write PID to help with debugging
+            os.write(fd, str(os.getpid()).encode())
+            os.close(fd)
+            return lock_file  # Return the lock file path as our "lock object"
+        except FileExistsError:
+            # Lock is held by another process
+            # Check if lock is stale (older than 30 seconds)
+            try:
+                if lock_file.exists():
+                    lock_age = time.time() - lock_file.stat().st_mtime
+                    if lock_age > 30:  # Stale lock
+                        lock_file.unlink()  # Remove stale lock
+                        continue
+            except:
+                pass
+            time.sleep(0.05)  # Brief wait before retry
+        except Exception:
+            return None
+    
+    return None
 
 
-def save_memory(memory_data: Dict[str, Any]) -> None:
-    """Save memory to JSON file."""
+def release_lock(lock: Any) -> None:
+    """Release a file lock."""
+    if lock and isinstance(lock, Path):
+        try:
+            lock.unlink()
+        except:
+            pass
+
+
+def load_memory() -> Dict[str, Any]:
+    """Load memory from JSON file with error handling."""
     memory_file = get_memory_file()
-    memory_file.write_text(json.dumps(memory_data, indent=2))
+    default_memory = {"session_id": SESSION_ID, "memories": {}}
+    
+    if not memory_file.exists():
+        return default_memory
+    
+    # Try to read with retries for transient failures
+    for attempt in range(3):
+        try:
+            with open(memory_file, 'r') as f:
+                # Non-blocking read attempt
+                content = f.read()
+                if content:
+                    return json.loads(content)
+                else:
+                    return default_memory
+        except (json.JSONDecodeError, ValueError) as e:
+            print(f"Warning: Corrupted memory file {memory_file}, starting fresh. Error: {e}")
+            return default_memory
+        except (IOError, OSError) as e:
+            if attempt < 2:
+                time.sleep(0.1)  # Brief retry delay
+                continue
+            print(f"Warning: Could not read memory file after 3 attempts. Error: {e}")
+            return default_memory
+        except Exception as e:
+            print(f"Warning: Unexpected error reading memory. Using defaults. Error: {e}")
+            return default_memory
+    
+    return default_memory
+
+
+def save_memory(memory_data: Dict[str, Any]) -> bool:
+    """Save memory to JSON file with atomic writes and error handling.
+    
+    Returns:
+        bool: True if save succeeded, False otherwise
+    """
+    memory_file = get_memory_file()
+    
+    # Ensure directory exists
+    try:
+        memory_file.parent.mkdir(parents=True, exist_ok=True)
+    except Exception as e:
+        print(f"Warning: Could not create memory directory. Error: {e}")
+        return False
+    
+    # Acquire lock for exclusive write access
+    lock = acquire_lock(timeout=2.0)  # Shorter timeout for workshop responsiveness
+    if not lock:
+        print(f"Warning: Could not acquire lock for memory write. Another operation in progress.")
+        # In workshop setting, we'll continue without lock rather than fail
+    
+    try:
+        # Use atomic write with temp file to prevent corruption
+        temp_fd = None
+        temp_path = None
+        
+        for attempt in range(3):
+            try:
+                # Create temp file in same directory for atomic rename
+                temp_fd, temp_path = tempfile.mkstemp(
+                    dir=memory_file.parent,
+                    prefix='.tmp_memory_',
+                    suffix='.json'
+                )
+                
+                # Write to temp file
+                with os.fdopen(temp_fd, 'w') as f:
+                    json.dump(memory_data, f, indent=2)
+                    f.flush()
+                    os.fsync(f.fileno())  # Force write to disk
+                
+                # Atomic rename (works on same filesystem)
+                if os.name == 'nt':  # Windows
+                    # Windows doesn't support atomic rename if target exists
+                    if memory_file.exists():
+                        memory_file.unlink()
+                os.rename(temp_path, memory_file)
+                
+                return True
+                
+            except Exception as e:
+                # Clean up temp file if it exists
+                if temp_fd is not None:
+                    try:
+                        os.close(temp_fd)
+                    except:
+                        pass
+                if temp_path and os.path.exists(temp_path):
+                    try:
+                        os.unlink(temp_path)
+                    except:
+                        pass
+                
+                if attempt < 2:
+                    time.sleep(0.1)  # Brief retry delay
+                    continue
+                    
+                print(f"Warning: Could not save memory after 3 attempts. Error: {e}")
+                return False
+        
+        return False
+    
+    finally:
+        # Always release lock
+        release_lock(lock)
 
 
 @tool
@@ -81,10 +231,15 @@ def remember(category: str, key: str, value: str) -> str:
     }
     
     # Save to file
-    save_memory(memory_data)
+    success = save_memory(memory_data)
     
     elapsed_ms = (time.time() - start_time) * 1000
-    return f"Remembered in category '{category}' with key '{key}' (took {elapsed_ms:.1f}ms)"
+    
+    if success:
+        return f"Remembered in category '{category}' with key '{key}' (took {elapsed_ms:.1f}ms)"
+    else:
+        # Memory save failed but we can continue - workshop must go on!
+        return f"⚠️ Memory save had issues but continuing. Item: '{category}/{key}' (took {elapsed_ms:.1f}ms)"
 
 
 @tool  
@@ -130,7 +285,13 @@ def recall(category: Optional[str] = None, key: Optional[str] = None) -> str:
         if key in memories[category]:
             item = memories[category][key]
             elapsed_ms = (time.time() - start_time) * 1000
-            return f"{item['value']}\n(Stored at: {item['timestamp']}, retrieved in {elapsed_ms:.1f}ms)"
+            
+            # CRITICAL FIX: Strip metadata if present to prevent component ID pollution
+            result = item['value']
+            if result and "\n(Stored at:" in result:
+                result = result.split("\n(Stored at:")[0].strip()
+            
+            return result
         else:
             return f"No memory found for key '{key}' in category '{category}'"
     
@@ -243,15 +404,19 @@ def clear_memory(category: Optional[str] = None, confirm: str = "no") -> str:
         # Clear all memory
         old_count = sum(len(items) for items in memory_data.get("memories", {}).values())
         memory_data["memories"] = {}
-        save_memory(memory_data)
-        return f"🗑️ Cleared ALL memory ({old_count} items deleted). Fresh start!"
+        if save_memory(memory_data):
+            return f"🗑️ Cleared ALL memory ({old_count} items deleted). Fresh start!"
+        else:
+            return f"⚠️ Had issues clearing memory but will continue"
     
     elif category in memory_data.get("memories", {}):
         # Clear specific category
         old_count = len(memory_data["memories"][category])
         del memory_data["memories"][category]
-        save_memory(memory_data)
-        return f"🗑️ Cleared category '{category}' ({old_count} items deleted)"
+        if save_memory(memory_data):
+            return f"🗑️ Cleared category '{category}' ({old_count} items deleted)"
+        else:
+            return f"⚠️ Had issues clearing category '{category}' but will continue"
     
     else:
         return f"Category '{category}' not found. Available: {list(memory_data.get('memories', {}).keys())}"
@@ -280,4 +445,8 @@ def remember_component(component_id: str, component_type: str, description: str)
             "description": description
         }
     }
-    save_memory(memory_data)
+    # Best effort save - don't crash component creation if memory fails
+    try:
+        save_memory(memory_data)
+    except Exception as e:
+        print(f"Warning: Could not save component to memory: {e}")
