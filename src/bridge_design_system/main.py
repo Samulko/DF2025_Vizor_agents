@@ -15,6 +15,62 @@ from .state.component_registry import initialize_registry, get_global_registry
 logger = get_logger(__name__)
 
 
+def clear_log_files():
+    """Clear all log files for a completely fresh start."""
+    log_dir = Path("logs")
+    if not log_dir.exists():
+        logger.info("📁 No logs directory found - nothing to clear")
+        return
+    
+    log_files_cleared = 0
+    try:
+        # Find all log files (including rotated ones)
+        log_patterns = ["*.log", "*.log.*"]
+        for pattern in log_patterns:
+            for log_file in log_dir.glob(pattern):
+                try:
+                    log_file.unlink()
+                    log_files_cleared += 1
+                    print(f"🗑️ Deleted: {log_file}")
+                except Exception as e:
+                    print(f"⚠️ Could not delete {log_file}: {e}")
+        
+        if log_files_cleared > 0:
+            print(f"✅ Cleared {log_files_cleared} log files")
+        else:
+            print("📁 No log files found to clear")
+            
+    except Exception as e:
+        print(f"❌ Error clearing log files: {e}")
+
+
+def clear_legacy_memory_files():
+    """Clear legacy file-based memory sessions (no longer used in smolagents)."""
+    memory_dir = Path("src/bridge_design_system/data/memory")
+    if not memory_dir.exists():
+        print("📁 No legacy memory directory found - nothing to clear")
+        return
+    
+    memory_files_cleared = 0
+    try:
+        # Find all session JSON files
+        for memory_file in memory_dir.glob("session_*.json"):
+            try:
+                memory_file.unlink()
+                memory_files_cleared += 1
+                print(f"🗑️ Deleted legacy memory: {memory_file.name}")
+            except Exception as e:
+                print(f"⚠️ Could not delete {memory_file}: {e}")
+        
+        if memory_files_cleared > 0:
+            print(f"✅ Cleared {memory_files_cleared} legacy memory files")
+        else:
+            print("📁 No legacy memory files found to clear")
+            
+    except Exception as e:
+        print(f"❌ Error clearing legacy memory files: {e}")
+
+
 def validate_environment():
     """Validate that required environment variables are set."""
     # Get unique providers needed
@@ -82,12 +138,13 @@ def test_system():
         return False
 
 
-def interactive_mode(use_legacy=False, reset_memory=False):
+def interactive_mode(use_legacy=False, reset_memory=False, hard_reset=False):
     """Run the system in interactive mode.
     
     Args:
         use_legacy: If True, use legacy triage agent (default is smolagents-native)
         reset_memory: If True, start with fresh agent memories
+        hard_reset: If True, clear everything including log files
     """
     mode = "legacy" if use_legacy else "smolagents-native"
     logger.info(f"Starting Bridge Design System in interactive mode ({mode})...")
@@ -110,8 +167,15 @@ def interactive_mode(use_legacy=False, reset_memory=False):
             triage = TriageAgent(component_registry=registry)
             logger.info("System initialized with smolagents-native patterns")
         
-        # Reset memory if requested
-        if reset_memory:
+        # Handle reset options
+        if hard_reset:
+            print("🧹 HARD RESET: Clearing EVERYTHING (logs, memories, registry, legacy files)...")
+            clear_log_files()
+            clear_legacy_memory_files()
+            triage.reset_all_agents()
+            registry.clear()
+            print("✅ Complete system reset - starting completely fresh!")
+        elif reset_memory:
             logger.info("🔄 Resetting agent memories as requested...")
             triage.reset_all_agents()
             registry.clear()
@@ -126,9 +190,11 @@ def interactive_mode(use_legacy=False, reset_memory=False):
             print("🚀 Using smolagents-native implementation (DEFAULT)")
             print("✨ 75% less code, 30% more efficient!")
         print("="*60)
-        print("\nType 'exit' to quit, 'reset' to clear all agent memories")
+        print("\nType 'exit' to quit, 'reset' to clear agent memories, 'hardreset' to clear everything")
         print("Type 'status' to see agent status")
-        if reset_memory:
+        if hard_reset:
+            print("✅ Started completely fresh (--hard-reset flag used)")
+        elif reset_memory:
             print("✅ Started with fresh memories (--reset flag used)")
         print()
         
@@ -144,6 +210,14 @@ def interactive_mode(use_legacy=False, reset_memory=False):
                     triage.reset_all_agents()
                     registry.clear()
                     print("✅ All agent memories and component registry reset - starting fresh!")
+                    continue
+                elif user_input.lower() == 'hardreset':
+                    print("🧹 HARD RESET: Clearing EVERYTHING (logs, memories, registry, legacy files)...")
+                    clear_log_files()
+                    clear_legacy_memory_files()
+                    triage.reset_all_agents()
+                    registry.clear()
+                    print("✅ Complete system reset - starting completely fresh!")
                     continue
                 elif user_input.lower() == 'status':
                     # Always use smolagents status (legacy removed)
@@ -210,6 +284,11 @@ def main():
         "--reset",
         action="store_true",
         help="Start with fresh agent memories (clears previous conversation history)"
+    )
+    parser.add_argument(
+        "--hard-reset",
+        action="store_true",
+        help="Start completely fresh (clears agent memories, component registry, AND log files)"
     )
     parser.add_argument(
         "--enhanced-cli",
@@ -320,11 +399,11 @@ def main():
         from .cli.enhanced_interface import run_enhanced_cli
         run_enhanced_cli(simple_mode=False)
     elif args.interactive:
-        interactive_mode(use_legacy=args.legacy, reset_memory=args.reset)
+        interactive_mode(use_legacy=args.legacy, reset_memory=args.reset, hard_reset=args.hard_reset)
     else:
         # Default to smolagents interactive mode
         logger.info("No specific mode specified - starting default smolagents interactive mode")
-        interactive_mode(use_legacy=False, reset_memory=args.reset)
+        interactive_mode(use_legacy=False, reset_memory=args.reset, hard_reset=args.hard_reset)
 
 
 if __name__ == "__main__":

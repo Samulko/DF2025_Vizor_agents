@@ -16,15 +16,15 @@ class Settings(BaseSettings):
     gemini_api_key: Optional[str] = None
     hf_token: Optional[str] = None
     
-    # Agent Model Configuration
-    triage_agent_provider: str = "deepseek"
-    triage_agent_model: str = "deepseek-chat"
-    geometry_agent_provider: str = "anthropic"
-    geometry_agent_model: str = "claude-3-5-sonnet-latest"
-    material_agent_provider: str = "anthropic"
-    material_agent_model: str = "claude-3-5-sonnet-latest"
-    structural_agent_provider: str = "anthropic"
-    structural_agent_model: str = "claude-3-5-sonnet-latest"
+    # Agent Model Configuration - defaults can be overridden by .env
+    triage_agent_provider: str = "gemini"
+    triage_agent_model: str = "gemini-2.5-flash-preview-05-20"
+    geometry_agent_provider: str = "gemini"
+    geometry_agent_model: str = "gemini-2.5-flash-preview-05-20"
+    material_agent_provider: str = "gemini"
+    material_agent_model: str = "gemini-2.5-flash-preview-05-20"
+    structural_agent_provider: str = "gemini"
+    structural_agent_model: str = "gemini-2.5-flash-preview-05-20"
     
     # MCP Configuration
     mcp_transport_mode: str = "http"  # "http" or "stdio"

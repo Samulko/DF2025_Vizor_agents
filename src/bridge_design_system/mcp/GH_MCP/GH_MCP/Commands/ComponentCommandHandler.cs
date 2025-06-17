@@ -364,9 +364,32 @@ namespace GrasshopperMCP.Commands
                                     if (nickNameProp != null && nickNameProp.CanWrite)
                                     {
                                         nickNameProp.SetValue(component, scriptName);
+                                        
+                                        // Force the component to update its display
+                                        component.ExpireSolution(false);  // Mark as expired
+                                        component.Attributes.ExpireLayout(); // Force layout refresh
+                                        
+                                        // Alternative approach: access via attributes directly as backup
+                                        if (component.Attributes != null)
+                                        {
+                                            component.Attributes.DocObject.NickName = scriptName;
+                                            component.Attributes.ExpireLayout();
+                                        }
+                                        
+                                        // Schedule a new solution to ensure display updates
+                                        var doc = component.OnPingDocument();
+                                        if (doc != null)
+                                        {
+                                            doc.ScheduleSolution(10); // Schedule a new solution
+                                        }
+                                        
+                                        RhinoApp.WriteLine($"Component nickname set to: {scriptName} and display refreshed");
                                     }
                                 }
-                                catch { }
+                                catch (Exception nickEx) 
+                                { 
+                                    RhinoApp.WriteLine($"Error setting component nickname: {nickEx.Message}");
+                                }
                                 
                                 // Set the script content
                                 if (!string.IsNullOrEmpty(scriptContent))
@@ -824,11 +847,24 @@ namespace GrasshopperMCP.Commands
         /// <returns>組件信息</returns>
         public static object GetComponentInfo(Command command)
         {
+            // Try both "id" and "componentId" for backward compatibility
             string idStr = command.GetParameter<string>("id");
+            if (string.IsNullOrEmpty(idStr))
+            {
+                idStr = command.GetParameter<string>("componentId");
+            }
+            
+            // Debug logging to show what parameters were received
+            RhinoApp.WriteLine($"GetComponentInfo: Received parameters:");
+            foreach (var param in command.Parameters)
+            {
+                RhinoApp.WriteLine($"  {param.Key}: {param.Value}");
+            }
             
             if (string.IsNullOrEmpty(idStr))
             {
-                throw new ArgumentException("Component ID is required");
+                var receivedParams = string.Join(", ", command.Parameters.Keys);
+                throw new ArgumentException($"Component ID is required. Expected parameter 'id' or 'componentId', but received: [{receivedParams}]");
             }
             
             object result = null;
@@ -946,11 +982,17 @@ namespace GrasshopperMCP.Commands
         /// <returns>腳本內容</returns>
         public static object GetPythonScriptContent(Command command)
         {
+            // Try both "id" and "componentId" for backward compatibility
             string idStr = command.GetParameter<string>("id");
+            if (string.IsNullOrEmpty(idStr))
+            {
+                idStr = command.GetParameter<string>("componentId");
+            }
             
             if (string.IsNullOrEmpty(idStr))
             {
-                throw new ArgumentException("Component ID is required");
+                var receivedParams = string.Join(", ", command.Parameters.Keys);
+                throw new ArgumentException($"Component ID is required. Expected parameter 'id' or 'componentId', but received: [{receivedParams}]");
             }
             
             object result = null;
@@ -1187,12 +1229,18 @@ namespace GrasshopperMCP.Commands
         /// <returns>操作結果</returns>
         public static object SetPythonScriptContent(Command command)
         {
+            // Try both "id" and "componentId" for backward compatibility
             string idStr = command.GetParameter<string>("id");
+            if (string.IsNullOrEmpty(idStr))
+            {
+                idStr = command.GetParameter<string>("componentId");
+            }
             string script = command.GetParameter<string>("script");
             
             if (string.IsNullOrEmpty(idStr))
             {
-                throw new ArgumentException("Component ID is required");
+                var receivedParams = string.Join(", ", command.Parameters.Keys);
+                throw new ArgumentException($"Component ID is required. Expected parameter 'id' or 'componentId', but received: [{receivedParams}]");
             }
             
             if (script == null) // Allow empty script
@@ -1351,11 +1399,17 @@ namespace GrasshopperMCP.Commands
         /// <returns>錯誤和警告信息</returns>
         public static object GetPythonScriptErrors(Command command)
         {
+            // Try both "id" and "componentId" for backward compatibility
             string idStr = command.GetParameter<string>("id");
+            if (string.IsNullOrEmpty(idStr))
+            {
+                idStr = command.GetParameter<string>("componentId");
+            }
             
             if (string.IsNullOrEmpty(idStr))
             {
-                throw new ArgumentException("Component ID is required");
+                var receivedParams = string.Join(", ", command.Parameters.Keys);
+                throw new ArgumentException($"Component ID is required. Expected parameter 'id' or 'componentId', but received: [{receivedParams}]");
             }
             
             object result = null;

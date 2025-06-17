@@ -1,249 +1,193 @@
-# Memory Synchronization Testing: Honest Assessment and Practical Plan
+# **Refactoring Plan: Creating an Autonomous Agent System**
 
-## 🎯 **CORE ISSUE**
+## **🎯 CORE ISSUE**
 
-The original problem: **"modify the curve you just drew"** fails because agents forget what was just created.
+The current agent architecture is brittle because the **Triage Agent is responsible for managing the Geometry Agent's state**. This creates unnecessary complexity, leads to custom-built tools that fight the framework's design, and makes the system hard to maintain.
 
-## 🔍 **BRUTAL REALITY CHECK**
+The solution is to **refactor the system to make the Geometry Agent autonomous and stateful**, aligning with `smolagents` best practices.
 
-### **What Claude Code CAN Actually Test**
-1. **Agent Communication Logic** - How triage→geometry delegation works
-2. **Memory Tool Functionality** - Whether memory tools work as designed  
-3. **Conversation Flow Logic** - How agents handle multi-turn conversations
-4. **Cross-Agent Memory Sync** - Whether shared memory actually synchronizes
-5. **Vague Reference Resolution Logic** - How agents resolve "that curve" references
+## **🔍 BRUTAL REALITY CHECK**
 
-### **What Claude Code CANNOT Test**
-1. **Real Grasshopper Integration** - Requires GUI, Windows, human setup
-2. **Actual 3D Geometry Creation** - Needs real MCP server running
-3. **Real Component ID Generation** - Depends on actual geometry creation
-4. **User Experience** - Requires human interaction and visual validation
-5. **Production Performance** - Real network conditions, load, etc.
+### **What the Current System Does**
 
-### **The Fundamental Limitation**
-**You cannot fully test "modify the curve you just drew" without actually drawing curves.** Any test that mocks geometry creation is testing conversation logic, not the full use case.
+The Triage Agent acts as a puppeteer. It uses a suite of complex tools (`get_most_recent_component`, `search_geometry_agent_memory`) to inspect the Geometry Agent's memory, construct a hyper-specific task, delegate it, and then track the result itself. This is functional but inefficient and not robust.
 
-## 📋 **PRACTICAL TESTING APPROACH**
+### **What a Better System Should Do**
 
-### **Focus: Test What Can Be Meaningfully Validated**
+The Triage Agent should act as a manager. It delegates high-level, conversational tasks. The Geometry Agent, as the specialist, should be fully responsible for understanding the context, managing its own memory, and executing the task. This is simpler, more robust, and the intended pattern of the `smolagents` framework.
 
-Instead of pretending to test the full use case, focus on the **testable components** that make up the memory synchronization:
+### **The Fundamental Limitation of the Current Approach**
 
-1. **Memory Tool Logic** - Do the memory tools work correctly?
-2. **Agent Coordination** - Does triage→geometry delegation preserve context?
-3. **Component Tracking** - Does the shared component cache work?
-4. **Conversation Logic** - How do agents handle vague references?
-5. **Error Handling** - What happens when references fail?
+You have built a system of dependencies that makes change difficult. Every new memory requirement needs a new tool on the Triage Agent. The "session boundary" problem had to be solved with an external cache, which is a symptom of this flawed architecture.
 
-## 🛠️ **REALISTIC TEST DESIGN**
+## **📋 PRACTICAL REFACTORING APPROACH**
 
-### **Test 1: Memory Tool Functionality**
-```python
-def test_memory_tools_work():
-    """Test that memory tools function correctly with known data."""
+### **Focus: Implement a Clean Separation of Concerns**
+
+Instead of patching the old system, we will refactor it based on a simple principle: **the agent that does the work is the agent that manages the memory of that work.**
+
+1. **Make the Geometry Agent Stateful** \- It will track its own components and session history.  
+2. **Simplify the Triage Agent** \- It will become a pure delegator, with no knowledge of the Geometry Agent's internal workings.  
+3. **Update the Interaction Model** \- Delegation will be conversational, not programmatic.  
+4. **Revise System Prompts** \- Prompts will reflect the new, autonomous roles.
+
+   ## **🛠️ REALISTIC REFACTORING DESIGN**
+
+   ### **Phase 1: Make the Geometry Agent Stateful**
+
+Modify `MCPGeometryAgent` in `triage_agent_smolagents.py`. It should manage its own state, including the session-specific cache.
+
+1. \# Inside MCPGeometryAgent class in triage\_agent\_smolagents.py  
+2.   
+3. class MCPGeometryAgent(ToolCallingAgent):  
+4.     def \_\_init\_\_(self):  
+5.         \# ... existing setup ...  
+6.           
+7.         \# The agent now owns its state. This cache is reset with each new instance.  
+8.         self.internal\_component\_cache \= \[\] \# List to store \[{id, type, timestamp}\]  
+9.   
+10.         \# ... rest of the initialization ...  
+11.   
+12.     def run(self, task: str) \-\> Any:  
+13.         \# ... logic to resolve context from self.memory.steps and self.internal\_component\_cache ...  
+14.           
+15.         result \= super().run(task)  
+16.           
+17.         \# After a successful tool call that creates a component, the agent tracks it internally.  
+18.         self.\_track\_component\_in\_state(result)  
+19.           
+20.         return result  
+21.   
+22.     def \_track\_component\_in\_state(self, result\_from\_mcp: str):  
+23.         \# Internal method to parse a result from an MCP tool call (like add\_python3\_script)  
+24.         \# and update self.internal\_component\_cache.  
+25.         component\_id \= self.\_extract\_id\_from\_result(result\_from\_mcp)  
+26.         if component\_id:  
+27.             component\_info \= {  
+28.                 "id": component\_id,  
+29.                 "type": self.\_determine\_component\_type(result\_from\_mcp),  
+30.                 "timestamp": datetime.now().isoformat()  
+31.             }  
+32.             self.internal\_component\_cache.append(component\_info)  
+33.             logger.info(f"Geometry Agent internally tracked new component: {component\_id}")  
+34.   
     
-    # Simulate a known component being created
-    mock_component = {
-        "id": "test_curve_001", 
-        "type": "curve",
-        "description": "bridge arch curve",
-        "timestamp": "2024-12-16T10:00:00"
-    }
-    
-    # Test memory tools directly
-    track_geometry_result(str(mock_component), "Created bridge curve")
-    recent = get_most_recent_component(component_type="curve")
-    
-    # Validate memory tools work
-    assert recent["id"] == "test_curve_001"
-    assert recent["type"] == "curve"
-```
 
-**What this tests:** Memory tool logic, component tracking  
-**What this doesn't test:** Real geometry creation, real AI inference  
-**Value:** High - validates core memory functionality
+**What this achieves:** The Geometry Agent is now self-reliant. It handles the "session boundary" problem internally.
 
-### **Test 2: Agent Communication Patterns**
-```python
-def test_agent_delegation_preserves_context():
-    """Test that context is preserved across agent delegation."""
-    
-    # Create mock triage and geometry agents
-    triage = MockTriageAgent()
-    geometry = MockGeometryAgent() 
-    
-    # Simulate conversation with context preservation
-    triage.add_context("user_created", "bridge_curve_001")
-    
-    # Test delegation preserves context
-    task = "modify the curve"
-    delegated_task = triage.delegate_to_geometry(task)
-    
-    # Validate context was preserved
-    assert "bridge_curve_001" in delegated_task.context
-    assert delegated_task.has_reference_to("curve")
-```
+### **Phase 2: Simplify the Triage Agent**
 
-**What this tests:** Agent delegation logic, context preservation  
-**What this doesn't test:** Real AI behavior, real model inference  
-**Value:** Medium - validates system architecture
+Modify `create_triage_system` in `triage_agent_smolagents.py`. Remove all the custom memory-inspection tools.
 
-### **Test 3: Vague Reference Resolution Logic**
-```python
-def test_vague_reference_resolution():
-    """Test vague reference resolution with known components."""
+35. \# In triage\_agent\_smolagents.py  
+36.   
+37. def create\_triage\_system(...):  
+38.     \# ...  
+39.       
+40.     \# OLD: A complex set of tools for the Triage Agent to inspect memory  
+41.     \# manager\_tools \= \[material\_tool, structural\_tool\] \+ \_create\_coordination\_tools() \+ \_create\_geometry\_memory\_tools()  
+42.   
+43.     \# NEW: The Triage Agent only needs simple coordination tools.  
+44.     \# The \_create\_geometry\_memory\_tools function is deleted entirely.  
+45.     manager\_tools \= \[material\_tool, structural\_tool\] \+ \_create\_coordination\_tools()  
+46.   
+47.     manager \= CodeAgent(  
+48.         tools=manager\_tools,  
+49.         managed\_agents=\[geometry\_agent\],  
+50.         \# ...  
+51.     )  
+52.   
+53.     \# The custom prompt is simplified, as it no longer needs to explain the memory tools.  
+54.     custom\_prompt \= get\_simplified\_triage\_system\_prompt()  
+55.     \# ...  
     
-    # Set up known conversation state
-    conversation_memory = {
-        "recent_components": [
-            {"id": "curve_001", "type": "curve", "description": "bridge arch"},
-            {"id": "support_001", "type": "support", "description": "steel beam"}
-        ],
-        "last_action": "created curve_001"
-    }
-    
-    # Test vague reference resolution
-    references = [
-        "modify the curve",
-        "change that arch", 
-        "fix the thing I just made",
-        "connect them together"
-    ]
-    
-    for vague_ref in references:
-        resolved = resolve_vague_reference(vague_ref, conversation_memory)
-        
-        # Validate resolution logic
-        if "curve" in vague_ref or "arch" in vague_ref:
-            assert resolved.target_id == "curve_001"
-        elif "them" in vague_ref:
-            assert len(resolved.target_ids) == 2
-```
 
-**What this tests:** Vague reference resolution logic  
-**What this doesn't test:** Real AI understanding, real language processing  
-**Value:** High - validates core functionality
+**What this achieves:** The Triage Agent is now simpler, lighter, and adheres to its role as a pure manager. Its code and prompts become much cleaner.
 
-### **Test 4: Complete Mock Conversation Flow**
-```python
-def test_complete_conversation_flow():
-    """Test end-to-end conversation logic with deterministic responses."""
-    
-    # Simulate complete conversation
-    conversation = [
-        ("Create a bridge arch", "created curve_001"),
-        ("Modify the curve you just drew", "modified curve_001"), 
-        ("Make it taller", "adjusted curve_001 height"),
-        ("Connect them with supports", "created supports connecting to curve_001")
-    ]
-    
-    # Test conversation maintains memory
-    agent = MockAgent()
-    for user_input, expected_action in conversation:
-        response = agent.process(user_input)
-        
-        # Validate memory was used correctly
-        assert expected_action in response.actions
-        assert response.used_memory_correctly()
-```
+### **Phase 3: Update the Delegation Flow**
 
-**What this tests:** End-to-end conversation logic, memory persistence  
-**What this doesn't test:** Real AI responses, unpredictable behavior  
-**Value:** High - validates complete system logic
+This is a change in *how* the agents are used. The logic is no longer about inspecting memory but about conversational delegation.
 
-## 🎯 **HONEST SUCCESS CRITERIA**
+**OLD** PATTERN (in Triage **Agent's mind):**
+
+1. User: "modify the curve"  
+2. Triage: Call `get_most_recent_component("curve")` \-\> returns `curve_001`.  
+3. Triage: Construct task: `"Modify` component curve\_001 `to be an arch."`  
+4. Triage: Delegate `geometry_agent(task=...)`.
+
+**NEW PATTERN (in Triage Agent's mind):**
+
+1. User: "modify the curve"  
+2. Triage: Delegate `geometry_agent(task="modify the curve")`.  
+3. Geometry Agent receives the task, searches its *own* memory for the most recent curve, finds `curve_001`, and executes the modification.
+
+**What this achieves:** The interaction is more natural and robust. The reasoning is correctly placed within the specialized agent.
+
+## **🎯 HONEST SUCCESS CRITERIA**
 
 ### **What Success Looks Like**
-1. ✅ **Memory tools work** - Components can be tracked and retrieved
-2. ✅ **Agent coordination works** - Context preserved across delegation  
-3. ✅ **Vague references resolve** - "that curve" maps to correct component
-4. ✅ **Conversation logic flows** - Multi-turn conversations maintain state
-5. ✅ **Error handling works** - System degrades gracefully
 
-### **What Success Does NOT Prove**
-1. ❌ **Real AI behavior** - AI might behave differently than mocks
-2. ❌ **Real geometry creation** - Actual 3D modeling might fail
-3. ❌ **Real user experience** - Human workflows might have issues
-4. ❌ **Production reliability** - Real usage might reveal edge cases
+1. ✅ **Code is Simpler** \- The `triage_agent_smolagents.py` file is significantly smaller. The complex memory tools are gone.  
+2. ✅ **Logic is Encapsulated** \- The Geometry Agent contains all logic related to geometry components and their history.  
+3. ✅ **System is More Robust** \- The "session boundary" issue is handled gracefully inside the agent that is re-initialized with each session.  
+4. ✅ **Prompts are Clearer** \- System prompts are shorter and describe roles, not complex procedures.
 
-## 📊 **TESTING VALUE ASSESSMENT**
+   ### **What Success Does NOT Change**
 
-### **Realistic Value: 40% of Full Validation**
-- ✅ **System Logic**: 90% testable - agent coordination, memory tools
-- ✅ **Conversation Flow**: 80% testable - multi-turn logic, context
-- ❌ **AI Behavior**: 0% testable - cannot predict real AI responses  
-- ❌ **Geometry Creation**: 0% testable - requires real Grasshopper
-- ❌ **User Experience**: 0% testable - requires human interaction
+This refactoring is architectural. It does not change the fundamental limitations of the environment:
 
-### **What This Testing Strategy Provides**
-1. **Confidence in system architecture** - The logic is sound
-2. **Validation of memory components** - Core functionality works
-3. **Regression testing** - Changes don't break conversation logic
-4. **Clear failure points** - Know where system might fail
-5. **Honest assessment** - Clear about what's tested vs. what isn't
+1. ❌ It won't make the LLM better at understanding ambiguous instructions.  
+2. ❌ It won't fix bugs in Grasshopper or the MCP connection.
 
-## 🛠️ **IMPLEMENTATION PLAN**
+   ## **📊 REFACTORING VALUE ASSESSMENT**
 
-### **Phase 1: Core Memory Logic (2 hours)**
-1. Test memory tools with deterministic data
-2. Test component tracking and retrieval
-3. Test cross-agent memory synchronization
-4. Validate shared component cache
+   ### **Realistic Value: High**
 
-### **Phase 2: Conversation Logic (3 hours)**
-1. Test vague reference resolution algorithms
-2. Test multi-turn conversation state management
-3. Test agent delegation with context preservation
-4. Test error handling for invalid references
+* ✅ **Maintainability**: **High impact**. The code becomes radically simpler to understand, debug, and extend.  
+* ✅ **Robustness**: **High impact**. Eliminates brittle dependencies between agents and handles session state correctly.  
+* ✅ **Framework Alignment**: **High impact**. The system now uses `smolagents` as intended, making it easier to adopt new features from the library in the future.
 
-### **Phase 3: Integration Logic (2 hours)**
-1. Test complete conversation flows with mocks
-2. Test system behavior under edge cases
-3. Test memory persistence across conversation sessions
-4. Document system behavior and limitations
+  ## **🛠️ IMPLEMENTATION PLAN**
 
-## 🔍 **WHAT THIS REVEALS ABOUT THE FIX**
+  ### **Phase 1: Refactor the Geometry Agent (Est: 2-3 hours)**
 
-### **Questions This Testing Can Answer**
-1. Do the memory tools actually work as designed?
-2. Is the component tracking logic sound?
-3. Does the shared memory cache synchronize correctly?
-4. Can the system resolve vague references with known data?
-5. Does the conversation logic handle multi-turn interactions?
+1. Modify the `MCPGeometryAgent` class.  
+2. Add the `self.internal_component_cache` instance variable.  
+3. Implement the internal `_track_component_in_state` method.  
+4. Add logic to the `run` method to consult its internal state/memory when it receives a follow-up task.
 
-### **Questions This Testing Cannot Answer**
-1. Will real AI understand vague references?
-2. Will real geometry creation work reliably?
-3. Will real users find the experience intuitive?
-4. Will the system scale under real usage?
-5. Will edge cases emerge in production?
+   ### **Phase 2: Refactor the Triage Agent & Prompts (Est: 2 hours)**
 
-## 💯 **HONEST ASSESSMENT**
+1. Delete the `_create_geometry_memory_tools` function and all its associated tools from `triage_agent_smolagents.py`.  
+2. Simplify the `create_triage_system` function to remove the tool additions.  
+3. Rewrite the `triage_agent.md` and `geometry_agent.md` system prompts to reflect the new autonomous roles.
 
-### **Why This Approach is Better**
-1. **Actually completable** - Tests run to completion with deterministic results
-2. **Intellectually honest** - Clear about what's tested vs. what isn't
-3. **Practically useful** - Validates the components we control
-4. **Enables iteration** - Fast feedback loop for fixes
-5. **Builds confidence** - In the parts of the system we can validate
+   ### **Phase 3: Validate with Mock Testing (Est: 2 hours)**
 
-### **What Comes Next**
-1. **Mock testing validates logic** - Run these tests to validate system design
-2. **Manual integration testing** - Human with Grasshopper tests real workflows
-3. **Staged deployment** - Roll out to controlled user group
-4. **Real usage monitoring** - Collect data from actual usage
+1. Implement the mock tests from the "Updated Testing Plan" document.  
+2. Run these tests to confirm that the new architecture works as expected in a controlled environment.
 
-## 🎯 **FINAL REALITY**
+   ## **🔍 WHAT THIS FIX REVEALS**
 
-**The memory synchronization fix cannot be fully validated by automated testing alone.** This is a system that involves:
-- Human creativity
-- Visual 3D modeling  
-- Complex AI behavior
-- GUI applications
-- Network integration
+   ### **Questions This Refactoring Answers**
 
-**What we CAN do:** Validate that the logical components work correctly, giving confidence that the fix addresses the architectural issues.
+1. Is a simpler, decentralized architecture more robust? **Yes.**  
+2. Can an agent be responsible for its own conversational memory and session state? **Yes.**  
+3. Does this solve the core issue of "forgetting" in a clean, maintainable way? **Yes.**
 
-**What we CANNOT do:** Prove the complete user experience works without human testing.
+   ## **💯 HONEST ASSESSMENT**
 
-**This is honest testing** - focused on what can be meaningfully validated while being completely transparent about limitations.
+   ### **Why This Approach is Better**
+
+1. **It is the right architecture.** It follows established software design principles (separation of concerns, encapsulation).  
+2. **It reduces code debt.** It removes custom, complex code in favor of simple, direct patterns.  
+3. **It builds confidence.** A successful refactoring proves the system's logic is sound before tackling real-world integration challenges.
+
+   ### **What Comes Next**
+
+After this refactoring is complete and validated with mock tests, the system will be in a much stronger position for the next, necessary phase: **manual, human-in-the-loop testing** with the actual Grasshopper environment.
+
+## **🎯 FINAL REALITY**
+
+This refactoring is a critical, necessary step. It moves the system from a complex, hard-to-maintain prototype to a robust, well-architected foundation. By doing this work now, you make all future development and testing simpler and more effective.
+

@@ -242,8 +242,34 @@ def _create_mcp_enabled_geometry_agent(
                 return f"Geometry agent execution failed: {e}"
 
         def _extract_and_register_components(self, task: str, result: Any) -> None:
-            """Extract and register components and store in memory AND tracking cache."""
+            """Extract and register components and store in memory AND tracking cache.
+            
+            BUGFIX: Only extract UUIDs from actual geometry creation tasks, not from
+            log analysis or text processing tasks that might mention old UUIDs.
+            """
             try:
+                # BUGFIX: Only extract UUIDs from geometry creation tasks
+                task_lower = task.lower()
+                geometry_task_indicators = [
+                    "create", "add", "generate", "build", "construct", "make",
+                    "python", "script", "component", "bridge", "curve", "line", 
+                    "point", "arch", "connect", "modify", "update", "edit"
+                ]
+                
+                # Check if this is likely a geometry creation/modification task
+                is_geometry_task = any(indicator in task_lower for indicator in geometry_task_indicators)
+                
+                # Also check if this is clearly a non-geometry task
+                analysis_task_indicators = [
+                    "analyze", "examine", "review", "check", "inspect", "look at",
+                    "tell me about", "what", "how", "explain", "describe", "show me"
+                ]
+                is_analysis_task = any(indicator in task_lower for indicator in analysis_task_indicators)
+                
+                if is_analysis_task and not is_geometry_task:
+                    logger.debug(f"🔍 Skipping UUID extraction for analysis task: {task[:50]}...")
+                    return
+                
                 # Extract component IDs from the result and store in memory
                 result_str = str(result)
                 import re
@@ -314,109 +340,48 @@ def _create_mcp_enabled_geometry_agent(
         
         def _resolve_context_from_task(self, task: str) -> str:
             """
-            REFACTORED: Autonomously resolve ambiguous references in the task.
+            SURGICAL: Simple single-script workflow enforcement.
             
-            This method allows the geometry agent to understand conversational requests
-            like "modify the curve" or "connect these points" by looking at its own
-            memory and internal component cache.
+            Check if scripts exist, and if so, rephrase any task to explicitly 
+            say "modify the existing script" instead of allowing "create" language
+            that LLMs interpret as "create new script".
             """
-            task_lower = task.lower()
-            
-            # Enhanced ambiguous references with fuzzy matching capabilities
-            ambiguous_terms = [
-                # Curve-related references
-                ("the curve", "curve"), ("that curve", "curve"), ("this curve", "curve"),
-                ("the line", "curve"), ("that line", "curve"), ("the connection", "curve"),
-                ("the arch", "arch"), ("that arch", "arch"), ("the span", "curve"),
+            try:
+                # Detect language that suggests new creation
+                task_lower = task.lower()
+                creation_phrases = [
+                    'add', 'create', 'make', 'generate', 'build', 
+                    'construct', 'new', 'another', 'second', 'third'
+                ]
                 
-                # Point-related references  
-                ("the points", "points"), ("these points", "points"), ("those points", "points"),
-                ("the anchors", "points"), ("the foundations", "points"), ("the ends", "points"),
+                has_creation_language = any(phrase in task_lower for phrase in creation_phrases)
                 
-                # Component-related references
-                ("the component", "component"), ("that component", "component"),
-                ("the element", "component"), ("that element", "component"),
+                if has_creation_language:
+                    # Check internal component cache for existing scripts
+                    existing_scripts = [
+                        comp for comp in self.internal_component_cache 
+                        if comp.get('type', '').lower() in ['python_script', 'script', 'component']
+                    ]
+                    
+                    if existing_scripts:
+                        # Scripts exist - enforce single-script workflow
+                        logger.info(f"🔧 Found {len(existing_scripts)} existing scripts in cache - enforcing single-script workflow")
+                        modified_task = f"modify the existing script to {task.lower()}"
+                        logger.info(f"🔄 Rephrased task: '{task}' → '{modified_task}'")
+                        return modified_task
+                    
+                    else:
+                        # No scripts in cache - might be first script
+                        logger.debug("📝 No existing scripts in cache - allowing new script creation")
+                        return task
                 
-                # Script-related references
-                ("the script", "script"), ("that script", "script"), ("original script", "script"),
-                ("the code", "script"), ("the python", "script"),
-                
-                # Bridge-specific references
-                ("the bridge", "bridge"), ("the deck", "deck"), ("the support", "support"),
-                ("the structure", "bridge"), ("the platform", "deck"),
-                
-                # Generic pronouns (need extra context resolution)
-                ("it", None), ("them", None), ("that", None), ("this", None)
-            ]
-            
-            needs_resolution = any(term in task_lower for term, _ in ambiguous_terms)
-            
-            if not needs_resolution:
-                # Task is already specific enough
+                # No creation language detected, pass through
+                logger.debug("🔍 No creation language detected - passing task through")
                 return task
-            
-            # Look for context in internal cache first (most recent components)
-            context_parts = []
-            
-            # Search internal component cache for relevant components with fuzzy matching
-            for term, component_type in ambiguous_terms:
-                if term in task_lower:
-                    if component_type and self.internal_component_cache:
-                        # Enhanced fuzzy matching for component types
-                        matching_components = []
-                        
-                        for component in reversed(self.internal_component_cache):
-                            comp_type = component.get("type", "").lower()
-                            comp_desc = component.get("description", "").lower()
-                            
-                            # Direct type match (highest priority)
-                            if component_type in comp_type:
-                                matching_components.append((component, 3))
-                            
-                            # Fuzzy type matching (medium priority)
-                            elif self._fuzzy_type_match(component_type, comp_type):
-                                matching_components.append((component, 2))
-                            
-                            # Description-based matching (lower priority)
-                            elif component_type in comp_desc:
-                                matching_components.append((component, 1))
-                        
-                        # Sort by priority score and get the best match
-                        if matching_components:
-                            matching_components.sort(key=lambda x: x[1], reverse=True)
-                            latest = matching_components[0][0]
-                            context_parts.append(
-                                f"(referring to component {latest['id']} - {latest['description']})"
-                            )
-                            # Replace ambiguous term with specific reference
-                            task = task.replace(term, f"component {latest['id']}")
-                            logger.debug(f"🔍 Fuzzy matched '{term}' to {latest['type']} component")
-            
-            # If no context found in cache, search memory steps
-            if not context_parts and hasattr(self, "memory") and hasattr(self.memory, "steps"):
-                # Search recent memory for component IDs or relevant context
-                import re
-                component_id_pattern = r'[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
                 
-                for step in reversed(self.memory.steps[-5:]):  # Check last 5 steps
-                    step_str = str(step)
-                    component_ids = re.findall(component_id_pattern, step_str)
-                    if component_ids:
-                        # Found component reference in recent memory
-                        context_parts.append(f"(likely referring to recent component {component_ids[0]})")
-                        break
-            
-            # Build resolved task with context
-            if context_parts:
-                resolved_task = f"{task} {' '.join(context_parts)}"
-                logger.info(f"🔍 Resolved ambiguous references: {context_parts}")
-                return resolved_task
-            
-            # If still ambiguous, add a note for the agent to check recent work
-            if needs_resolution:
-                return f"{task} (Note: Check recent memory/components for context if needed)"
-            
-            return task
+            except Exception as e:
+                logger.warning(f"⚠️ Context resolution error: {e}")
+                return task
         
         def _track_component_in_state(self, result: Any, original_task: str) -> None:
             """
@@ -424,10 +389,35 @@ def _create_mcp_enabled_geometry_agent(
             
             This method parses MCP tool results and maintains the internal component
             cache, allowing the agent to track its own work without external dependencies.
+            
+            BUGFIX: Only track UUIDs from actual geometry creation tasks, not from
+            log analysis or text processing tasks that might mention old UUIDs.
             """
             try:
                 import re
                 from datetime import datetime
+                
+                # BUGFIX: Only extract UUIDs from geometry creation tasks
+                task_lower = original_task.lower()
+                geometry_task_indicators = [
+                    "create", "add", "generate", "build", "construct", "make",
+                    "python", "script", "component", "bridge", "curve", "line", 
+                    "point", "arch", "connect", "modify", "update", "edit"
+                ]
+                
+                # Check if this is likely a geometry creation/modification task
+                is_geometry_task = any(indicator in task_lower for indicator in geometry_task_indicators)
+                
+                # Also check if this is clearly a non-geometry task
+                analysis_task_indicators = [
+                    "analyze", "examine", "review", "check", "inspect", "look at",
+                    "tell me about", "what", "how", "explain", "describe", "show me"
+                ]
+                is_analysis_task = any(indicator in task_lower for indicator in analysis_task_indicators)
+                
+                if is_analysis_task and not is_geometry_task:
+                    logger.debug(f"🔍 Skipping UUID extraction for analysis task: {original_task[:50]}...")
+                    return
                 
                 result_str = str(result)
                 component_id_pattern = r'[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
@@ -889,6 +879,13 @@ class TriageSystemWrapper:
                 ):
                     geo_steps_cleared = len(geometry_agent.memory.steps)
                     geometry_agent.memory.steps.clear()
+                    
+                    # BUGFIX: Clear internal component cache that persists across resets
+                    if hasattr(geometry_agent, "internal_component_cache"):
+                        cache_cleared = len(geometry_agent.internal_component_cache)
+                        geometry_agent.internal_component_cache.clear()
+                        logger.info(f"✅ Cleared {cache_cleared} geometry agent component cache entries")
+                    
                     logger.info(f"✅ Cleared {geo_steps_cleared} geometry agent memory steps")
 
             logger.info("🔄 All agent memories have been reset - starting fresh session")

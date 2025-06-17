@@ -1,4 +1,3 @@
-```markdown
 # CLAUDE.md
 
 AR-assisted bridge design system using AI agents for Rhino Grasshopper.
@@ -89,7 +88,11 @@ src/bridge_design_system/
 │   └── GH_MCP/               # C# Grasshopper component
 └── main.py           # Entry point
 ```
-```
 
-
-I WANT you to be direct and critical in your answer. If you don't know, say don't know. If something won't work say it won't work. Please do not give me BS.
+## Claude's Operational Directive
+- Be direct and critical
+- If unsure, say "I don't know"
+- If something won't work, clearly state it won't work
+- No BS answers
+- Prioritize practical, realistic approaches
+- Please correct me if I am wrong
