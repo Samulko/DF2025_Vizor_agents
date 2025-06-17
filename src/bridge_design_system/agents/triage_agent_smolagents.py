@@ -41,10 +41,12 @@ def create_triage_system(
     # Get model
     model = ModelProvider.get_model(model_name)
 
-    # Create specialized geometry agent with full MCP access (proper smolagents pattern)
+    # REFACTORED: Removed shared component tracking - geometry agent is now autonomous
+    
+    # Create autonomous geometry agent with full MCP access (proper smolagents pattern)
     geometry_agent = _create_mcp_enabled_geometry_agent(
         custom_tools=_create_registry_tools(component_registry) if component_registry else None,
-        component_registry=component_registry,
+        component_registry=component_registry
     )
 
     # Note: Material and Structural agents would be created here when available
@@ -58,7 +60,7 @@ def create_triage_system(
     structural_tool = create_structural_placeholder()
     basic_coordination_tools = _create_coordination_tools()
 
-    # Manager tools (NOT including geometry agent - that goes in managed_agents)
+    # REFACTORED: Manager tools simplified - no geometry memory tools needed
     manager_tools = [material_tool, structural_tool] + basic_coordination_tools + memory_tools
 
     # Create manager agent with managed_agents pattern (smolagents best practice)
@@ -69,7 +71,7 @@ def create_triage_system(
 
     manager = CodeAgent(
         tools=manager_tools,  # Coordination tools only
-        managed_agents=[geometry_agent],  # Specialized agents go here
+        managed_agents=[geometry_agent],  # Autonomous geometry agent
         model=model,
         name="triage_agent",
         description="Coordinates bridge design tasks by delegating to specialized agents",
@@ -77,13 +79,9 @@ def create_triage_system(
         additional_authorized_imports=["typing", "json", "datetime"],
         **kwargs,
     )
-
-    # Now add geometry memory tools that have access to the manager instance
-    geometry_memory_tools = _create_geometry_memory_tools(manager)
-
-    # Add the new tools to the manager's tools dict
-    for memory_tool in geometry_memory_tools:
-        manager.tools[memory_tool.name] = memory_tool
+    
+    # REFACTORED: Removed geometry memory tools - geometry agent is now autonomous
+    # The geometry agent handles its own context resolution and memory management
 
     # Append our custom system prompt to the default one
     custom_prompt = get_triage_system_prompt()
@@ -111,17 +109,17 @@ def _create_mcp_enabled_geometry_agent(
     custom_tools: Optional[List] = None, component_registry: Optional[Any] = None
 ) -> Any:
     """
-    Create geometry agent with full MCP toolset for managed_agents pattern.
+    Create autonomous geometry agent with full MCP toolset for managed_agents pattern.
 
-    Following smolagents best practices, this creates a ToolCallingAgent with
-    name and description attributes that can be used in managed_agents.
+    Following smolagents best practices, this creates an autonomous ToolCallingAgent
+    with name and description attributes that can be used in managed_agents.
 
     Args:
         custom_tools: Additional tools to include
         component_registry: Registry for tracking components
 
     Returns:
-        ToolCallingAgent configured with MCP tools for managed_agents
+        Autonomous ToolCallingAgent configured with MCP tools for managed_agents
     """
     logger.info("Creating geometry agent with full MCP toolset (including edit_python3_script)")
 
@@ -154,13 +152,17 @@ def _create_mcp_enabled_geometry_agent(
     # Let's create a minimal agent instance for the managed_agents pattern
 
     class MCPGeometryAgent(ToolCallingAgent):
-        """ToolCallingAgent with persistent MCP connection for session continuity."""
+        """Autonomous ToolCallingAgent with persistent MCP connection and internal state management."""
 
         def __init__(self):
             self.stdio_params = stdio_params
             self.custom_tools = custom_tools or []
             self.memory_tools = memory_tools
             self.component_registry = component_registry
+            
+            # REFACTORED: Agent now owns its state completely
+            self.internal_component_cache = []  # List to store [{id, type, description, timestamp}]
+            logger.info("🎯 Initializing autonomous geometry agent with internal state management")
 
             # Establish persistent MCP connection during initialization
             logger.info("🔗 Establishing persistent MCP connection...")
@@ -199,23 +201,30 @@ def _create_mcp_enabled_geometry_agent(
                 self.mcp_tools = []
 
         def run(self, task: str) -> Any:
-            """Execute geometry task using persistent MCP connection and agent memory."""
-            logger.info(f"🎯 Executing task with persistent MCP geometry agent: {task[:100]}...")
+            """Execute geometry task with autonomous context resolution and state management."""
+            logger.info(f"🎯 Autonomous geometry agent processing task: {task[:100]}...")
 
             try:
+                # REFACTORED: Autonomous context resolution from task description
+                resolved_task = self._resolve_context_from_task(task)
+                logger.info(f"📋 Resolved task: {resolved_task[:150]}...")
+                
                 # Check for duplicate/similar recent tasks to prevent loops
                 if hasattr(self, "memory") and hasattr(self.memory, "steps"):
                     recent_tasks = [
                         step.task for step in self.memory.steps[-3:] if hasattr(step, "task")
                     ]
-                    if any(task.lower() in recent_task.lower() for recent_task in recent_tasks):
+                    if any(resolved_task.lower() in recent_task.lower() for recent_task in recent_tasks):
                         logger.warning(
-                            f"⚠️ Similar task detected in recent memory, being cautious: {task[:50]}..."
+                            f"⚠️ Similar task detected in recent memory, being cautious: {resolved_task[:50]}..."
                         )
 
                 # Use the persistent agent that maintains context and memory
-                result = super().run(task)
+                result = super().run(resolved_task)
 
+                # Track components in internal state after successful execution
+                self._track_component_in_state(result, task)
+                
                 # Log completion for debugging
                 logger.info(
                     f"✅ Geometry agent completed task in {len(self.memory.steps) if hasattr(self, 'memory') else 0} total steps"
@@ -225,19 +234,20 @@ def _create_mcp_enabled_geometry_agent(
                 if self.component_registry:
                     self._extract_and_register_components(task, result)
 
-                logger.info("✅ Task completed successfully with persistent MCP geometry agent")
+                logger.info("✅ Task completed successfully with autonomous context resolution")
                 return result
 
             except Exception as e:
-                logger.error(f"❌ Persistent MCP geometry agent execution failed: {e}")
+                logger.error(f"❌ Autonomous geometry agent execution failed: {e}")
                 return f"Geometry agent execution failed: {e}"
 
         def _extract_and_register_components(self, task: str, result: Any) -> None:
-            """Extract and register components and store in memory."""
+            """Extract and register components and store in memory AND tracking cache."""
             try:
                 # Extract component IDs from the result and store in memory
                 result_str = str(result)
                 import re
+                from datetime import datetime
 
                 # Look for component ID patterns in the result
                 component_id_pattern = (
@@ -252,21 +262,46 @@ def _create_mcp_enabled_geometry_agent(
                     logger.info(
                         f"🔧 Found {len(unique_matches)} unique component IDs (removed {len(matches) - len(unique_matches)} duplicates)"
                     )
+                    
+                    # Track each component in the shared cache for follow-up requests
                     for component_id in unique_matches:
-                        # Component information is stored in agent.memory.steps (smolagents native)
-                        # Triage agent can access this via geometry memory tools
+                        # Determine component type from context
+                        comp_type = "unknown"
+                        desc_lower = (task + " " + result_str).lower()
+                        if "bridge" in desc_lower and "point" in desc_lower:
+                            comp_type = "bridge_points"
+                        elif "curve" in desc_lower or "line" in desc_lower:
+                            comp_type = "bridge_curve"
+                        elif "arch" in desc_lower:
+                            comp_type = "bridge_arch"
+                        elif "deck" in desc_lower:
+                            comp_type = "bridge_deck"
+                        
+                        component_info = {
+                            "id": component_id,
+                            "type": comp_type,
+                            "description": task[:100],
+                            "timestamp": datetime.now().isoformat(),
+                            "full_result": result_str[:200] + "..." if len(result_str) > 200 else result_str
+                        }
+                        
+                        # REMOVED: No longer using shared recent_components
+                        # Track internally instead via _track_component_in_state
+                        
                         logger.info(
-                            f"📝 Component created and stored in native memory: {component_id}"
+                            f"📝 Component created and tracked: {component_id} ({comp_type})"
                         )
 
                 if self.component_registry:
-                    # Also register in component registry if available
+                    # NOTE: Component registry is orthogonal to autonomous operation
+                    # It's used for cross-agent communication and external tracking,
+                    # while internal_component_cache handles autonomous context resolution
                     logger.info(
                         f"📝 Component registration handled by triage agent: {task[:50]}..."
                     )
 
             except Exception as e:
-                logger.warning(f"⚠️ Failed to register components: {e}")
+                logger.warning(f"⚠️ Failed to register/track components: {e}")
 
         def __del__(self):
             """Cleanup persistent MCP connection on agent destruction."""
@@ -276,12 +311,273 @@ def _create_mcp_enabled_geometry_agent(
                     logger.info("🔌 Persistent MCP connection closed")
             except Exception as e:
                 logger.warning(f"⚠️ Error closing MCP connection: {e}")
+        
+        def _resolve_context_from_task(self, task: str) -> str:
+            """
+            REFACTORED: Autonomously resolve ambiguous references in the task.
+            
+            This method allows the geometry agent to understand conversational requests
+            like "modify the curve" or "connect these points" by looking at its own
+            memory and internal component cache.
+            """
+            task_lower = task.lower()
+            
+            # Enhanced ambiguous references with fuzzy matching capabilities
+            ambiguous_terms = [
+                # Curve-related references
+                ("the curve", "curve"), ("that curve", "curve"), ("this curve", "curve"),
+                ("the line", "curve"), ("that line", "curve"), ("the connection", "curve"),
+                ("the arch", "arch"), ("that arch", "arch"), ("the span", "curve"),
+                
+                # Point-related references  
+                ("the points", "points"), ("these points", "points"), ("those points", "points"),
+                ("the anchors", "points"), ("the foundations", "points"), ("the ends", "points"),
+                
+                # Component-related references
+                ("the component", "component"), ("that component", "component"),
+                ("the element", "component"), ("that element", "component"),
+                
+                # Script-related references
+                ("the script", "script"), ("that script", "script"), ("original script", "script"),
+                ("the code", "script"), ("the python", "script"),
+                
+                # Bridge-specific references
+                ("the bridge", "bridge"), ("the deck", "deck"), ("the support", "support"),
+                ("the structure", "bridge"), ("the platform", "deck"),
+                
+                # Generic pronouns (need extra context resolution)
+                ("it", None), ("them", None), ("that", None), ("this", None)
+            ]
+            
+            needs_resolution = any(term in task_lower for term, _ in ambiguous_terms)
+            
+            if not needs_resolution:
+                # Task is already specific enough
+                return task
+            
+            # Look for context in internal cache first (most recent components)
+            context_parts = []
+            
+            # Search internal component cache for relevant components with fuzzy matching
+            for term, component_type in ambiguous_terms:
+                if term in task_lower:
+                    if component_type and self.internal_component_cache:
+                        # Enhanced fuzzy matching for component types
+                        matching_components = []
+                        
+                        for component in reversed(self.internal_component_cache):
+                            comp_type = component.get("type", "").lower()
+                            comp_desc = component.get("description", "").lower()
+                            
+                            # Direct type match (highest priority)
+                            if component_type in comp_type:
+                                matching_components.append((component, 3))
+                            
+                            # Fuzzy type matching (medium priority)
+                            elif self._fuzzy_type_match(component_type, comp_type):
+                                matching_components.append((component, 2))
+                            
+                            # Description-based matching (lower priority)
+                            elif component_type in comp_desc:
+                                matching_components.append((component, 1))
+                        
+                        # Sort by priority score and get the best match
+                        if matching_components:
+                            matching_components.sort(key=lambda x: x[1], reverse=True)
+                            latest = matching_components[0][0]
+                            context_parts.append(
+                                f"(referring to component {latest['id']} - {latest['description']})"
+                            )
+                            # Replace ambiguous term with specific reference
+                            task = task.replace(term, f"component {latest['id']}")
+                            logger.debug(f"🔍 Fuzzy matched '{term}' to {latest['type']} component")
+            
+            # If no context found in cache, search memory steps
+            if not context_parts and hasattr(self, "memory") and hasattr(self.memory, "steps"):
+                # Search recent memory for component IDs or relevant context
+                import re
+                component_id_pattern = r'[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
+                
+                for step in reversed(self.memory.steps[-5:]):  # Check last 5 steps
+                    step_str = str(step)
+                    component_ids = re.findall(component_id_pattern, step_str)
+                    if component_ids:
+                        # Found component reference in recent memory
+                        context_parts.append(f"(likely referring to recent component {component_ids[0]})")
+                        break
+            
+            # Build resolved task with context
+            if context_parts:
+                resolved_task = f"{task} {' '.join(context_parts)}"
+                logger.info(f"🔍 Resolved ambiguous references: {context_parts}")
+                return resolved_task
+            
+            # If still ambiguous, add a note for the agent to check recent work
+            if needs_resolution:
+                return f"{task} (Note: Check recent memory/components for context if needed)"
+            
+            return task
+        
+        def _track_component_in_state(self, result: Any, original_task: str) -> None:
+            """
+            REFACTORED: Track components in internal state for autonomous operation.
+            
+            This method parses MCP tool results and maintains the internal component
+            cache, allowing the agent to track its own work without external dependencies.
+            """
+            try:
+                import re
+                from datetime import datetime
+                
+                result_str = str(result)
+                component_id_pattern = r'[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
+                matches = re.findall(component_id_pattern, result_str)
+                
+                # Remove duplicates while preserving order
+                unique_matches = list(dict.fromkeys(matches))
+                
+                if unique_matches:
+                    logger.info(f"🔧 Found {len(unique_matches)} component IDs to track internally")
+                    
+                    for component_id in unique_matches:
+                        # Determine component type from context
+                        comp_type = self._determine_component_type(result_str, original_task)
+                        
+                        component_info = {
+                            "id": component_id,
+                            "type": comp_type,
+                            "description": original_task[:100],
+                            "timestamp": datetime.now().isoformat(),
+                            "full_result": result_str[:200] + "..." if len(result_str) > 200 else result_str
+                        }
+                        
+                        # Add to internal cache (keep last 10)
+                        self.internal_component_cache.append(component_info)
+                        if len(self.internal_component_cache) > 10:
+                            self.internal_component_cache.pop(0)
+                        
+                        logger.info(
+                            f"📝 Internally tracked component: {component_id} ({comp_type})"
+                        )
+                        logger.debug(f"   Cache size: {len(self.internal_component_cache)} components")
+                
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to track component in internal state: {e}")
+        
+        def _fuzzy_type_match(self, search_type: str, component_type: str) -> bool:
+            """
+            Helper for fuzzy matching between component types.
+            
+            Returns True if search_type and component_type are semantically similar.
+            """
+            # Define semantic relationships between component types
+            type_synonyms = {
+                "curve": ["line", "path", "connection", "span", "arch"],
+                "line": ["curve", "connection", "path"],
+                "arch": ["curve", "arc", "bow"], 
+                "points": ["anchors", "foundations", "ends", "supports"],
+                "script": ["code", "python", "component"],
+                "bridge": ["structure", "span"],
+                "deck": ["platform", "surface", "roadway"],
+                "support": ["column", "pier", "pillar", "post"]
+            }
+            
+            # Check if either type is a synonym of the other
+            search_synonyms = type_synonyms.get(search_type, [])
+            comp_synonyms = type_synonyms.get(component_type, [])
+            
+            return (component_type in search_synonyms or 
+                    search_type in comp_synonyms or
+                    search_type in component_type or
+                    component_type in search_type)
+        
+        def _determine_component_type(self, result_str: str, task: str) -> str:
+            """
+            Enhanced helper to determine component type from context with fuzzy matching.
+            
+            Uses multiple matching strategies for robust component type identification.
+            """
+            context = (task + " " + result_str).lower()
+            
+            # Define component type patterns with fuzzy matching
+            type_patterns = {
+                "bridge_points": [
+                    ["bridge", "point"], ["bridge", "anchor"], ["bridge", "support", "point"],
+                    ["start", "point"], ["end", "point"], ["foundation", "point"]
+                ],
+                "bridge_curve": [
+                    ["curve"], ["line"], ["path"], ["connection", "line"], 
+                    ["bridge", "span"], ["connecting", "curve"], ["arch", "curve"]
+                ],
+                "bridge_arch": [
+                    ["arch"], ["curved", "bridge"], ["arched"], ["bow"], 
+                    ["arc"], ["semicircle"], ["vault"]
+                ],
+                "bridge_deck": [
+                    ["deck"], ["platform"], ["surface"], ["roadway"], 
+                    ["bridge", "surface"], ["walkway"], ["driving", "surface"]
+                ],
+                "bridge_support": [
+                    ["support"], ["column"], ["pier"], ["pillar"], 
+                    ["vertical", "support"], ["bridge", "support"], ["post"]
+                ],
+                "bridge_cable": [
+                    ["cable"], ["wire"], ["tension"], ["suspension"], 
+                    ["cable", "stay"], ["hanging"], ["string"]
+                ],
+                "python_script": [
+                    ["script"], ["python"], ["code"], ["component", "script"],
+                    ["programming"], ["python3"]
+                ]
+            }
+            
+            # Score each component type based on pattern matches
+            type_scores = {}
+            
+            for comp_type, pattern_groups in type_patterns.items():
+                score = 0
+                
+                for pattern_group in pattern_groups:
+                    # Check if all words in pattern group are present
+                    if all(word in context for word in pattern_group):
+                        # Give higher score for more specific patterns (more words)
+                        score += len(pattern_group) * 2
+                    
+                    # Check for partial matches (at least half the words)
+                    elif len(pattern_group) > 1:
+                        matches = sum(1 for word in pattern_group if word in context)
+                        if matches >= len(pattern_group) // 2:
+                            score += matches
+                
+                type_scores[comp_type] = score
+            
+            # Find the best match
+            if type_scores:
+                best_type = max(type_scores.items(), key=lambda x: x[1])
+                if best_type[1] > 0:  # Only return if we found actual matches
+                    logger.debug(f"🔍 Component type fuzzy match: '{best_type[0]}' (score: {best_type[1]})")
+                    return best_type[0]
+            
+            # Fallback to simple keyword matching for backwards compatibility
+            if "bridge" in context and "point" in context:
+                return "bridge_points"
+            elif "curve" in context or "line" in context:
+                return "bridge_curve" 
+            elif "arch" in context:
+                return "bridge_arch"
+            elif "deck" in context:
+                return "bridge_deck"
+            elif "script" in context or "python" in context:
+                return "python_script"
+            else:
+                logger.debug(f"🔍 Component type defaulted to 'geometry' for context: {context[:100]}...")
+                return "geometry"
 
     return MCPGeometryAgent()
 
 
 def _create_coordination_tools() -> List:
-    """Create tools for coordination and state management."""
+    """Create tools for coordination and state management."""""
 
     @tool
     def reset_agent_memories() -> str:
@@ -335,374 +631,57 @@ def _create_coordination_tools() -> List:
         logger.info(f"Design phase updated to: {phase}. Details: {details}")
         return f"Design phase updated to '{phase}'"
 
-    return [reset_agent_memories, check_design_state, update_design_phase]
-
-
-def _create_geometry_memory_tools(manager) -> List:
-    """Create tools that access geometry agent's native smolagents memory."""
-
     @tool
-    def get_geometry_agent_memory() -> str:
+    def debug_component_tracking() -> str:
         """
-        Access geometry agent's native smolagents memory for conversation context.
-
-        This tool accesses the geometry agent's persistent memory (agent.memory.steps)
-        which contains all previous conversation history including component creation.
-
+        Debug tool to show autonomous geometry agent state.
+        
+        REFACTORED: Now shows the autonomous geometry agent's internal state
+        instead of shared component tracking cache.
+        
         Returns:
-            String containing geometry agent's recent conversation history
+            Debug information about geometry agent state
         """
         try:
-            if hasattr(manager, "managed_agents") and manager.managed_agents:
-                # smolagents converts list to dict internally
-                if (
-                    isinstance(manager.managed_agents, dict)
-                    and "geometry_agent" in manager.managed_agents
-                ):
-                    geometry_agent = manager.managed_agents["geometry_agent"]
-                    logger.debug(
-                        f"✅ Accessed geometry agent from managed_agents dict: {type(geometry_agent).__name__}"
-                    )
-                elif isinstance(manager.managed_agents, list) and len(manager.managed_agents) > 0:
-                    geometry_agent = manager.managed_agents[0]  # Fallback to list access
-                    logger.debug(
-                        f"✅ Accessed geometry agent from managed_agents list: {type(geometry_agent).__name__}"
-                    )
-                else:
-                    return f"Cannot access geometry agent from managed_agents structure: {type(manager.managed_agents)}"
-
-                if hasattr(geometry_agent, "memory") and hasattr(geometry_agent.memory, "steps"):
-                    # Get recent memory steps
-                    steps = geometry_agent.memory.steps
-                    if not steps:
-                        return "Geometry agent has no conversation history yet."
-
-                    logger.debug(f"📋 Found {len(steps)} memory steps in geometry agent")
-
-                    # Format recent steps for context
-                    recent_steps = steps[-5:]  # Last 5 steps
-                    formatted_steps = []
-
-                    for i, step in enumerate(recent_steps):
-                        step_info = f"Step {i+1}: {type(step).__name__}"
-
-                        # Extract relevant information from each step type
-                        if hasattr(step, "task"):
-                            step_info += f" - Task: {step.task}"
-                        if hasattr(step, "observations"):
-                            obs_str = str(step.observations)[:200]  # Limit length
-                            step_info += f" - Result: {obs_str}..."
-                        if hasattr(step, "tool_calls"):
-                            step_info += (
-                                f" - Tools used: {len(step.tool_calls) if step.tool_calls else 0}"
-                            )
-
-                        formatted_steps.append(step_info)
-
-                    return "Geometry Agent Recent Memory:\n" + "\n".join(formatted_steps)
-                else:
-                    return "Geometry agent memory structure not available."
-            else:
-                return "No geometry agent found in managed agents."
-
+            debug_info = []
+            debug_info.append("=== AUTONOMOUS GEOMETRY AGENT DEBUG ===")
+            debug_info.append("Component tracking: Handled internally by geometry agent")
+            
+            # Note: We can't directly access the geometry agent's internal cache from here
+            # because it's encapsulated. This is by design for the autonomous architecture.
+            debug_info.append("\\nTo see component details, delegate a task to the geometry agent")
+            debug_info.append("that asks it to report its internal component state.")
+            
+            debug_info.append("\\n=== END DEBUG ===")
+            
+            result = "\\n".join(debug_info)
+            logger.info("🐛 Autonomous geometry agent debug info requested")
+            return result
+            
         except Exception as e:
-            return f"Error accessing geometry agent memory: {e}"
+            logger.error(f"❌ Error in debug tool: {e}")
+            return f"Debug tool error: {e}"
 
-    @tool
-    def search_geometry_agent_memory(query: str) -> str:
-        """
-        Search through geometry agent's conversation history for specific content.
+    return [reset_agent_memories, check_design_state, update_design_phase, debug_component_tracking]
 
-        This tool searches the geometry agent's native memory for mentions of
-        components, curves, scripts, or other geometry-related content.
 
-        Args:
-            query: Search term (e.g., "curve", "bridge", "component", "script")
-
-        Returns:
-            String containing matching conversation context
-        """
-        try:
-            if hasattr(manager, "managed_agents") and manager.managed_agents:
-                # smolagents converts list to dict internally
-                if (
-                    isinstance(manager.managed_agents, dict)
-                    and "geometry_agent" in manager.managed_agents
-                ):
-                    geometry_agent = manager.managed_agents["geometry_agent"]
-                    logger.debug(
-                        f"✅ Accessed geometry agent from managed_agents dict for search: {type(geometry_agent).__name__}"
-                    )
-                elif isinstance(manager.managed_agents, list) and len(manager.managed_agents) > 0:
-                    geometry_agent = manager.managed_agents[0]  # Fallback to list access
-                    logger.debug(
-                        f"✅ Accessed geometry agent from managed_agents list for search: {type(geometry_agent).__name__}"
-                    )
-                else:
-                    return f"Cannot access geometry agent from managed_agents structure: {type(manager.managed_agents)}"
-
-                if hasattr(geometry_agent, "memory") and hasattr(geometry_agent.memory, "steps"):
-                    steps = geometry_agent.memory.steps
-                    if not steps:
-                        return f"No conversation history to search for '{query}'."
-
-                    matches = []
-                    query_lower = query.lower()
-
-                    for i, step in enumerate(steps):
-                        step_text = str(step).lower()
-
-                        # Check if query matches in this step
-                        if query_lower in step_text:
-                            # Extract context around the match
-                            step_info = f"Match in Step {i+1}:"
-
-                            if hasattr(step, "task"):
-                                step_info += f"\n  Task: {step.task}"
-                            if hasattr(step, "observations"):
-                                obs_str = str(step.observations)
-                                # Find context around the match
-                                obs_lower = obs_str.lower()
-                                match_index = obs_lower.find(query_lower)
-                                if match_index != -1:
-                                    # Extract 100 chars before and after the match
-                                    start = max(0, match_index - 100)
-                                    end = min(len(obs_str), match_index + len(query) + 100)
-                                    context = obs_str[start:end]
-                                    step_info += f"\n  Context: ...{context}..."
-
-                            matches.append(step_info)
-
-                    if matches:
-                        logger.debug(f"🔍 Found {len(matches)} memory matches for query: {query}")
-                        return f"Found {len(matches)} matches for '{query}':\n\n" + "\n\n".join(
-                            matches
-                        )
-                    else:
-                        logger.debug(f"❌ No memory matches found for query: {query}")
-                        return f"No matches found for '{query}' in geometry agent conversation history."
-                else:
-                    return "Geometry agent memory structure not available for search."
-            else:
-                return "No geometry agent found to search."
-
-        except Exception as e:
-            return f"Error searching geometry agent memory: {e}"
-
-    @tool
-    def extract_components_from_geometry_memory() -> str:
-        """
-        Extract component IDs and information from geometry agent's conversation history.
-
-        This tool specifically looks for component creation, modifications, and
-        component IDs in the geometry agent's memory to provide component context.
-
-        IMPORTANT: This now validates component IDs against current session to prevent
-        stale memory contamination from previous sessions.
-
-        Returns:
-            String containing found components and their details
-        """
-        try:
-            if hasattr(manager, "managed_agents") and manager.managed_agents:
-                # smolagents converts list to dict internally
-                if (
-                    isinstance(manager.managed_agents, dict)
-                    and "geometry_agent" in manager.managed_agents
-                ):
-                    geometry_agent = manager.managed_agents["geometry_agent"]
-                    logger.debug(
-                        f"✅ Accessed geometry agent from managed_agents dict for extraction: {type(geometry_agent).__name__}"
-                    )
-                elif isinstance(manager.managed_agents, list) and len(manager.managed_agents) > 0:
-                    geometry_agent = manager.managed_agents[0]  # Fallback to list access
-                    logger.debug(
-                        f"✅ Accessed geometry agent from managed_agents list for extraction: {type(geometry_agent).__name__}"
-                    )
-                else:
-                    return f"Cannot access geometry agent from managed_agents structure: {type(manager.managed_agents)}"
-
-                if hasattr(geometry_agent, "memory") and hasattr(geometry_agent.memory, "steps"):
-                    steps = geometry_agent.memory.steps
-                    if not steps:
-                        return "No conversation history available to extract components."
-
-                    components = []
-                    import re
-
-                    # Pattern for component IDs (UUIDs)
-                    component_id_pattern = r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
-
-                    for i, step in enumerate(steps):
-                        step_text = str(step)
-
-                        # Look for component IDs
-                        component_ids = re.findall(component_id_pattern, step_text)
-
-                        if component_ids:
-                            # Extract context about what was created/modified
-                            component_info = f"Step {i+1}:"
-
-                            if hasattr(step, "task"):
-                                component_info += f"\n  Task: {step.task}"
-
-                            # Try to identify what type of component
-                            step_lower = step_text.lower()
-                            component_type = "unknown"
-                            if "bridge" in step_lower and "point" in step_lower:
-                                component_type = "bridge_points"
-                            elif "curve" in step_lower or "line" in step_lower:
-                                component_type = "bridge_curve"
-                            elif "deck" in step_lower:
-                                component_type = "bridge_deck"
-                            elif "python" in step_lower and "script" in step_lower:
-                                component_type = "python_script"
-
-                            for comp_id in component_ids:
-                                component_info += (
-                                    f"\n  Component ID: {comp_id} (type: {component_type})"
-                                )
-
-                            # Add relevant observations
-                            if hasattr(step, "observations"):
-                                obs_str = str(step.observations)
-                                # Extract relevant parts (limit length)
-                                if len(obs_str) > 300:
-                                    obs_str = obs_str[:300] + "..."
-                                component_info += f"\n  Details: {obs_str}"
-
-                            components.append(component_info)
-
-                    if components:
-                        logger.debug(
-                            f"🔧 Extracted {len(components)} components from geometry agent memory"
-                        )
-                        return (
-                            f"Found {len(components)} component creation/modification events:\n\n"
-                            + "\n\n".join(components)
-                        )
-                    else:
-                        logger.debug("❌ No components found in geometry agent memory")
-                        return "No components found in geometry agent conversation history."
-                else:
-                    return "Geometry agent memory structure not available for component extraction."
-            else:
-                return "No geometry agent found for component extraction."
-
-        except Exception as e:
-            return f"Error extracting components from geometry agent memory: {e}"
-
-    @tool
-    def get_current_valid_components() -> str:
-        """
-        Get currently valid components in Grasshopper, cross-referenced with memory context.
-
-        This tool combines current Grasshopper session data with geometry agent memory
-        to provide component IDs that are both recent AND currently valid.
-
-        This solves the stale memory contamination issue by only returning component IDs
-        that exist in the current Grasshopper session.
-
-        Returns:
-            String containing current valid components with memory context
-        """
-        try:
-            if hasattr(manager, "managed_agents") and manager.managed_agents:
-                # Get geometry agent reference
-                geometry_agent = None
-                if (
-                    isinstance(manager.managed_agents, dict)
-                    and "geometry_agent" in manager.managed_agents
-                ):
-                    geometry_agent = manager.managed_agents["geometry_agent"]
-                elif isinstance(manager.managed_agents, list) and len(manager.managed_agents) > 0:
-                    geometry_agent = manager.managed_agents[0]
-
-                if geometry_agent and hasattr(geometry_agent, "tools"):
-                    # Get current components from Grasshopper
-                    current_components = {}
-                    try:
-                        # Use the geometry agent's MCP tools to get current components
-                        for tool_name, tool_func in geometry_agent.tools.items():
-                            if tool_name == "get_all_components_enhanced":
-                                current_result = tool_func()
-                                if hasattr(current_result, "data") and current_result.data:
-                                    components_data = current_result.data.get("components", [])
-                                    for comp in components_data:
-                                        if "id" in comp:
-                                            current_components[comp["id"]] = comp
-                                break
-                    except Exception as e:
-                        logger.warning(f"Could not get current components: {e}")
-
-                    # Extract memory component IDs (as before)
-                    memory_components = []
-                    if hasattr(geometry_agent, "memory") and hasattr(
-                        geometry_agent.memory, "steps"
-                    ):
-                        steps = geometry_agent.memory.steps
-                        import re
-
-                        component_id_pattern = r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
-
-                        for i, step in enumerate(steps):
-                            step_text = str(step)
-                            component_ids = re.findall(component_id_pattern, step_text)
-
-                            for comp_id in component_ids:
-                                # CRITICAL: Only include if it exists in current session
-                                if comp_id in current_components:
-                                    comp_info = current_components[comp_id]
-
-                                    # Extract context from memory step
-                                    context = f"Memory Step {i+1}:"
-                                    if hasattr(step, "task"):
-                                        context += f" Task: {step.task}"
-
-                                    memory_components.append(
-                                        {
-                                            "id": comp_id,
-                                            "current_data": comp_info,
-                                            "memory_context": context,
-                                            "step_index": i,
-                                        }
-                                    )
-
-                    # Sort by step index (most recent first)
-                    memory_components.sort(key=lambda x: x["step_index"], reverse=True)
-
-                    if memory_components:
-                        result = f"Found {len(memory_components)} current valid components (filtered from memory):\\n\\n"
-                        for comp in memory_components:
-                            result += f"Component ID: {comp['id']}\\n"
-                            result += (
-                                f"  Current Type: {comp['current_data'].get('type', 'unknown')}\\n"
-                            )
-                            result += (
-                                f"  Current Name: {comp['current_data'].get('name', 'unknown')}\\n"
-                            )
-                            result += f"  Position: ({comp['current_data'].get('x', 0)}, {comp['current_data'].get('y', 0)})\\n"
-                            result += f"  Memory Context: {comp['memory_context']}\\n\\n"
-                        return result
-                    else:
-                        return f"No components found that exist in both memory and current session.\\nCurrent session has {len(current_components)} components.\\nThis suggests the memory contains only stale component IDs from previous sessions."
-                else:
-                    return "Cannot access geometry agent tools for component validation."
-            else:
-                return "No geometry agent found for component validation."
-        except Exception as e:
-            return f"Error validating current components: {e}"
-
-    return [
-        get_geometry_agent_memory,
-        search_geometry_agent_memory,
-        extract_components_from_geometry_memory,
-        get_current_valid_components,
-    ]
+# REFACTORED: Removed _create_geometry_memory_tools function entirely
+# The geometry agent is now autonomous and handles its own memory/context
 
 
 def _create_registry_tools(component_registry: Any) -> List:
-    """Create tools for component registry integration."""
+    """
+    Create tools for component registry integration.
+    
+    NOTE: The component registry is orthogonal to the autonomous agent architecture.
+    It serves as a cross-agent communication mechanism and external component tracking,
+    while the geometry agent's internal_component_cache handles autonomous context resolution.
+    
+    This separation allows:
+    - Autonomous operation: Agent resolves context internally  
+    - Cross-agent communication: Registry enables material/structural agents to access geometry
+    - External integration: Registry provides API for external tools/monitoring
+    """
 
     @tool
     def register_bridge_component(component_type: str, component_id: str, data: dict) -> str:
