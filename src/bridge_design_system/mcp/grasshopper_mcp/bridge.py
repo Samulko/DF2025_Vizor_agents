@@ -513,7 +513,7 @@ def get_component_guide():
 # Import Core tools - ONLY KEEP REQUIRED TOOLS
 from grasshopper_mcp.tools.core import (
     # Component tools - KEEP ONLY THESE 6
-    add_python3_script,
+    # add_python3_script,  # DISABLED
     get_python3_script,
     edit_python3_script,
     get_python3_script_errors,
@@ -550,7 +550,7 @@ from grasshopper_mcp.tools.core import (
 
 # Register Core tools with the server - ONLY KEEP 6 REQUIRED TOOLS
 # Component tools - KEEP ONLY THESE 6
-server.tool("add_python3_script")(add_python3_script)
+# server.tool("add_python3_script")(add_python3_script)  # DISABLED
 server.tool("get_python3_script")(get_python3_script)
 server.tool("edit_python3_script")(edit_python3_script)
 server.tool("get_python3_script_errors")(get_python3_script_errors)
