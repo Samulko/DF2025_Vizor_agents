@@ -24,7 +24,7 @@ logger = get_logger(__name__)
 
 class SmolagentsGeometryAgent:
     """
-    Simplified geometry agent wrapper using smolagents patterns with persistent MCP connection.
+    Geometry agent wrapper using smolagents patterns with persistent MCP connection.
     
     This maintains session continuity by establishing a persistent MCP connection
     during initialization instead of creating fresh connections per request.
@@ -82,7 +82,7 @@ class SmolagentsGeometryAgent:
             self.agent = ToolCallingAgent(
                 tools=self.custom_tools,
                 model=self.model,
-                max_steps=6,  # Increased to allow proper error handling even without MCP
+                max_steps=8,  # Increased to allow proper error handling even without MCP
                 name="geometry_agent",
                 description="Creates 3D geometry (MCP connection failed)"
             )
@@ -183,48 +183,3 @@ def get_geometry_system_prompt() -> str:
         raise FileNotFoundError(f"Required system prompt file not found: {prompt_path}")
     
     return prompt_path.read_text(encoding='utf-8')
-
-
-
-
-
-
-# Optional: Convenience function for component registry integration
-def create_geometry_agent_with_registry(
-    component_registry: Any,
-    **kwargs
-) -> ToolCallingAgent:
-    """
-    Create geometry agent with component registry integration.
-    
-    This is a thin wrapper that adds registry-aware tools to the agent.
-    
-    Args:
-        component_registry: Registry for tracking components
-        **kwargs: Arguments passed to create_geometry_agent
-        
-    Returns:
-        ToolCallingAgent with registry integration
-    """
-    # Create registry tools
-    @tool
-    def register_component(name: str, data: dict) -> str:
-        """
-        Register a component in the component registry.
-        
-        Args:
-            name: Component name
-            data: Component data
-            
-        Returns:
-            Registration confirmation
-        """
-        component_registry.register_component(name, data)
-        return f"Component '{name}' registered successfully"
-    
-    # Add registry tool to custom tools
-    custom_tools = kwargs.get('custom_tools', [])
-    custom_tools.append(register_component)
-    kwargs['custom_tools'] = custom_tools
-    
-    return create_geometry_agent(**kwargs)
