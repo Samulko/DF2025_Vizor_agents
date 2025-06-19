@@ -65,7 +65,7 @@ class SmolagentsGeometryAgent:
             self.agent = ToolCallingAgent(
                 tools=all_tools,
                 model=self.model,
-                max_steps=6,  # Increased to allow: check -> modify -> detect errors -> fix -> verify -> finalize
+                max_steps=8,  # Increased to allow: check -> modify -> detect errors -> fix -> verify -> finalize
                 name="geometry_agent",
                 description="Creates 3D geometry in Rhino Grasshopper using persistent MCP connection"
             )
