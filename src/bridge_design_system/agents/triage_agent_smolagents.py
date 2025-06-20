@@ -49,8 +49,13 @@ def create_triage_system(
         component_registry=component_registry
     )
 
-    # Note: Material and Structural agents would be created here when available
-    # For now, we only have geometry agent in managed_agents
+    # Create autonomous SysLogic agent for structural validation
+    from .syslogic_agent_smolagents import create_syslogic_agent
+    syslogic_agent = create_syslogic_agent(
+        component_registry=component_registry
+    )
+
+    # Note: Material agent would be created here when available
 
     # Create manager agent first (without old file-based memory tools)
     # OLD FILE-BASED MEMORY TOOLS - COMMENTED OUT, USING NATIVE MEMORY INSTEAD
@@ -71,7 +76,7 @@ def create_triage_system(
 
     manager = CodeAgent(
         tools=manager_tools,  # Coordination tools only
-        managed_agents=[geometry_agent],  # Autonomous geometry agent
+        managed_agents=[geometry_agent, syslogic_agent],  # Autonomous specialized agents
         model=model,
         name="triage_agent",
         description="Coordinates bridge design tasks by delegating to specialized agents",
@@ -847,6 +852,11 @@ class TriageSystemWrapper:
                 "type": "ToolCallingAgent",
                 "mcp_integration": "enabled",
             },
+            "syslogic_agent": {
+                "initialized": True,
+                "type": "CodeAgent",
+                "validation_tools": "enabled",
+            },
         }
 
     def reset_all_agents(self) -> None:
@@ -858,35 +868,21 @@ class TriageSystemWrapper:
                 self.manager.memory.steps.clear()
                 logger.info(f"✅ Cleared {steps_cleared} triage agent memory steps")
 
-            # Reset geometry agent memory
+            # Reset managed agents memory
             if hasattr(self.manager, "managed_agents") and self.manager.managed_agents:
-                geometry_agent = None
-                if (
-                    isinstance(self.manager.managed_agents, dict)
-                    and "geometry_agent" in self.manager.managed_agents
-                ):
-                    geometry_agent = self.manager.managed_agents["geometry_agent"]
-                elif (
-                    isinstance(self.manager.managed_agents, list)
-                    and len(self.manager.managed_agents) > 0
-                ):
-                    geometry_agent = self.manager.managed_agents[0]
-
-                if (
-                    geometry_agent
-                    and hasattr(geometry_agent, "memory")
-                    and hasattr(geometry_agent.memory, "steps")
-                ):
-                    geo_steps_cleared = len(geometry_agent.memory.steps)
-                    geometry_agent.memory.steps.clear()
+                for i, agent in enumerate(self.manager.managed_agents):
+                    agent_name = getattr(agent, "name", f"agent_{i}")
                     
-                    # BUGFIX: Clear internal component cache that persists across resets
-                    if hasattr(geometry_agent, "internal_component_cache"):
-                        cache_cleared = len(geometry_agent.internal_component_cache)
-                        geometry_agent.internal_component_cache.clear()
-                        logger.info(f"✅ Cleared {cache_cleared} geometry agent component cache entries")
+                    if hasattr(agent, "memory") and hasattr(agent.memory, "steps"):
+                        steps_cleared = len(agent.memory.steps)
+                        agent.memory.steps.clear()
+                        logger.info(f"✅ Cleared {steps_cleared} {agent_name} memory steps")
                     
-                    logger.info(f"✅ Cleared {geo_steps_cleared} geometry agent memory steps")
+                    # Special handling for geometry agent's internal component cache
+                    if hasattr(agent, "internal_component_cache"):
+                        cache_cleared = len(agent.internal_component_cache)
+                        agent.internal_component_cache.clear()
+                        logger.info(f"✅ Cleared {cache_cleared} {agent_name} component cache entries")
 
             logger.info("🔄 All agent memories have been reset - starting fresh session")
 

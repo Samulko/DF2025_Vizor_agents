@@ -24,6 +24,7 @@ uv run python -m bridge_design_system.main --interactive
 - `uv run black src/ tests/` - Format code
 - `uv run ruff check src/ tests/` - Lint code
 - `uv run python test_http_mcp_integration.py` - Test MCP integration
+- `jupyter notebook` - Start educational notebooks (requires `uv pip install jupyter`)
 
 ## Workflows
 
@@ -48,6 +49,7 @@ Best for features with clear inputs/outputs:
 ## Architecture
 - **Triage Agent**: Main orchestrator in `agents/triage_agent.py`
 - **Geometry Agent**: Handles 3D geometry via MCP in `agents/geometry_agent_mcpadapt.py`
+- **Bridge Reference Agent**: Searches real-world bridge info in `agents/bridge_reference_agent.py`
 - **MCP Server**: HTTP server at port 8001 with 6 Grasshopper tools
 - **TCP Bridge**: C# component communicates on port 8081
 
