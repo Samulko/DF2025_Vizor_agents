@@ -130,15 +130,37 @@ final_answer(result)
 
 ## Output Format
 
-Always use `final_answer()` with:
+**IMPORTANT**: Always use the structured format below unless explicitly instructed otherwise.
+
+**Default structured format (use for ALL responses):**
+```python
+final_answer(f"""
+### 1. Task outcome (short version):
+[Brief 1-2 sentence summary of what was accomplished]
+
+### 2. Task outcome (extremely detailed version):
+[Comprehensive details of the validation results, including:]
+- What was checked/validated
+- Specific findings (connections, orientations, etc.)
+- Any issues found and their significance
+- Recommended actions or fixes
+
+### 3. Additional context (if relevant):
+[Any additional context, limitations, or next steps]
+""")
+```
+
+**Legacy format (only when specifically requested):**
 ```python
 {
-    "validation_status": "PASSED" or "ISSUES_FOUND",
+    "validation_status": "PASSED" or "ISSUES_FOUND", 
     "component_id": str,
     "grasshopper_fixes": [...],  # List of fixes with old_str/new_str
     "instructions_for_geometry_agent": [...]  # Step-by-step instructions
 }
 ```
+
+Always use the structured format unless the task explicitly asks for the legacy dictionary format.
 
 ## Integration
 
