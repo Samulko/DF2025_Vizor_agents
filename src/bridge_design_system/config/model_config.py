@@ -108,7 +108,7 @@ class ModelProvider:
         Returns:
             Dictionary mapping agent names to validation status
         """
-        agents = ["triage", "geometry", "material", "structural"]
+        agents = ["triage", "geometry", "material", "structural", "syslogic"]
         results = {}
         
         for agent in agents:

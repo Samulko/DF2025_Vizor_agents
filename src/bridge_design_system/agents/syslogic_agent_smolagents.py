@@ -463,6 +463,7 @@ def _calculate_triangle_closure(elements: List[dict], module_type: str) -> dict:
 def create_syslogic_agent(
     model_name: str = "syslogic", 
     component_registry: Optional[Any] = None,
+    monitoring_callback: Optional[Any] = None,
     **kwargs
 ) -> CodeAgent:
     """
@@ -474,6 +475,7 @@ def create_syslogic_agent(
     Args:
         model_name: Model configuration name from settings
         component_registry: Optional registry for cross-agent communication
+        monitoring_callback: Optional callback for real-time monitoring
         **kwargs: Additional arguments passed to CodeAgent
         
     Returns:
@@ -495,6 +497,11 @@ def create_syslogic_agent(
     # Extract max_steps from kwargs to avoid duplicate parameter error
     max_steps = kwargs.pop("max_steps", 8)  # Allow multiple validation steps
     
+    # Prepare step_callbacks for monitoring
+    step_callbacks = kwargs.pop("step_callbacks", [])
+    if monitoring_callback:
+        step_callbacks.append(monitoring_callback)
+    
     # Create autonomous CodeAgent for complex structural reasoning
     agent = CodeAgent(
         tools=validation_tools,
@@ -502,6 +509,7 @@ def create_syslogic_agent(
         name="syslogic_agent",
         description="Validates truss structure integrity and provides Grasshopper fix instructions",
         max_steps=max_steps,
+        step_callbacks=step_callbacks,
         additional_authorized_imports=["math", "re", "datetime", "typing"],
         **kwargs
     )

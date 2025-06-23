@@ -21,7 +21,10 @@ logger = get_logger(__name__)
 
 
 def create_triage_system(
-    component_registry: Optional[Any] = None, model_name: str = "triage", **kwargs
+    component_registry: Optional[Any] = None, 
+    model_name: str = "triage", 
+    monitoring_callback: Optional[Any] = None,
+    **kwargs
 ) -> CodeAgent:
     """
     Create triage system using smolagents ManagedAgent pattern.
@@ -33,6 +36,7 @@ def create_triage_system(
     Args:
         component_registry: Registry for tracking components across agents
         model_name: Model configuration name from settings
+        monitoring_callback: Optional callback for real-time monitoring
         **kwargs: Additional arguments passed to CodeAgent
 
     Returns:
@@ -44,15 +48,39 @@ def create_triage_system(
     # REFACTORED: Removed shared component tracking - geometry agent is now autonomous
     
     # Create autonomous geometry agent with full MCP access (proper smolagents pattern)
+    geometry_monitor = None
+    if monitoring_callback:
+        # Check if it's a remote callback factory or local callback  
+        if callable(monitoring_callback) and str(type(monitoring_callback)).find('function') != -1:
+            # Remote monitoring - create callback for this agent
+            geometry_monitor = monitoring_callback("geometry_agent")
+        else:
+            # Local monitoring - use existing pattern
+            from ..monitoring.agent_monitor import create_monitor_callback
+            geometry_monitor = create_monitor_callback("geometry_agent", monitoring_callback)
+    
     geometry_agent = _create_mcp_enabled_geometry_agent(
         custom_tools=_create_registry_tools(component_registry) if component_registry else None,
-        component_registry=component_registry
+        component_registry=component_registry,
+        monitoring_callback=geometry_monitor
     )
 
     # Create autonomous SysLogic agent for structural validation
     from .syslogic_agent_smolagents import create_syslogic_agent
+    syslogic_monitor = None
+    if monitoring_callback:
+        # Check if it's a remote callback factory or local callback
+        if callable(monitoring_callback) and str(type(monitoring_callback)).find('function') != -1:
+            # Remote monitoring - create callback for this agent
+            syslogic_monitor = monitoring_callback("syslogic_agent")
+        else:
+            # Local monitoring - use existing pattern
+            from ..monitoring.agent_monitor import create_monitor_callback
+            syslogic_monitor = create_monitor_callback("syslogic_agent", monitoring_callback)
+    
     syslogic_agent = create_syslogic_agent(
-        component_registry=component_registry
+        component_registry=component_registry,
+        monitoring_callback=syslogic_monitor
     )
 
     # Note: Material agent would be created here when available
@@ -74,6 +102,19 @@ def create_triage_system(
         "max_steps", 6
     )  # Increased to allow proper task completion and error handling
 
+    # Prepare step_callbacks for triage agent monitoring
+    step_callbacks = kwargs.pop("step_callbacks", [])
+    if monitoring_callback:
+        # Check if it's a remote callback factory or local callback
+        if callable(monitoring_callback) and str(type(monitoring_callback)).find('function') != -1:
+            # Remote monitoring - create callback for this agent
+            triage_monitor = monitoring_callback("triage_agent")
+        else:
+            # Local monitoring - use existing pattern
+            from ..monitoring.agent_monitor import create_monitor_callback
+            triage_monitor = create_monitor_callback("triage_agent", monitoring_callback)
+        step_callbacks.append(triage_monitor)
+
     manager = CodeAgent(
         tools=manager_tools,  # Coordination tools only
         managed_agents=[geometry_agent, syslogic_agent],  # Autonomous specialized agents
@@ -81,6 +122,7 @@ def create_triage_system(
         name="triage_agent",
         description="Coordinates bridge design tasks by delegating to specialized agents",
         max_steps=max_steps,
+        step_callbacks=step_callbacks,
         additional_authorized_imports=["typing", "json", "datetime"],
         **kwargs,
     )
@@ -111,7 +153,9 @@ def get_triage_system_prompt() -> str:
 
 
 def _create_mcp_enabled_geometry_agent(
-    custom_tools: Optional[List] = None, component_registry: Optional[Any] = None
+    custom_tools: Optional[List] = None, 
+    component_registry: Optional[Any] = None,
+    monitoring_callback: Optional[Any] = None
 ) -> Any:
     """
     Create autonomous geometry agent with full MCP toolset for managed_agents pattern.
@@ -182,12 +226,14 @@ def _create_mcp_enabled_geometry_agent(
                 all_tools = list(self.mcp_tools) + self.custom_tools + self.memory_tools
 
                 # Initialize with persistent MCP tools - sufficient steps for error detection/fixing
+                step_callbacks = [monitoring_callback] if monitoring_callback else []
                 super().__init__(
                     tools=all_tools,
                     model=model,
                     max_steps=6,  # Allow: check -> modify -> detect errors -> fix -> verify -> finalize
                     name="geometry_agent",
                     description="Creates 3D geometry in Rhino Grasshopper via MCP connection",
+                    step_callbacks=step_callbacks,
                 )
 
                 logger.info("🎯 Persistent geometry agent initialized successfully")
@@ -195,12 +241,14 @@ def _create_mcp_enabled_geometry_agent(
             except Exception as e:
                 logger.error(f"❌ Failed to establish persistent MCP connection: {e}")
                 # Fallback to empty tools if MCP connection fails
+                step_callbacks = [monitoring_callback] if monitoring_callback else []
                 super().__init__(
                     tools=self.custom_tools + self.memory_tools,
                     model=model,
                     max_steps=6,  # Increased to allow proper error handling even without MCP
                     name="geometry_agent",
                     description="Creates 3D geometry (MCP connection failed)",
+                    step_callbacks=step_callbacks,
                 )
                 self.mcp_connection = None
                 self.mcp_tools = []
@@ -804,9 +852,12 @@ class TriageSystemWrapper:
     smolagents-native pattern.
     """
 
-    def __init__(self, component_registry: Optional[Any] = None):
+    def __init__(self, component_registry: Optional[Any] = None, monitoring_callback: Optional[Any] = None):
         """Initialize wrapper with smolagents manager."""
-        self.manager = create_triage_system(component_registry=component_registry)
+        self.manager = create_triage_system(
+            component_registry=component_registry,
+            monitoring_callback=monitoring_callback
+        )
         self.component_registry = component_registry
         self.logger = logger
 

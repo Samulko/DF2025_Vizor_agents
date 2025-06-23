@@ -31,7 +31,7 @@ class SmolagentsGeometryAgent:
     """
     
     def __init__(self, custom_tools: Optional[List] = None, model_name: str = "geometry", 
-                 component_registry: Optional[Any] = None):
+                 component_registry: Optional[Any] = None, monitoring_callback: Optional[Any] = None):
         """Initialize the smolagents geometry agent with persistent MCP connection."""
         self.custom_tools = custom_tools or []
         self.model_name = model_name
@@ -62,12 +62,14 @@ class SmolagentsGeometryAgent:
             all_tools = list(self.mcp_tools) + self.custom_tools
             
             # Create persistent ToolCallingAgent with sufficient steps for error detection/fixing
+            step_callbacks = [monitoring_callback] if monitoring_callback else []
             self.agent = ToolCallingAgent(
                 tools=all_tools,
                 model=self.model,
                 max_steps=12,  # Increased to allow: check -> modify -> detect errors -> fix -> verify -> finalize
                 name="geometry_agent",
-                description="Creates 3D geometry in Rhino Grasshopper using persistent MCP connection"
+                description="Creates 3D geometry in Rhino Grasshopper using persistent MCP connection",
+                step_callbacks=step_callbacks
             )
             
             # Append custom system prompt to default smolagents prompt
@@ -79,12 +81,14 @@ class SmolagentsGeometryAgent:
         except Exception as e:
             logger.error(f"❌ Failed to establish persistent MCP connection: {e}")
             # Fallback to agent without MCP tools if connection fails
+            step_callbacks = [monitoring_callback] if monitoring_callback else []
             self.agent = ToolCallingAgent(
                 tools=self.custom_tools,
                 model=self.model,
                 max_steps=8,  # Increased to allow proper error handling even without MCP
                 name="geometry_agent",
-                description="Creates 3D geometry (MCP connection failed)"
+                description="Creates 3D geometry (MCP connection failed)",
+                step_callbacks=step_callbacks
             )
             self.mcp_connection = None
             self.mcp_tools = []
@@ -147,6 +151,7 @@ def create_geometry_agent(
     custom_tools: Optional[List] = None,
     model_name: str = "geometry",
     component_registry: Optional[Any] = None,
+    monitoring_callback: Optional[Any] = None,
     **kwargs
 ) -> SmolagentsGeometryAgent:
     """
@@ -159,6 +164,7 @@ def create_geometry_agent(
         custom_tools: Additional tools to include
         model_name: Model configuration name from settings
         component_registry: Registry for tracking components
+        monitoring_callback: Optional callback for real-time monitoring
         **kwargs: Additional arguments (for compatibility)
         
     Returns:
@@ -167,7 +173,8 @@ def create_geometry_agent(
     return SmolagentsGeometryAgent(
         custom_tools=custom_tools,
         model_name=model_name,
-        component_registry=component_registry
+        component_registry=component_registry,
+        monitoring_callback=monitoring_callback
     )
 
 

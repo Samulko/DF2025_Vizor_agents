@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     material_agent_model: str = "gemini-2.5-flash-preview-05-20"
     structural_agent_provider: str = "gemini"
     structural_agent_model: str = "gemini-2.5-flash-preview-05-20"
+    syslogic_agent_provider: str = "gemini"
+    syslogic_agent_model: str = "gemini-2.5-flash-preview-05-20"
     
     # MCP Configuration
     mcp_transport_mode: str = "http"  # "http" or "stdio"

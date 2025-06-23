@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LCARS - Engineering Systems Monitor</title>
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        /* LCARS Color Palette */
+        :root {
+            --lcars-orange: #FF9966;
+            --lcars-pink: #FF99CC;
+            --lcars-old-pink: #D49AC7; /* More muted, vintage pink like in reference */
+            --lcars-purple: #CC99FF;
+            --lcars-blue: #9999FF;
+            --lcars-red: #FF6666;
+            --lcars-yellow: #FFCC99;
+            --lcars-black: #000000;
+            --lcars-white: #FFFFFF;
+            --lcars-dark-bg: #0a0a0a;
+        }
+
+        body {
+            font-family: 'Oswald', 'Arial Narrow', 'Helvetica Neue Condensed', sans-serif;
+            background: var(--lcars-black);
+            min-height: 100vh;
+            padding: 20px 20px 80px 20px; /* Added bottom padding for fixed footer */
+            color: var(--lcars-white);
+            line-height: 1.5;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: var(--lcars-blue);
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 3rem; /* 3.75rem * 0.8 */
+            font-weight: 500;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            transform: scaleY(1.2) scaleX(0.85); /* Slightly wider */
+        }
+
+        .header .subtitle {
+            font-size: 1.32rem; /* 1.65rem * 0.8 */
+            opacity: 0.9;
+            font-weight: 500;
+            transform: scaleY(1.2) scaleX(0.85); /* Slightly wider */
+        }
+
+
+        .status-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        /* LCARS Panel Base */
+        .agent-card {
+            background: transparent !important;
+            border: none;
+            padding: 0;
+            margin: 0;
+            position: relative;
+            display: flex;
+            align-items: stretch;
+            min-height: 80px;
+            height: 80px; /* Fixed height to match */
+            transition: all 0.3s ease;
+        }
+
+        /* LCARS Main Panel - rectangular, no rounding */
+        .lcars-main-panel {
+            background: var(--lcars-orange);
+            flex-grow: 1;
+            display: flex;
+            align-items: flex-end; /* Align to bottom */
+            justify-content: flex-end; /* Align to right */
+            padding: 0 15px 8px 25px; /* Reduced bottom and right padding */
+            position: relative;
+            border-radius: 0; /* Completely rectangular */
+            margin-left: 10px; /* Gap between status and main panel (swapped sides) */
+            order: 2; /* Move to right side */
+        }
+
+        /* LCARS Status Section (Left Side) - rounded with own background */
+        .lcars-status-section {
+            background: var(--lcars-orange); /* Own background color, not inherited */
+            width: 140px; /* Narrower status section */
+            height: 80px; /* Fixed height to match main panel */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 60px 0 0 60px; /* Rounded on left side (mirrored) */
+            order: 1; /* Move to left side */
+        }
+
+        .lcars-status-text {
+            position: relative;
+            z-index: 1;
+            font-weight: 700;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--lcars-black);
+            padding: 0 15px;
+        }
+
+        .agent-header {
+            display: flex;
+            justify-content: flex-end;
+            align-items: flex-end;
+            width: 100%;
+            height: 100%;
+            color: var(--lcars-black);
+        }
+
+        .agent-name {
+            font-size: 1.4rem;
+            font-weight: 400;
+            color: var(--lcars-black);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transform: scaleY(1.2) scaleX(0.85); /* Slightly wider */
+            transform-origin: bottom right; /* Anchor scaling to bottom right */
+        }
+
+        .status-badge {
+            padding: 8px 16px;
+            border-radius: 25px;
+            font-size: 0.9rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--lcars-black);
+            border: none;
+            min-width: 120px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        /* LCARS Status Colors */
+        .status-ready {
+            background: var(--lcars-orange);
+        }
+
+        .status-thinking {
+            background: var(--lcars-blue);
+            animation: lcars-pulse 2s infinite;
+        }
+
+        .status-working {
+            background: var(--lcars-blue);
+            animation: lcars-pulse 2s infinite;
+        }
+
+        .status-delegating {
+            background: var(--lcars-pink);
+        }
+
+        .status-connecting {
+            background: var(--lcars-purple);
+            animation: lcars-pulse 2s infinite;
+        }
+
+        .status-validating {
+            background: var(--lcars-purple);
+            animation: lcars-pulse 2s infinite;
+        }
+
+        .status-completed {
+            background: var(--lcars-orange);
+        }
+
+        .status-error {
+            background: var(--lcars-red);
+            animation: lcars-alert 1s infinite;
+        }
+
+        /* Agent-Specific Base Colors */
+        .agent-card[data-agent="triage_agent"] .lcars-main-panel {
+            background: var(--lcars-orange);
+        }
+        .agent-card[data-agent="triage_agent"] .lcars-status-section {
+            background: var(--lcars-orange);
+        }
+
+        .agent-card[data-agent="geometry_agent"] .lcars-main-panel {
+            background: var(--lcars-red);
+        }
+        .agent-card[data-agent="geometry_agent"] .lcars-status-section {
+            background: var(--lcars-red);
+        }
+
+        .agent-card[data-agent="syslogic_agent"] .lcars-main-panel {
+            background: var(--lcars-purple);
+        }
+        .agent-card[data-agent="syslogic_agent"] .lcars-status-section {
+            background: var(--lcars-purple);
+        }
+
+        /* Status-based modifications */
+        .agent-card.status-thinking .lcars-main-panel,
+        .agent-card.status-thinking .lcars-status-section,
+        .agent-card.status-working .lcars-main-panel,
+        .agent-card.status-working .lcars-status-section,
+        .agent-card.status-connecting .lcars-main-panel,
+        .agent-card.status-connecting .lcars-status-section,
+        .agent-card.status-validating .lcars-main-panel,
+        .agent-card.status-validating .lcars-status-section {
+            animation: lcars-pulse 2s infinite;
+        }
+
+        .agent-card.status-error .lcars-main-panel,
+        .agent-card.status-error .lcars-status-section {
+            background: var(--lcars-red) !important;
+            animation: lcars-alert 1s infinite;
+        }
+
+        /* LCARS Animations */
+        @keyframes lcars-pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.8; }
+            100% { opacity: 1; }
+        }
+
+        @keyframes lcars-alert {
+            0% { opacity: 1; }
+            50% { opacity: 0.6; }
+            100% { opacity: 1; }
+        }
+
+        .agent-details {
+            display: none; /* Hidden for now in LCARS layout */
+        }
+
+        .detail-row {
+            display: none; /* Hidden for now in LCARS layout */
+        }
+
+        .detail-label {
+            display: none; /* Hidden for now in LCARS layout */
+        }
+
+        .detail-value {
+            display: none; /* Hidden for now in LCARS layout */
+        }
+
+        .tool-calls {
+            display: none; /* Hidden for now in LCARS layout */
+        }
+
+        .tool-tag {
+            display: none; /* Hidden for now in LCARS layout */
+        }
+
+        .error-message {
+            display: none; /* Hidden for now in LCARS layout */
+        }
+
+        .connection-status {
+            display: none; /* Hide connection status indicator */
+        }
+
+        .connection-connected {
+            background: var(--lcars-orange);
+        }
+
+        .connection-disconnected {
+            background: var(--lcars-red);
+            animation: lcars-alert 1s infinite;
+        }
+
+        .connection-connecting {
+            background: var(--lcars-blue);
+            animation: lcars-pulse 2s infinite;
+        }
+
+        /* LCARS Corner Elbows and Geometric Elements */
+        .lcars-corner-top-left {
+            position: absolute;
+            top: -10px;
+            left: -10px;
+            width: 60px;
+            height: 60px;
+            background: var(--lcars-orange);
+            border-radius: 0 0 60px 0;
+        }
+
+        .lcars-corner-top-right {
+            position: absolute;
+            top: -10px;
+            right: -10px;
+            width: 60px;
+            height: 60px;
+            background: var(--lcars-orange);
+            border-radius: 0 0 0 60px;
+        }
+
+        .lcars-separator {
+            height: 4px;
+            background: var(--lcars-orange);
+            margin: 20px 0;
+            border-radius: 2px;
+        }
+
+        /* Remove bottom corner element */
+
+        .last-update {
+            font-size: 0.9rem;
+            color: var(--lcars-blue);
+            text-align: center;
+            margin-top: 30px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .task-history {
+            background: var(--lcars-old-pink);
+            border-radius: 0;
+            padding: 15px;
+            margin-top: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            border: none;
+            position: relative;
+            min-height: 120px;
+        }
+
+        .task-history h2 {
+            font-size: 1.4rem;
+            font-weight: 500;
+            color: var(--lcars-black);
+            margin: 0;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transform: scaleY(1.2) scaleX(0.85);
+            transform-origin: bottom right;
+            position: absolute;
+            bottom: 8px;
+            right: 15px;
+        }
+
+        .footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: transparent;
+        }
+
+        .footer-main {
+            color: var(--lcars-blue);
+            font-size: 1.2rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            transform: scaleY(1.2) scaleX(0.85);
+        }
+
+        .footer-left {
+            color: var(--lcars-blue);
+            font-size: 0.9rem;
+            font-weight: 500;
+            letter-spacing: 1px;
+            transform: scaleY(1.2) scaleX(0.85);
+            position: absolute;
+            left: 20px;
+            bottom: 20px;
+        }
+
+        .task-item {
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 153, 102, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .task-item:hover {
+            background: rgba(255, 255, 255, 0.12);
+            transform: translateX(5px);
+            border-color: rgba(255, 153, 102, 0.4);
+        }
+
+        .task-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .task-agent {
+            font-weight: 600;
+            color: var(--lcars-orange);
+            text-transform: uppercase;
+        }
+
+        .task-time {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .task-summary {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 0.95rem;
+            line-height: 1.4;
+            margin-bottom: 8px;
+        }
+
+        .task-detail {
+            display: none;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.85rem;
+            font-family: 'Courier New', monospace;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+            white-space: pre-wrap;
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid rgba(255, 153, 102, 0.2);
+        }
+
+        .task-toggle {
+            cursor: pointer;
+            color: var(--lcars-blue);
+            font-size: 0.85rem;
+            text-decoration: underline;
+        }
+
+        .task-toggle:hover {
+            color: var(--lcars-pink);
+        }
+
+        .task-detail br {
+            margin-bottom: 5px;
+        }
+
+        .task-detail strong {
+            color: #333;
+        }
+
+        .task-detail em {
+            color: #666;
+            font-style: italic;
+        }
+
+        .task-summary {
+            font-weight: 500;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .agent-card {
+                min-height: 60px;
+            }
+
+            .lcars-endcap-left,
+            .lcars-endcap-right {
+                width: 30px;
+            }
+
+            .agent-name {
+                font-size: 1.2rem;
+            }
+
+            .status-badge {
+                font-size: 0.8rem;
+                min-width: 100px;
+                padding: 6px 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>TEAM</h1>
+            <p class="subtitle">Task-Enabled Agent Matrix</p>
+        </div>
+
+        <div class="connection-status" id="connectionStatus">
+            ESTABLISHING LINK...
+        </div>
+
+        <div class="status-grid" id="statusGrid">
+            <!-- Agent cards will be populated here -->
+        </div>
+
+        <div class="last-update" id="lastUpdate">
+            WAITING FOR AUTOMATED SYSTEMS STATUS...
+        </div>
+
+        <div class="task-history" id="taskHistory">
+            <h2>Recent Task History</h2>
+            <div id="taskList" style="width: 100%; padding-bottom: 50px;">
+                <p style="color: #888; text-align: center;">No completed tasks yet...</p>
+            </div>
+        </div>
+
+        <div class="footer">
+            <div class="footer-left">IntCDC</div>
+            <div class="footer-main">DIGITAL FUTURES • 2025</div>
+        </div>
+    </div>
+
+    <script>
+        class AgentMonitor {
+            constructor() {
+                this.websocket = null;
+                this.reconnectInterval = 3000;  // Faster reconnection
+                this.maxReconnectInterval = 30000;  // Cap reconnection interval
+                this.currentReconnectInterval = this.reconnectInterval;
+                this.agents = {};
+                this.connectionStatus = document.getElementById('connectionStatus');
+                this.statusGrid = document.getElementById('statusGrid');
+                this.lastUpdate = document.getElementById('lastUpdate');
+                this.heartbeatInterval = null;
+                this.missedHeartbeats = 0;
+                this.maxMissedHeartbeats = 3;
+                this.taskHistory = [];  // Store completed tasks
+                this.maxTaskHistory = 10;  // Keep last 10 tasks
+                this.isPageVisible = true;
+                
+                // Handle page visibility changes
+                document.addEventListener('visibilitychange', () => {
+                    this.isPageVisible = !document.hidden;
+                    if (this.isPageVisible && (!this.websocket || this.websocket.readyState !== WebSocket.OPEN)) {
+                        console.log('📄 Page became visible, checking connection...');
+                        this.connect();
+                    }
+                });
+                
+                this.connect();
+            }
+
+            connect() {
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const wsUrl = `${protocol}//${window.location.host}/status`;
+                
+                this.updateConnectionStatus('connecting');
+                
+                try {
+                    // Close existing connection if any
+                    if (this.websocket) {
+                        this.websocket.close();
+                    }
+                    
+                    this.websocket = new WebSocket(wsUrl);
+                    
+                    this.websocket.onopen = () => {
+                        console.log('✅ WebSocket connected');
+                        this.updateConnectionStatus('connected');
+                        this.currentReconnectInterval = this.reconnectInterval; // Reset reconnect interval
+                        this.startHeartbeat();
+                    };
+                    
+                    this.websocket.onmessage = (event) => {
+                        try {
+                            const message = JSON.parse(event.data);
+                            this.handleMessage(message);
+                            this.missedHeartbeats = 0; // Reset heartbeat counter
+                        } catch (error) {
+                            console.error('❌ Error parsing message:', error);
+                        }
+                    };
+                    
+                    this.websocket.onclose = (event) => {
+                        console.log('🔌 WebSocket disconnected:', event.code, event.reason);
+                        this.updateConnectionStatus('disconnected');
+                        this.stopHeartbeat();
+                        
+                        // Only reconnect if it wasn't a clean close
+                        if (event.code !== 1000) {
+                            this.scheduleReconnect();
+                        } else {
+                            console.log('🔌 Clean WebSocket close, not reconnecting');
+                        }
+                    };
+                    
+                    this.websocket.onerror = (error) => {
+                        console.error('❌ WebSocket error:', error);
+                        this.updateConnectionStatus('disconnected');
+                    };
+                    
+                } catch (error) {
+                    console.error('❌ Failed to create WebSocket:', error);
+                    this.updateConnectionStatus('disconnected');
+                    this.scheduleReconnect();
+                }
+            }
+            
+            scheduleReconnect() {
+                // Only reconnect if page is visible
+                if (!this.isPageVisible) {
+                    console.log('📄 Page not visible, skipping reconnection');
+                    return;
+                }
+                
+                setTimeout(() => {
+                    if (this.isPageVisible) {
+                        console.log(`🔄 Attempting reconnection in ${this.currentReconnectInterval}ms`);
+                        this.connect();
+                        // Exponential backoff with cap
+                        this.currentReconnectInterval = Math.min(
+                            this.currentReconnectInterval * 1.5, 
+                            this.maxReconnectInterval
+                        );
+                    } else {
+                        console.log('📄 Page became hidden, cancelling reconnection');
+                    }
+                }, this.currentReconnectInterval);
+            }
+            
+            startHeartbeat() {
+                this.stopHeartbeat(); // Clear any existing heartbeat
+                this.heartbeatInterval = setInterval(() => {
+                    if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
+                        try {
+                            this.websocket.send(JSON.stringify({type: 'ping'}));
+                            this.missedHeartbeats++;
+                            
+                            if (this.missedHeartbeats >= this.maxMissedHeartbeats) {
+                                console.log('💔 Too many missed heartbeats, reconnecting...');
+                                this.websocket.close();
+                            }
+                        } catch (error) {
+                            console.error('❌ Heartbeat failed:', error);
+                            this.websocket.close();
+                        }
+                    }
+                }, 10000); // Send heartbeat every 10 seconds
+            }
+            
+            stopHeartbeat() {
+                if (this.heartbeatInterval) {
+                    clearInterval(this.heartbeatInterval);
+                    this.heartbeatInterval = null;
+                }
+                this.missedHeartbeats = 0;
+            }
+
+            updateConnectionStatus(status) {
+                const statusElement = this.connectionStatus;
+                statusElement.className = `connection-status connection-${status}`;
+                
+                switch (status) {
+                    case 'connected':
+                        statusElement.textContent = 'COMPUTER CORE ONLINE';
+                        break;
+                    case 'connecting':
+                        statusElement.textContent = 'ESTABLISHING LINK...';
+                        break;
+                    case 'disconnected':
+                        statusElement.textContent = 'COMPUTER CORE OFFLINE';
+                        break;
+                }
+            }
+
+            handleMessage(message) {
+                if (message.type === 'status_update' && message.data) {
+                    this.updateAgentStatus(message.data);
+                    const stardate = this.calculateStardate(new Date());
+                    this.lastUpdate.textContent = `STARDATE: ${stardate} - LAST SYSTEM UPDATE: ${new Date().toLocaleTimeString()}`;
+                } else if (message.type === 'ping') {
+                    // Respond to server ping
+                    if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
+                        this.websocket.send(JSON.stringify({type: 'pong'}));
+                    }
+                } else if (message.type === 'pong') {
+                    // Server responded to our ping
+                    this.missedHeartbeats = Math.max(0, this.missedHeartbeats - 1);
+                }
+            }
+
+            updateAgentStatus(agentData) {
+                Object.keys(agentData).forEach(agentName => {
+                    const prevAgent = this.agents[agentName];
+                    const newAgent = agentData[agentName];
+                    
+                    // Check if agent just completed a task
+                    if (prevAgent && prevAgent.status !== 'completed' && newAgent.status === 'completed') {
+                        // Use the actual response if available, otherwise fall back to current_task
+                        const responseContent = newAgent.last_response || newAgent.current_task || 'Unknown task';
+                        console.log(`📋 Adding task to history for ${agentName}:`, responseContent.substring(0, 100));
+                        this.addToTaskHistory({
+                            agentName: agentName,
+                            task: responseContent,
+                            timestamp: new Date(),
+                            toolCalls: newAgent.tool_calls || []
+                        });
+                    }
+                    
+                    this.agents[agentName] = newAgent;
+                });
+                this.renderAgents();
+            }
+
+            addToTaskHistory(taskInfo) {
+                // Add to beginning of array
+                this.taskHistory.unshift(taskInfo);
+                
+                // Keep only last N tasks
+                if (this.taskHistory.length > this.maxTaskHistory) {
+                    this.taskHistory = this.taskHistory.slice(0, this.maxTaskHistory);
+                }
+                
+                this.renderTaskHistory();
+            }
+
+            renderTaskHistory() {
+                const taskList = document.getElementById('taskList');
+                
+                if (this.taskHistory.length === 0) {
+                    taskList.innerHTML = '<p style="color: #888; text-align: center;">No completed tasks yet...</p>';
+                    return;
+                }
+                
+                taskList.innerHTML = this.taskHistory.map((task, index) => {
+                    const taskId = `task-${index}`;
+                    const agentDisplayName = task.agentName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                    const timeAgo = this.getTimeAgo(task.timestamp);
+                    
+                    // Extract summary from the task content
+                    let summary = task.task;
+                    let hasDetails = false;
+                    
+                    // Special handling for triage agent responses
+                    if (task.agentName === 'triage_agent') {
+                        // For triage agent, the response should now be clean (extracted final answer)
+                        // Just use the response as-is since it's already clean
+                        summary = task.task.split('\n')[0].substring(0, 100) + 
+                                 (task.task.length > 100 ? '...' : '');
+                        hasDetails = task.task.length > 100 || task.task.includes('\n');
+                    } else {
+                        // For other agents, check if this is a structured response with ### sections
+                        if (task.task.includes('### 1. Task outcome (short version):')) {
+                            // Extract the short version as summary (everything until ### 2)
+                            const shortMatch = task.task.match(/### 1\. Task outcome \(short version\):\s*([\s\S]*?)(?=### 2|$)/);
+                            if (shortMatch) {
+                                summary = shortMatch[1].trim();
+                                hasDetails = true;
+                            }
+                        } else {
+                            // For non-structured responses, use first line or 80 chars
+                            summary = task.task.split('\n')[0].substring(0, 80) + 
+                                     (task.task.length > 80 ? '...' : '');
+                            hasDetails = task.task.length > 80 || task.task.includes('\n');
+                        }
+                    }
+                    
+                    return `
+                        <div class="task-item">
+                            <div class="task-header">
+                                <span class="task-agent">${agentDisplayName}</span>
+                                <span class="task-time">${timeAgo}</span>
+                            </div>
+                            <div class="task-summary">${this.escapeHtml(summary)}</div>
+                            ${hasDetails ? `
+                                <span class="task-toggle" onclick="toggleTaskDetail('${taskId}', '${task.agentName}')">Show details</span>
+                                <div id="${taskId}" class="task-detail">${this.formatTaskDetail(task.task, task.agentName)}</div>
+                            ` : ''}
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            formatTaskDetail(taskContent, agentName = '') {
+                if (agentName.includes('triage')) {
+                    return this.formatTriageAgentDetails(taskContent);
+                } else {
+                    // For other agents, show only the detailed version (section 2)
+                    if (taskContent.includes('### 2. Task outcome (extremely detailed version):')) {
+                        const detailMatch = taskContent.match(/### 2\. Task outcome \(extremely detailed version\):\s*([\s\S]*?)(?=### 3|$)/);
+                        if (detailMatch) {
+                            let detailed = detailMatch[1].trim();
+                            detailed = this.escapeHtml(detailed);
+                            // Convert bullet points to proper list items
+                            detailed = detailed.replace(/^- /gm, '• ');
+                            // Make tool names bold
+                            detailed = detailed.replace(/• \*\*(.*?)\*\*:/g, '• <strong>$1</strong>:');
+                            return detailed;
+                        }
+                    }
+                }
+                
+                // For non-structured content, format the whole thing
+                let formatted = this.escapeHtml(taskContent);
+                
+                // Make ### headers bold
+                formatted = formatted.replace(/### (\d+\. [^:]+:)/g, '<strong>### $1</strong>');
+                
+                // Convert bullet points to proper list items
+                formatted = formatted.replace(/^- /gm, '• ');
+                
+                return formatted;
+            }
+
+            formatTriageAgentDetails(taskContent) {
+                // Clean up triage agent responses for better readability
+                // Since triage responses are now extracted clean, just format them nicely
+                let formatted = this.escapeHtml(taskContent);
+                
+                // Make any headers bold
+                formatted = formatted.replace(/### (\d+\. [^:]+:)/g, '<strong>### $1</strong>');
+                
+                // Convert bullet points to proper list items
+                formatted = formatted.replace(/^- /gm, '• ');
+                
+                // Make tool names bold if they follow the pattern "• toolname:"
+                formatted = formatted.replace(/• ([^:]+):/g, '• <strong>$1</strong>:');
+                
+                return formatted;
+            }
+
+            getTimeAgo(date) {
+                const seconds = Math.floor((new Date() - date) / 1000);
+                
+                if (seconds < 60) return 'just now';
+                const minutes = Math.floor(seconds / 60);
+                if (minutes < 60) return `${minutes}m ago`;
+                const hours = Math.floor(minutes / 60);
+                if (hours < 24) return `${hours}h ago`;
+                return `${Math.floor(hours / 24)}d ago`;
+            }
+
+            escapeHtml(str) {
+                const div = document.createElement('div');
+                div.textContent = str;
+                return div.innerHTML;
+            }
+
+            calculateStardate(date) {
+                // Calculate stardate based on TNG formula
+                // Stardate 0 = January 1, 2323 in Star Trek TNG
+                // For our purposes, use 2025 as base year
+                const baseYear = 2025;
+                const currentYear = date.getFullYear();
+                const dayOfYear = Math.floor((date - new Date(currentYear, 0, 0)) / 86400000);
+                const yearOffset = currentYear - baseYear;
+                const stardate = (yearOffset * 1000) + (dayOfYear * 2.74); // Approximate TNG formula
+                return stardate.toFixed(1);
+            }
+
+            renderAgents() {
+                const agentOrder = ['triage_agent', 'geometry_agent', 'syslogic_agent'];
+                
+                this.statusGrid.innerHTML = agentOrder.map(agentName => {
+                    const agent = this.agents[agentName];
+                    if (!agent) return '';
+                    
+                    return this.createAgentCard(agent);
+                }).join('');
+            }
+
+            createAgentCard(agent) {
+                const formatAgentName = (name) => {
+                    return name.replace(/_/g, ' ')
+                              .replace(/\b\w/g, l => l.toUpperCase());
+                };
+
+                const formatTimestamp = (timestamp) => {
+                    if (!timestamp || timestamp === 'initial') return 'Never';
+                    return new Date(timestamp * 1000).toLocaleTimeString();
+                };
+
+                const getStatusDisplay = (status) => {
+                    const statusMap = {
+                        'ready': 'STANDBY',
+                        'thinking': 'PROCESSING',
+                        'working': 'ACTIVE',
+                        'delegating': 'COMMANDING',
+                        'connecting': 'INTERFACING',
+                        'validating': 'ANALYZING',
+                        'completed': 'COMPLETE',
+                        'error': 'ALERT'
+                    };
+                    return statusMap[status] || status.replace(/_/g, ' ').toUpperCase();
+                };
+
+                const getStatusDescription = (agent) => {
+                    const descriptions = {
+                        'ready': 'System standing by for commands',
+                        'thinking': 'Processing algorithms and tactical analysis',
+                        'working': 'Executing primary operations and tool interfaces',
+                        'delegating': 'Command module distributing tasks to subsystems',
+                        'connecting': 'Establishing interface with external systems',
+                        'validating': 'Performing structural integrity analysis',
+                        'completed': 'Mission parameters achieved successfully',
+                        'error': 'Alert: System malfunction detected'
+                    };
+                    return descriptions[agent.status] || 'System processing...';
+                };
+
+                const toolCallsHtml = agent.tool_calls && agent.tool_calls.length > 0 
+                    ? `<div class="tool-calls">
+                         <div class="detail-label">Active Tools:</div>
+                         ${agent.tool_calls.map(tool => `<span class="tool-tag">${tool}</span>`).join('')}
+                       </div>`
+                    : '';
+
+                const errorHtml = agent.error_message 
+                    ? `<div class="error-message">❌ ${agent.error_message}</div>`
+                    : '';
+
+                const currentTaskDisplay = agent.current_task 
+                    ? (agent.current_task.length > 60 
+                        ? agent.current_task.substring(0, 60) + '...' 
+                        : agent.current_task)
+                    : 'None';
+
+                return `
+                    <div class="agent-card status-${agent.status}" data-agent="${agent.name}">
+                        <div class="lcars-main-panel">
+                            <div class="agent-header">
+                                <div class="agent-name">${formatAgentName(agent.name)}</div>
+                            </div>
+                        </div>
+                        <div class="lcars-status-section">
+                            <div class="lcars-status-text" title="${getStatusDescription(agent)}">${getStatusDisplay(agent.status)}</div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        // Toggle task detail visibility
+        function toggleTaskDetail(taskId, agentName = '') {
+            const detail = document.getElementById(taskId);
+            const toggle = event.target;
+            
+            if (detail.style.display === 'none' || !detail.style.display) {
+                detail.style.display = 'block';
+                toggle.textContent = 'Hide details';
+            } else {
+                detail.style.display = 'none';
+                toggle.textContent = 'Show details';
+            }
+        }
+
+        // Initialize the monitor when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new AgentMonitor();
+        });
+    </script>
+</body>
+</html>

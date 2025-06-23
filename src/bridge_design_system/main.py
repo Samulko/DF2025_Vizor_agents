@@ -4,6 +4,8 @@ This system uses MCPAdapt for robust MCP integration with Grasshopper,
 providing stable async/sync handling and eliminating event loop issues.
 """
 import logging
+import threading
+import time
 from pathlib import Path
 
 from .agents import TriageAgent
@@ -13,6 +15,9 @@ from .config.settings import settings
 from .state.component_registry import initialize_registry, get_global_registry
 
 logger = get_logger(__name__)
+
+# Global monitoring variables
+monitoring_server_started = False
 
 
 def clear_log_files():
@@ -75,7 +80,7 @@ def validate_environment():
     """Validate that required environment variables are set."""
     # Get unique providers needed
     providers = set()
-    for agent in ["triage", "geometry", "material", "structural"]:
+    for agent in ["triage", "geometry", "material", "structural", "syslogic"]:
         provider = getattr(settings, f"{agent}_agent_provider", None)
         if provider:
             providers.add(provider)
@@ -92,6 +97,67 @@ def validate_environment():
         logger.warning("GRASSHOPPER_MCP_PATH not set - MCP features will be limited")
     
     return True
+
+
+def start_monitoring_server(enable_monitoring=True):
+    """Start the monitoring server in a background thread."""
+    global monitoring_server_started
+    
+    if not enable_monitoring:
+        logger.info("📊 Monitoring disabled by user")
+        return
+    
+    if monitoring_server_started:
+        return
+    
+    try:
+        from .monitoring.server import start_status_monitor
+        
+        def run_server():
+            print("📊 Starting Agent Status Monitor on http://localhost:5000")
+            print("🌐 Dashboard accessible from any device on local network")
+            start_status_monitor(host='0.0.0.0', port=5000)
+        
+        # Start monitoring server in background thread
+        monitor_thread = threading.Thread(target=run_server, daemon=True)
+        monitor_thread.start()
+        
+        # Wait a moment for server to initialize
+        time.sleep(2)
+        monitoring_server_started = True
+        
+        logger.info("✅ Monitoring server started successfully")
+        
+    except Exception as e:
+        logger.warning(f"⚠️ Failed to start monitoring server: {e}")
+        logger.info("Continuing without monitoring...")
+
+
+def get_monitoring_callback(enable_embedded_monitoring=False):
+    """Get the monitoring callback if available."""
+    if enable_embedded_monitoring:
+        # Use embedded monitoring (old behavior)
+        try:
+            from .monitoring.server import get_status_tracker
+            status_tracker = get_status_tracker()
+            if status_tracker:
+                logger.info("✅ Embedded monitoring integration enabled")
+                return status_tracker
+            else:
+                logger.info("📊 Embedded monitoring server not ready - continuing without monitoring")
+                return None
+        except Exception as e:
+            logger.debug(f"Embedded monitoring not available: {e}")
+            return None
+    else:
+        # Use remote monitoring (new default behavior)
+        try:
+            from .monitoring.agent_monitor import create_remote_monitor_callback
+            logger.info("📡 Remote monitoring enabled - will send updates to standalone server")
+            return create_remote_monitor_callback
+        except Exception as e:
+            logger.debug(f"Remote monitoring not available: {e}")
+            return None
 
 
 def test_system():
@@ -116,7 +182,11 @@ def test_system():
         # Test agent initialization
         logger.info("\nTesting agent initialization...")
         registry = initialize_registry()
-        triage = TriageAgent(component_registry=registry)
+        
+        # Use remote monitoring for test
+        monitoring_callback = get_monitoring_callback(enable_embedded_monitoring=False)
+        
+        triage = TriageAgent(component_registry=registry, monitoring_callback=monitoring_callback)
         logger.info("✓ Triage agent initialized successfully")
         
         # Test basic operation
@@ -138,13 +208,14 @@ def test_system():
         return False
 
 
-def interactive_mode(use_legacy=False, reset_memory=False, hard_reset=False):
+def interactive_mode(use_legacy=False, reset_memory=False, hard_reset=False, enable_monitoring=False):
     """Run the system in interactive mode.
     
     Args:
         use_legacy: If True, use legacy triage agent (default is smolagents-native)
         reset_memory: If True, start with fresh agent memories
         hard_reset: If True, clear everything including log files
+        enable_monitoring: If True, start monitoring dashboard (default False for clean CLI)
     """
     mode = "legacy" if use_legacy else "smolagents-native"
     logger.info(f"Starting Bridge Design System in interactive mode ({mode})...")
@@ -153,6 +224,12 @@ def interactive_mode(use_legacy=False, reset_memory=False, hard_reset=False):
         return
     
     try:
+        # Don't start monitoring server - assume it's running separately
+        # start_monitoring_server(enable_monitoring=enable_monitoring)
+        
+        # Always use remote monitoring callback
+        monitoring_callback = get_monitoring_callback(enable_embedded_monitoring=False)
+        
         # Initialize component registry
         registry = initialize_registry()
         logger.info("Component registry initialized")
@@ -160,11 +237,11 @@ def interactive_mode(use_legacy=False, reset_memory=False, hard_reset=False):
         if use_legacy:
             # Legacy is no longer supported - use smolagents implementation
             logger.warning("Legacy implementation has been removed - using smolagents-native implementation")
-            triage = TriageAgent(component_registry=registry)
+            triage = TriageAgent(component_registry=registry, monitoring_callback=monitoring_callback)
             logger.info("System initialized with smolagents-native patterns")
         else:
             # Use default smolagents-native implementation
-            triage = TriageAgent(component_registry=registry)
+            triage = TriageAgent(component_registry=registry, monitoring_callback=monitoring_callback)
             logger.info("System initialized with smolagents-native patterns")
         
         # Handle reset options
@@ -190,6 +267,14 @@ def interactive_mode(use_legacy=False, reset_memory=False, hard_reset=False):
             print("🚀 Using smolagents-native implementation (DEFAULT)")
             print("✨ 75% less code, 30% more efficient!")
         print("="*60)
+        
+        # Show monitoring information
+        if enable_monitoring:
+            print("📊 Remote Agent Monitoring enabled - connect to http://localhost:5000")
+            print("🌐 Make sure monitoring server is running in separate terminal")
+        else:
+            print("⚠️ Agent monitoring disabled (use --monitoring to enable)")
+        
         print("\nType 'exit' to quit, 'reset' to clear agent memories, 'hardreset' to clear everything")
         print("Type 'status' to see agent status")
         if hard_reset:
@@ -245,7 +330,11 @@ def interactive_mode(use_legacy=False, reset_memory=False, hard_reset=False):
                 else:
                     print(f"\nError: {response.message}")
                     if response.error:
-                        print(f"Error Type: {response.error.value}")
+                        # Handle both string errors and error objects
+                        if hasattr(response.error, 'value'):
+                            print(f"Error Type: {response.error.value}")
+                        else:
+                            print(f"Error Details: {response.error}")
                         
             except KeyboardInterrupt:
                 print("\n\nInterrupted. Type 'exit' to quit.")
@@ -294,6 +383,11 @@ def main():
         "--enhanced-cli",
         action="store_true",
         help="Run enhanced CLI with Rich formatting and real-time status"
+    )
+    parser.add_argument(
+        "--monitoring",
+        action="store_true",
+        help="Enable embedded agent monitoring dashboard (disabled by default for clean CLI)"
     )
     parser.add_argument(
         "--start-mcp-server",
@@ -399,11 +493,21 @@ def main():
         from .cli.enhanced_interface import run_enhanced_cli
         run_enhanced_cli(simple_mode=False)
     elif args.interactive:
-        interactive_mode(use_legacy=args.legacy, reset_memory=args.reset, hard_reset=args.hard_reset)
+        interactive_mode(
+            use_legacy=args.legacy, 
+            reset_memory=args.reset, 
+            hard_reset=args.hard_reset,
+            enable_monitoring=args.monitoring
+        )
     else:
         # Default to smolagents interactive mode
         logger.info("No specific mode specified - starting default smolagents interactive mode")
-        interactive_mode(use_legacy=False, reset_memory=args.reset, hard_reset=args.hard_reset)
+        interactive_mode(
+            use_legacy=False, 
+            reset_memory=args.reset, 
+            hard_reset=args.hard_reset,
+            enable_monitoring=args.monitoring
+        )
 
 
 if __name__ == "__main__":
