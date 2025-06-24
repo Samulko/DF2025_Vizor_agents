@@ -5,8 +5,9 @@ This script helps fix the reference paths based on your Rhino installation
 """
 
 import os
-import sys
 import platform
+import sys
+
 
 def find_rhino_installation():
     """Find Rhino installation on the system"""

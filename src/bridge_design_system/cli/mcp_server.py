@@ -1,8 +1,6 @@
 """CLI for starting the HTTP MCP server."""
-import asyncio
 import logging
 import sys
-from pathlib import Path
 
 import click
 import uvicorn
@@ -44,7 +42,7 @@ def start_mcp_server(port, grasshopper_port, host, debug, reload):
     # Configure logging
     log_level = "debug" if debug else "info"
     
-    click.echo(f"🚀 Starting Grasshopper MCP HTTP Server")
+    click.echo("🚀 Starting Grasshopper MCP HTTP Server")
     click.echo(f"📡 Server: http://{host}:{port}")
     click.echo(f"🔗 Grasshopper: http://localhost:{grasshopper_port}")
     click.echo(f"📊 Documentation: http://{host}:{port}/docs")

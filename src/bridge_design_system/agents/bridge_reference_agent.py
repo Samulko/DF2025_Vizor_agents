@@ -9,7 +9,6 @@ This is an educational example showing how specialized agents can be
 created and integrated into the larger system.
 """
 
-from typing import Any, Optional
 
 from smolagents import ToolCallingAgent, WebSearchTool, tool
 

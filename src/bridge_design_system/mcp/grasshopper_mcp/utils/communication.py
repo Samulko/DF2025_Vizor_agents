@@ -4,15 +4,16 @@ Communication utilities for Grasshopper MCP.
 This module contains functions for communicating with the Grasshopper MCP server.
 """
 
-import socket
 import json
-import sys
-import traceback
-from typing import Dict, Any, Optional
 
 # Grasshopper MCP connection parameters
 import platform
+import socket
 import subprocess
+import sys
+import traceback
+from typing import Any, Dict, Optional
+
 
 def get_windows_host():
     """Get Windows host IP from WSL."""

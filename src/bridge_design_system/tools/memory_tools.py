@@ -8,10 +8,11 @@ This module provides three SmolaGents tools for memory management:
 
 import json
 import os
-from pathlib import Path
-from datetime import datetime
-from typing import Optional, Dict, Any, List
 import time
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, Optional
+
 # Platform-specific imports for file locking
 try:
     import fcntl
@@ -19,10 +20,8 @@ try:
 except ImportError:
     HAS_FCNTL = False
 import tempfile
-import shutil
 
 from smolagents import tool
-
 
 # Session management
 SESSION_ID = os.environ.get('BRIDGE_SESSION_ID', f'session_{datetime.now().strftime("%Y%m%d_%H%M%S")}')
@@ -136,7 +135,7 @@ def save_memory(memory_data: Dict[str, Any]) -> bool:
     # Acquire lock for exclusive write access
     lock = acquire_lock(timeout=2.0)  # Shorter timeout for workshop responsiveness
     if not lock:
-        print(f"Warning: Could not acquire lock for memory write. Another operation in progress.")
+        print("Warning: Could not acquire lock for memory write. Another operation in progress.")
         # In workshop setting, we'll continue without lock rather than fail
     
     try:
@@ -396,7 +395,7 @@ def clear_memory(category: Optional[str] = None, confirm: str = "no") -> str:
         clear_memory("errors", "yes") -> Clear error logs
     """
     if confirm != "yes":
-        return f"Memory clear aborted. To confirm deletion, use confirm='yes'"
+        return "Memory clear aborted. To confirm deletion, use confirm='yes'"
     
     memory_data = load_memory()
     
@@ -407,7 +406,7 @@ def clear_memory(category: Optional[str] = None, confirm: str = "no") -> str:
         if save_memory(memory_data):
             return f"🗑️ Cleared ALL memory ({old_count} items deleted). Fresh start!"
         else:
-            return f"⚠️ Had issues clearing memory but will continue"
+            return "⚠️ Had issues clearing memory but will continue"
     
     elif category in memory_data.get("memories", {}):
         # Clear specific category

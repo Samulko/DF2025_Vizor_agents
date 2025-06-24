@@ -1,8 +1,6 @@
 """CLI for starting the official MCP streamable-http server."""
-import asyncio
 import logging
 import sys
-from pathlib import Path
 
 import click
 
@@ -42,10 +40,10 @@ def start_streamable_http_server(port, grasshopper_url, log_level, debug):
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
     
-    click.echo(f"🚀 Starting Official MCP Streamable-HTTP Server")
+    click.echo("🚀 Starting Official MCP Streamable-HTTP Server")
     click.echo(f"📡 Server: http://127.0.0.1:{port}/mcp")
     click.echo(f"🔗 Grasshopper: {grasshopper_url}")
-    click.echo(f"📊 Transport: streamable-http (official MCP)")
+    click.echo("📊 Transport: streamable-http (official MCP)")
     
     if debug:
         click.echo("🐛 Debug mode enabled")

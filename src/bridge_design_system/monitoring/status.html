@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LCARS - Engineering Systems Monitor</title>
+    <title>TEAM - Task-Enabled Agent Matrix</title>
+    <link rel="icon" type="image/png" href="./DF logo.png">
     <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         * {
@@ -165,7 +166,7 @@
 
         .status-working {
             background: var(--lcars-blue);
-            animation: lcars-pulse 2s infinite;
+            animation: lcars-working 3s infinite ease-in-out;
         }
 
         .status-delegating {
@@ -239,10 +240,13 @@
          */
 
         /* Status-based modifications */
+        .agent-card.status-working .lcars-main-panel,
+        .agent-card.status-working .lcars-status-section {
+            animation: lcars-working 3s infinite ease-in-out;
+        }
+
         .agent-card.status-thinking .lcars-main-panel,
         .agent-card.status-thinking .lcars-status-section,
-        .agent-card.status-working .lcars-main-panel,
-        .agent-card.status-working .lcars-status-section,
         .agent-card.status-connecting .lcars-main-panel,
         .agent-card.status-connecting .lcars-status-section,
         .agent-card.status-validating .lcars-main-panel,
@@ -267,6 +271,12 @@
             0% { opacity: 1; }
             50% { opacity: 0.6; }
             100% { opacity: 1; }
+        }
+
+        @keyframes lcars-working {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.9; transform: scale(1.02); }
+            100% { opacity: 1; transform: scale(1); }
         }
 
         .agent-details {

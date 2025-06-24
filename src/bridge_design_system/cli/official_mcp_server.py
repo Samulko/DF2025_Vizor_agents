@@ -2,7 +2,6 @@
 import asyncio
 import logging
 import sys
-from pathlib import Path
 
 import click
 
@@ -30,9 +29,9 @@ def start_official_mcp_server(grasshopper_url, debug):
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
     
-    click.echo(f"🚀 Starting Official Grasshopper MCP Server")
+    click.echo("🚀 Starting Official Grasshopper MCP Server")
     click.echo(f"🔗 Grasshopper: {grasshopper_url}")
-    click.echo(f"📡 Protocol: stdio (standard MCP)")
+    click.echo("📡 Protocol: stdio (standard MCP)")
     
     if debug:
         click.echo("🐛 Debug mode enabled")

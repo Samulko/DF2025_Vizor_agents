@@ -1,6 +1,6 @@
 """Simple, clean CLI interface with color-coded agent interactions."""
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Optional
 
 from rich.console import Console
 from rich.panel import Panel
@@ -86,7 +86,6 @@ class SimpleAgentCLI:
         self.console.clear()
         
         # Check terminal type and color support
-        import os
         terminal_info = "Git Bash (limited colors)" if self.use_simple_format else f"Modern Terminal ({self.console.color_system})"
         
         if self.use_simple_format:

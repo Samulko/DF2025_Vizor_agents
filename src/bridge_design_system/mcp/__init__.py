@@ -13,12 +13,12 @@ This module provides multiple MCP implementations:
 # Clean FastMCP implementation (recommended)
 # Use smolagents' built-in ToolCollection.from_mcp() instead of custom integration
 from .mcp_tools_utils import (
-    get_mcp_tools_stdio, 
-    get_mcp_tools_http, 
-    get_grasshopper_tools, 
+    get_grasshopper_tools,
+    get_mcp_tools_http,
+    get_mcp_tools_stdio,
     is_mcp_server_available,
+    is_mcp_server_available_http,
     is_mcp_server_available_stdio,
-    is_mcp_server_available_http
 )
 
 # Legacy implementations (for backward compatibility) - disabled due to import issues

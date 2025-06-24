@@ -1,13 +1,12 @@
 """Enhanced agent monitor with direct smolagents step_callbacks integration."""
 
 import asyncio
-import json
 import time
-from datetime import datetime
-from typing import Any, Dict, List, Optional, Set, Callable
 from dataclasses import dataclass
+from datetime import datetime
+from typing import Any, Callable, Dict, List, Optional, Set
 
-from smolagents import ActionStep, CodeAgent, ToolCallingAgent
+from smolagents import ActionStep
 
 from ..config.logging_config import get_logger
 
@@ -152,8 +151,8 @@ class MonitorCallback:
             
             # If this is a completion, schedule a reset to "ready" after delay
             if is_completion:
-                import time
                 import threading
+                import time
                 
                 self._last_completion_time = time.time()
                 logger.debug(f"⏰ {self.agent_name} completion detected, will remain visible for {self._completion_reset_delay}s")
@@ -532,14 +531,14 @@ class WebSocketManager:
                     continue
                     
                 await connection.send_json(message)
-                logger.debug(f"✅ Sent status update to WebSocket connection")
+                logger.debug("✅ Sent status update to WebSocket connection")
             except Exception as e:
                 # Handle specific WebSocket errors more gracefully
                 error_msg = str(e)
                 if "websocket.close" in error_msg or "response already completed" in error_msg:
-                    logger.debug(f"🔌 WebSocket already closed, removing from connections")
+                    logger.debug("🔌 WebSocket already closed, removing from connections")
                 elif "connection closed" in error_msg.lower():
-                    logger.debug(f"🔌 WebSocket connection closed by client")
+                    logger.debug("🔌 WebSocket connection closed by client")
                 else:
                     logger.debug(f"⚠️ WebSocket error: {e}")
                 disconnected.add(connection)
@@ -547,7 +546,7 @@ class WebSocketManager:
         # Clean up disconnected clients
         for conn in disconnected:
             self.connections.discard(conn)
-            logger.debug(f"🔌 Removed disconnected WebSocket connection")
+            logger.debug("🔌 Removed disconnected WebSocket connection")
         
         if disconnected:
             logger.debug(f"📱 {len(self.connections)} WebSocket connections remaining")
@@ -601,8 +600,8 @@ class RemoteMonitorCallback:
     
     def __call__(self, memory_step, agent) -> None:
         """Called after each agent step - sends status update to remote server."""
-        import time
         import threading
+        import time
         
         try:
             session = self._get_session()

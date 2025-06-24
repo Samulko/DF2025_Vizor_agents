@@ -6,7 +6,7 @@ Vizor is a library for augmented reality in Grasshopper.
 """
 
 import sys
-from typing import Dict, Any, Optional
+from typing import Any, Dict
 
 # Add the project root to the Python path when running as a script
 if __name__ == "__main__":

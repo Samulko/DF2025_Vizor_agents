@@ -45,11 +45,11 @@ def start_manual_mcp_server(port, grasshopper_url, bridge_mode, log_level, debug
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
     
-    click.echo(f"🚀 Starting Manual MCP HTTP Server")
+    click.echo("🚀 Starting Manual MCP HTTP Server")
     click.echo(f"📡 MCP endpoint: http://127.0.0.1:{port}/mcp")
     click.echo(f"🌉 Bridge endpoints: http://127.0.0.1:{port}/grasshopper/")
     click.echo(f"🔗 Grasshopper: {grasshopper_url}")
-    click.echo(f"📊 Transport: HTTP + SSE (Manual implementation)")
+    click.echo("📊 Transport: HTTP + SSE (Manual implementation)")
     click.echo(f"🏗️  Mode: {'Bridge' if bridge_mode else 'Direct'}")
     
     if debug:

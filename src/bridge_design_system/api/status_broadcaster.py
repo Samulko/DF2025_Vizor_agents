@@ -2,10 +2,9 @@
 import asyncio
 import json
 import logging
-import weakref
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Set
 from enum import Enum
+from typing import Any, Dict, List, Optional, Set
 
 import websockets
 from websockets.server import WebSocketServerProtocol

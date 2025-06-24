@@ -8,12 +8,9 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
-from rich.columns import Columns
-from rich.live import Live
-from rich.layout import Layout
 
 from ..agents.triage_agent import TriageAgent
-from ..api.status_broadcaster import get_broadcaster, AgentStatus
+from ..api.status_broadcaster import get_broadcaster
 
 
 class AgentConversationDisplay:

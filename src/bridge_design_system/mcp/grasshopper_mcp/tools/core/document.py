@@ -4,7 +4,8 @@ Document management tools for Grasshopper MCP.
 This module provides functions for managing Grasshopper documents.
 """
 
-from typing import Dict, Any
+from typing import Any, Dict
+
 from grasshopper_mcp.utils.communication import send_to_grasshopper
 
 

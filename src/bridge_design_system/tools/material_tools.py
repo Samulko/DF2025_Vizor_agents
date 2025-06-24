@@ -6,12 +6,11 @@ cutting sequence optimization, and waste minimization algorithms.
 """
 
 import json
-import math
 import shutil
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
-from dataclasses import dataclass, asdict
+from typing import Any, Dict, List, Optional
 
 from ..config.logging_config import get_logger
 

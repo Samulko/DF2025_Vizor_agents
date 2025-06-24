@@ -4,7 +4,8 @@ Connection management tools for Grasshopper MCP.
 This module provides functions for managing connections between components.
 """
 
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
+
 from grasshopper_mcp.utils.communication import send_to_grasshopper
 
 

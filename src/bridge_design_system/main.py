@@ -3,16 +3,16 @@
 This system uses MCPAdapt for robust MCP integration with Grasshopper,
 providing stable async/sync handling and eliminating event loop issues.
 """
-import logging
 import threading
 import time
 from pathlib import Path
 
 from .agents import TriageAgent
+from .agents.VizorListener import VizorListener
 from .config.logging_config import get_logger
 from .config.model_config import ModelProvider
 from .config.settings import settings
-from .state.component_registry import initialize_registry, get_global_registry
+from .state.component_registry import initialize_registry
 from .tools.material_tools import MaterialInventoryManager
 
 logger = get_logger(__name__)
@@ -468,6 +468,30 @@ def interactive_mode(use_legacy=False, reset_memory=False, hard_reset=False, ena
             print("✅ Started with fresh memories (--reset flag used)")
         print()
         
+        # Initialize VizorListener for gaze-assisted spatial command grounding
+        vizor_listener = None
+        try:
+            vizor_listener = VizorListener()
+            
+            # Use the improved connection status checking
+            if vizor_listener.is_ros_connected():
+                logger.info("👁️ VizorListener for gaze context initialized successfully")
+                print("👁️ Gaze-assisted spatial grounding enabled (ROS connected)")
+            else:
+                # VizorListener created but ROS not connected - keep for potential reconnection
+                status = vizor_listener.get_connection_status()
+                if status["ros_available"]:
+                    logger.warning("⚠️ VizorListener ROS connection failed - gaze features limited")
+                    print("⚠️ Gaze features limited (ROS not connected, but can reconnect later)")
+                else:
+                    logger.warning("⚠️ ROS dependencies not available - gaze features disabled")
+                    print("⚠️ Gaze features disabled (ROS dependencies not installed)")
+                    
+        except Exception as e:
+            logger.error(f"❌ VizorListener initialization failed: {e}")
+            print(f"⚠️ Gaze features disabled (initialization failed: {str(e)})")
+            vizor_listener = None
+        
         while True:
             try:
                 user_input = input("\nDesigner> ").strip()
@@ -498,7 +522,7 @@ def interactive_mode(use_legacy=False, reset_memory=False, hard_reset=False, ena
                     
                     # Registry status
                     registry_stats = registry.get_stats()
-                    print(f"\nComponent Registry:")
+                    print("\nComponent Registry:")
                     print(f"  Components: {registry_stats['total_components']}")
                     print(f"  Types: {', '.join(registry_stats['types'])}")
                     print(f"  Recent: {registry_stats['recent_components']}")
@@ -506,20 +530,42 @@ def interactive_mode(use_legacy=False, reset_memory=False, hard_reset=False, ena
                 elif not user_input:
                     continue
                 
-                # Process the request
-                print("\nProcessing...")
-                response = triage.handle_design_request(user_input)
+                # Capture gaze context for this specific command (single-shot policy)
+                gazed_element_id = None
+                if vizor_listener:
+                    try:
+                        gazed_element_id = vizor_listener.get_current_element()
+                        if gazed_element_id:
+                            print(f"[Debug] Gaze detected on: {gazed_element_id}")
+                    except Exception as e:
+                        logger.warning(f"⚠️ Failed to get gaze data: {e}")
                 
-                if response.success:
-                    print(f"\nTriage Agent> {response.message}")
-                else:
-                    print(f"\nError: {response.message}")
-                    if response.error:
-                        # Handle both string errors and error objects
-                        if hasattr(response.error, 'value'):
-                            print(f"Error Type: {response.error.value}")
-                        else:
-                            print(f"Error Details: {response.error}")
+                try:
+                    # Process the request with gaze context
+                    print("\nProcessing...")
+                    response = triage.handle_design_request(
+                        request=user_input,
+                        gaze_id=gazed_element_id
+                    )
+                    
+                    if response.success:
+                        print(f"\nTriage Agent> {response.message}")
+                    else:
+                        print(f"\nError: {response.message}")
+                        if response.error:
+                            # Handle both string errors and error objects
+                            if hasattr(response.error, 'value'):
+                                print(f"Error Type: {response.error.value}")
+                            else:
+                                print(f"Error Details: {response.error}")
+                
+                finally:
+                    # CRITICAL: Single-shot policy - clear gaze immediately after command
+                    if vizor_listener is not None:
+                        try:
+                            vizor_listener.current_element = None
+                        except Exception as e:
+                            logger.debug(f"Warning: Failed to clear gaze data: {e}")
                         
             except KeyboardInterrupt:
                 print("\n\nInterrupted. Type 'exit' to quit.")
@@ -654,7 +700,7 @@ def main():
                 
             except Exception as e:
                 print(f"❌ Clean FastMCP server not suitable for HTTP: {e}")
-                print(f"🔄 Using Manual MCP server for reliable HTTP support...")
+                print("🔄 Using Manual MCP server for reliable HTTP support...")
                 fastmcp_available = False
         
         if not fastmcp_available:
@@ -676,8 +722,9 @@ def main():
                 print("💡 Try installing FastMCP: pip install fastmcp")
                 exit(1)
     elif args.start_official_mcp:
-        from .cli.official_mcp_server import start_official_mcp_server
         import sys
+
+        from .cli.official_mcp_server import start_official_mcp_server
         # Override sys.argv to pass the arguments
         sys.argv = [
             "official-mcp-server",
@@ -687,8 +734,9 @@ def main():
             sys.argv.append("--debug")
         start_official_mcp_server()
     elif args.start_mcp_server:
-        from .cli.mcp_server import start_mcp_server
         import sys
+
+        from .cli.mcp_server import start_mcp_server
         # Override sys.argv to pass the port argument
         sys.argv = ["mcp-server", "--port", str(args.mcp_port)]
         start_mcp_server()

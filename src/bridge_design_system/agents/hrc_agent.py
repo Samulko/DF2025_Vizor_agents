@@ -1,24 +1,20 @@
 """HRC Agent - Integrates human-robot collaboration process planning into the design process."""
-import logging
-import gc
 import asyncio
+import gc
 import time
-from copy import deepcopy
-from pathlib import Path
-from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
-from smolagents import CodeAgent, tool
-from smolagents.agents import PromptTemplates, SystemPromptStep, EMPTY_PROMPT_TEMPLATES
 from mcp import StdioServerParameters
 from mcpadapt.core import MCPAdapt
 from mcpadapt.smolagents_adapter import SmolAgentsAdapter
+from smolagents import CodeAgent, tool
 
-from ..config.model_config import ModelProvider
 from ..config.logging_config import get_logger
+from ..config.model_config import ModelProvider
 from ..config.settings import settings
-from .base_agent import BaseAgent, AgentResponse, AgentError
 
 logger = get_logger(__name__)
 

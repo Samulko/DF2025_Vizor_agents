@@ -1,10 +1,8 @@
 """WebSocket server for real-time agent status visualization."""
 import asyncio
-import json
 import logging
 import signal
 import sys
-from typing import Optional
 
 from .status_broadcaster import AgentStatusBroadcaster
 

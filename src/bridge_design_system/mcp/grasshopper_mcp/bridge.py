@@ -1,7 +1,5 @@
-import os
 import sys
 import traceback
-from typing import Dict, Any, Optional, List
 
 # Add the project root to the Python path when running as a script
 if __name__ == "__main__":
@@ -16,10 +14,9 @@ if __name__ == "__main__":
     sys.path.insert(0, str(project_root))
 
 # Import MCP server
-from mcp.server.fastmcp import FastMCP
-
 # Import utility functions
 from grasshopper_mcp.utils.communication import send_to_grasshopper
+from mcp.server.fastmcp import FastMCP
 
 # Create MCP server
 server = FastMCP("Grasshopper Bridge")
@@ -512,12 +509,7 @@ def get_component_guide():
 
 # Import Core tools - ONLY KEEP REQUIRED TOOLS
 from grasshopper_mcp.tools.core import (
-    # Component tools - KEEP ONLY THESE 6
-    # add_python3_script,  # DISABLED
-    get_python3_script,
     edit_python3_script,
-    get_python3_script_errors,
-    get_component_info_enhanced,
     get_all_components_enhanced,
     # TEMPORARILY DISABLED
     # add_number_slider,
@@ -546,6 +538,11 @@ from grasshopper_mcp.tools.core import (
     # Pattern tools - DISABLED
     # create_grasshopper_pattern,
     # get_pattern_list
+    get_component_info_enhanced,
+    # Component tools - KEEP ONLY THESE 6
+    # add_python3_script,  # DISABLED
+    get_python3_script,
+    get_python3_script_errors,
 )
 
 # Register Core tools with the server - ONLY KEEP 6 REQUIRED TOOLS

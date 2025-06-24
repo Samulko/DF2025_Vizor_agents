@@ -4,11 +4,11 @@ This module provides standardized configuration templates for different
 agent types, including security settings, monitoring, and production
 optimizations following smolagents best practices.
 """
-import os
 import logging
-from typing import Dict, List, Any, Optional
-from dataclasses import dataclass, asdict
+import os
+from dataclasses import asdict, dataclass
 from enum import Enum
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 

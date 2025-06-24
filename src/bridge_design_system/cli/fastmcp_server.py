@@ -1,8 +1,6 @@
 """CLI for starting the FastMCP-based MCP server."""
-import asyncio
 import logging
 import sys
-from pathlib import Path
 
 import click
 
@@ -52,11 +50,11 @@ def start_fastmcp_server(port, grasshopper_url, bridge_mode, stateless, log_leve
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
     
-    click.echo(f"🚀 Starting FastMCP-based MCP Server")
+    click.echo("🚀 Starting FastMCP-based MCP Server")
     click.echo(f"📡 MCP endpoint: http://127.0.0.1:{port}/mcp")
     click.echo(f"🌉 Bridge endpoints: http://127.0.0.1:{port}/grasshopper/")
     click.echo(f"🔗 Grasshopper: {grasshopper_url}")
-    click.echo(f"📊 Transport: streamable-http (FastMCP)")
+    click.echo("📊 Transport: streamable-http (FastMCP)")
     click.echo(f"🏗️  Mode: {'Bridge' if bridge_mode else 'Direct'}")
     click.echo(f"🔄 Stateless: {stateless}")
     

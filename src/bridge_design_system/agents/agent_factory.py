@@ -5,25 +5,21 @@ security settings, and monitoring integration. It replaces complex inheritance
 hierarchies with clean factory patterns.
 """
 import logging
-import os
-from typing import List, Optional, Dict, Any, Union
+from typing import Any, Dict, List, Optional, Union
 
-from smolagents import (
-    CodeAgent, 
-    ToolCallingAgent, 
-    Tool,
-    AgentError,
-    AgentExecutionError,
-    AgentParsingError,
-    AgentMaxStepsError
-)
-from mcp import StdioServerParameters
 from mcpadapt.core import MCPAdapt
 from mcpadapt.smolagents_adapter import SmolAgentsAdapter
+from smolagents import (
+    AgentError,
+    AgentExecutionError,
+    CodeAgent,
+    Tool,
+    ToolCallingAgent,
+)
 
 from ..config.model_config import ModelProvider
 from ..config.settings import settings
-from ..tools.memory_tools import remember, recall, search_memory, clear_memory
+from ..tools.memory_tools import clear_memory, recall, remember, search_memory
 
 logger = logging.getLogger(__name__)
 

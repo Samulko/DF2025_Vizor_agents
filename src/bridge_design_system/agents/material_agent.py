@@ -3,14 +3,14 @@ from typing import List
 
 from smolagents import Tool
 
-from .base_agent import BaseAgent
 from ..tools.material_tools import (
-    check_material_inventory,
-    find_best_piece_for_cut, 
-    cut_timber_piece,
     add_timber_stock,
-    get_material_statistics
+    check_material_inventory,
+    cut_timber_piece,
+    find_best_piece_for_cut,
+    get_material_statistics,
 )
+from .base_agent import BaseAgent
 
 
 class MaterialAgent(BaseAgent):

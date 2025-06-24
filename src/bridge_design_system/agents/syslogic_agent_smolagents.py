@@ -7,16 +7,20 @@ Grasshopper fix generation.
 """
 
 import math
-import re
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 
 from smolagents import CodeAgent, tool
 
 from ..config.logging_config import get_logger
 from ..config.model_config import ModelProvider
-from ..tools.material_tools import MaterialInventoryManager, CuttingOptimizer, extract_element_lengths, create_session_record
+from ..tools.material_tools import (
+    CuttingOptimizer,
+    MaterialInventoryManager,
+    create_session_record,
+    extract_element_lengths,
+)
 
 logger = get_logger(__name__)
 
@@ -306,7 +310,7 @@ def _generate_orientation_instructions(element_data: dict, correction_data: dict
     return {
         "instructions": [
             f"Locate beam with ID '{element_id}' in the Grasshopper script",
-            f"Check the Z-component of the direction vector or endpoints",
+            "Check the Z-component of the direction vector or endpoints",
             f"Adjust the Z-coordinate from {current_z} to {target_z}",
             "Ensure the beam direction vector has Z=0 for horizontal orientation"
         ],
@@ -651,18 +655,27 @@ def plan_cutting_sequence(required_lengths: list, optimize: bool = True) -> dict
 
 
 @tool
-def get_material_status(detailed: bool = False) -> dict:
+def get_material_status(
+    detailed: bool = False,
+    project_context: str = None,
+    design_complexity: str = None,
+    user_intent: str = None
+) -> dict:
     """
-    Get current material inventory status and availability.
+    Get current material inventory status and availability with context.
     
     Provides real-time view of material inventory including remaining
     capacity, utilization statistics, and beam-by-beam breakdown.
+    Returns raw data for agent to reason about contextually.
     
     Args:
         detailed: Whether to include detailed beam-by-beam breakdown
+        project_context: Context about project phase (e.g., "prototyping", "production", "testing")
+        design_complexity: Complexity level (e.g., "simple", "complex", "experimental")
+        user_intent: User's current goal (e.g., "optimization", "validation", "exploration")
         
     Returns:
-        Dict with inventory summary, remaining capacity, and utilization stats
+        Dict with raw inventory data, context info, and deterministic calculations only
     """
     logger.info(f"📊 Getting material status (detailed={detailed})")
     
@@ -706,8 +719,12 @@ def get_material_status(detailed: bool = False) -> dict:
                 "cutting_sessions": len(recent_sessions),
                 "last_updated": inventory_manager.inventory_data.get("last_updated", "Unknown")
             },
-            "recommendations": _generate_inventory_recommendations(status, beams),
-            "alerts": _check_inventory_alerts(status, beams)
+            "context_info": {
+                "project_context": project_context,
+                "design_complexity": design_complexity,
+                "user_intent": user_intent
+            }
+            # Note: No hardcoded recommendations or alerts - agent will reason about this data contextually
         }
         
     except Exception as e:
@@ -1091,40 +1108,9 @@ def _format_cutting_plan_visual(cutting_result: dict) -> str:
         return "Visual representation unavailable"
 
 
-def _generate_inventory_recommendations(status: dict, beams: list) -> list:
-    """Generate recommendations based on current inventory status."""
-    recommendations = []
-    
-    if status["waste_percentage"] > 10:
-        recommendations.append("High waste percentage - consider design optimization")
-    
-    if status["beams_available"] < 2:
-        recommendations.append("Low beam availability - consider restocking")
-    
-    if status["overall_utilization_percent"] > 90:
-        recommendations.append("Very high utilization - consider additional material procurement")
-    
-    unused_beams = len([beam for beam in beams if beam.utilization_percent == 0])
-    if unused_beams == 0:
-        recommendations.append("All beams in use - excellent resource utilization")
-    
-    return recommendations if recommendations else ["Material inventory is in good condition"]
-
-
-def _check_inventory_alerts(status: dict, beams: list) -> list:
-    """Check for critical inventory alerts."""
-    alerts = []
-    
-    if status["total_remaining_mm"] < 1000:
-        alerts.append("CRITICAL: Low material remaining (<1000mm)")
-    
-    if status["beams_available"] == 0:
-        alerts.append("CRITICAL: No beams available for cutting")
-    
-    if status["waste_percentage"] > 15:
-        alerts.append("WARNING: High waste percentage (>15%)")
-    
-    return alerts
+# Note: Removed hardcoded recommendation and alert functions.
+# Material analysis is now handled contextually by the agent using
+# the raw data from get_material_status() with project context.
 
 
 def _generate_design_alternatives(element_lengths: list, beams: list, optimizer) -> list:

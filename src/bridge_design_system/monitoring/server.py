@@ -3,14 +3,13 @@
 import asyncio
 import json
 from pathlib import Path
-from typing import Set, Optional
+from typing import Optional
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
 
-from .agent_monitor import AgentStatusTracker, WebSocketManager, create_agent_monitor_system
 from ..config.logging_config import get_logger
+from .agent_monitor import AgentStatusTracker, WebSocketManager, create_agent_monitor_system
 
 logger = get_logger(__name__)
 
@@ -169,7 +168,7 @@ def start_status_monitor(host: str = "0.0.0.0", port: int = 5000):
     """Start the enhanced status monitor server with network access."""
     import uvicorn
     print(f"📊 Starting Enhanced Agent Status Monitor on http://{host}:{port}")
-    print(f"🌐 Dashboard accessible from any device on local network")
+    print("🌐 Dashboard accessible from any device on local network")
     uvicorn.run(app, host=host, port=port, log_level="error")
 
 

@@ -112,7 +112,7 @@
   "total_waste_mm": 0,
   "total_utilization_percent": 0.0,
   "cutting_sessions": [],
-  "last_updated": "2025-01-24T00:00:00.000Z",
+  "last_updated": "2025-06-24T12:26:47.761319",
   "metadata": {
     "cross_section": "5x5cm",
     "material_type": "timber",
@@ -127,5 +127,11 @@
     "average_beam_length_mm": 1980.0,
     "material_efficiency_target": 95.0,
     "waste_tolerance_mm": 100
+  },
+  "backup_metadata": {
+    "name": "auto_backup_before_reset_20250624_122707",
+    "original_file": "/home/samko/github/vizor_agents/src/bridge_design_system/data/material_inventory.json",
+    "created_at": "2025-06-24T12:27:07.726657",
+    "source_version": "1.0"
   }
 }

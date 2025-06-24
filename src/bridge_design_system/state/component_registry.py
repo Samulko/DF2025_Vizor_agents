@@ -5,14 +5,14 @@ This registry provides centralized component tracking that survives fresh CodeAg
 creation and enables reference resolution for natural language queries.
 """
 
-import threading
-import time
 import json
 import logging
+import threading
+import time
 from collections import deque
-from dataclasses import dataclass, asdict
-from typing import Dict, List, Optional, Any, Set, Tuple
+from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from ..tools.memory_tools import remember_component
 

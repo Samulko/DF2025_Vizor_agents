@@ -7,11 +7,10 @@ Also includes polling endpoints for Grasshopper bridge component.
 """
 import contextlib
 import logging
-import json
 import uuid
 from collections.abc import AsyncIterator
-from typing import Any, Dict, List, Optional
 from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 import anyio
 import click
@@ -19,9 +18,9 @@ import mcp.types as types
 from mcp.server.lowlevel import Server
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from starlette.applications import Starlette
-from starlette.routing import Mount, Route
-from starlette.responses import JSONResponse
 from starlette.requests import Request
+from starlette.responses import JSONResponse
+from starlette.routing import Mount, Route
 from starlette.types import Receive, Scope, Send
 
 from .grasshopper_mcp.utils.communication import GrasshopperHttpClient

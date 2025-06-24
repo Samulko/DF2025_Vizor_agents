@@ -7,6 +7,7 @@ for the bridge design system agents.
 
 from .server import start_status_monitor
 
+
 def start_lcars_interface(host='0.0.0.0', port=5000):
     """Start the LCARS monitoring interface.
     
