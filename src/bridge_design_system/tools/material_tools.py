@@ -257,6 +257,120 @@ class MaterialInventoryManager:
             ]
         
         return status
+    
+    def _create_backup(self, backup_name: str) -> str:
+        """Create named backup of current inventory state."""
+        try:
+            # Create backups directory if it doesn't exist
+            backups_dir = self.inventory_path.parent / "backups"
+            backups_dir.mkdir(exist_ok=True)
+            
+            # Create backup file path
+            backup_path = backups_dir / f"{backup_name}.json"
+            
+            # Copy current inventory to backup
+            backup_data = self.inventory_data.copy()
+            backup_data["backup_metadata"] = {
+                "name": backup_name,
+                "original_file": str(self.inventory_path),
+                "created_at": datetime.now().isoformat(),
+                "source_version": backup_data.get("metadata", {}).get("version", "unknown")
+            }
+            
+            with open(backup_path, 'w') as f:
+                json.dump(backup_data, f, indent=2)
+            
+            logger.info(f"✅ Backup created: {backup_path}")
+            return str(backup_path)
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to create backup '{backup_name}': {e}")
+            raise
+    
+    def _restore_backup(self, backup_name: str) -> Dict[str, Any]:
+        """Restore inventory from named backup."""
+        try:
+            # Find backup file
+            backups_dir = self.inventory_path.parent / "backups"
+            backup_path = backups_dir / f"{backup_name}.json"
+            
+            if not backup_path.exists():
+                raise FileNotFoundError(f"Backup file not found: {backup_path}")
+            
+            # Load backup data
+            with open(backup_path, 'r') as f:
+                backup_data = json.load(f)
+            
+            # Remove backup metadata for restoration
+            backup_data.pop("backup_metadata", None)
+            
+            # Update last_updated timestamp
+            backup_data["last_updated"] = datetime.now().isoformat()
+            
+            # Restore to current inventory
+            self.inventory_data = backup_data
+            self._save_inventory(backup=False)  # Don't create backup of the restore
+            
+            logger.info(f"✅ Inventory restored from backup: {backup_name}")
+            return backup_data
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to restore backup '{backup_name}': {e}")
+            raise
+    
+    def _list_backups(self) -> List[Dict[str, Any]]:
+        """List available backup files with metadata."""
+        try:
+            backups_dir = self.inventory_path.parent / "backups"
+            
+            if not backups_dir.exists():
+                return []
+            
+            backups = []
+            for backup_file in backups_dir.glob("*.json"):
+                try:
+                    with open(backup_file, 'r') as f:
+                        backup_data = json.load(f)
+                    
+                    metadata = backup_data.get("backup_metadata", {})
+                    backups.append({
+                        "name": backup_file.stem,
+                        "file_path": str(backup_file),
+                        "created_at": metadata.get("created_at", "unknown"),
+                        "source_version": metadata.get("source_version", "unknown"),
+                        "file_size_bytes": backup_file.stat().st_size
+                    })
+                    
+                except Exception as e:
+                    logger.warning(f"⚠️ Could not read backup metadata from {backup_file}: {e}")
+            
+            # Sort by creation date (newest first)
+            backups.sort(key=lambda x: x["created_at"], reverse=True)
+            
+            logger.info(f"📋 Found {len(backups)} backup files")
+            return backups
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to list backups: {e}")
+            return []
+    
+    def _delete_backup(self, backup_name: str) -> bool:
+        """Delete a named backup file."""
+        try:
+            backups_dir = self.inventory_path.parent / "backups"
+            backup_path = backups_dir / f"{backup_name}.json"
+            
+            if backup_path.exists():
+                backup_path.unlink()
+                logger.info(f"🗑️ Deleted backup: {backup_name}")
+                return True
+            else:
+                logger.warning(f"⚠️ Backup not found: {backup_name}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"❌ Failed to delete backup '{backup_name}': {e}")
+            return False
 
 
 class CuttingOptimizer:

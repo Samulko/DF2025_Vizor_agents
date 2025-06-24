@@ -800,6 +800,263 @@ def validate_material_feasibility(proposed_elements: list) -> dict:
         }
 
 
+@tool
+def reset_material_inventory(reset_type: str = "full", backup_name: str = None) -> dict:
+    """
+    Reset material inventory to original or specified state.
+    
+    Provides flexible reset options for development, testing, and design iteration.
+    Automatically creates backup before reset operations for safety.
+    
+    Args:
+        reset_type: Type of reset - "full" (all beams pristine), "session" (to specific session), 
+                   "backup" (restore from backup), "confirm_full" (confirmed full reset)
+        backup_name: Name of backup to restore from (if reset_type="backup") or session ID (if reset_type="session")
+        
+    Returns:
+        Dict with reset status, operation details, and new inventory state
+    """
+    logger.info(f"🔄 Material inventory reset requested: {reset_type}")
+    
+    try:
+        # Initialize material manager
+        inventory_manager = MaterialInventoryManager()
+        
+        # Safety check for full reset
+        if reset_type == "full":
+            current_status = inventory_manager.get_status(detailed=False)
+            if current_status["total_utilization_percent"] > 0:
+                return {
+                    "success": False,
+                    "requires_confirmation": True,
+                    "warning": f"Current inventory has {current_status['total_utilization_percent']:.1f}% utilization",
+                    "current_usage": {
+                        "total_cuts": sum(len(beam.cuts) for beam in inventory_manager.get_beams()),
+                        "sessions": len(inventory_manager.inventory_data.get("cutting_sessions", [])),
+                        "waste_mm": current_status["total_waste_mm"]
+                    },
+                    "message": "Use reset_type='confirm_full' to proceed with full reset",
+                    "alternative": "Consider using reset_type='session' to reset to a specific session instead"
+                }
+        
+        # Create automatic backup before reset
+        backup_created = None
+        if reset_type in ["full", "confirm_full"]:
+            try:
+                backup_name_auto = f"auto_backup_before_reset_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                inventory_manager._create_backup(backup_name_auto)
+                backup_created = backup_name_auto
+                logger.info(f"📋 Automatic backup created: {backup_name_auto}")
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to create automatic backup: {e}")
+        
+        # Perform reset based on type
+        reset_result = None
+        
+        if reset_type in ["full", "confirm_full"]:
+            # Full reset - restore all 13 beams to pristine state
+            reset_result = _perform_full_reset(inventory_manager)
+            
+        elif reset_type == "session":
+            # Session reset - restore to specific cutting session
+            if not backup_name:
+                return {
+                    "success": False,
+                    "error": "session_id required for session reset",
+                    "available_sessions": [
+                        session["session_id"] for session in 
+                        inventory_manager.inventory_data.get("cutting_sessions", [])
+                    ]
+                }
+            reset_result = _perform_session_reset(inventory_manager, backup_name)
+            
+        elif reset_type == "backup":
+            # Backup restore - restore from named backup
+            if not backup_name:
+                return {
+                    "success": False,
+                    "error": "backup_name required for backup restore",
+                    "available_backups": inventory_manager._list_backups()
+                }
+            reset_result = _perform_backup_restore(inventory_manager, backup_name)
+            
+        else:
+            return {
+                "success": False,
+                "error": f"Unknown reset_type: {reset_type}",
+                "valid_types": ["full", "confirm_full", "session", "backup"]
+            }
+        
+        # Get new status after reset
+        new_status = inventory_manager.get_status(detailed=False)
+        
+        return {
+            "success": True,
+            "reset_type": reset_type,
+            "backup_created": backup_created,
+            "reset_details": reset_result,
+            "new_inventory_status": {
+                "total_beams": new_status["total_beams"],
+                "beams_available": new_status["beams_available"],
+                "total_remaining_mm": new_status["total_remaining_mm"],
+                "total_utilization_percent": new_status["total_utilization_percent"]
+            },
+            "message": f"Material inventory reset completed successfully using {reset_type} method",
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Material inventory reset failed: {e}")
+        return {
+            "success": False,
+            "error": f"Reset operation failed: {str(e)}",
+            "reset_type": reset_type
+        }
+
+
+# ==================== RESET HELPER FUNCTIONS ====================
+
+def _perform_full_reset(inventory_manager) -> dict:
+    """Perform full reset of all beams to pristine state."""
+    try:
+        # Create fresh inventory data with all 13 beams at 1980mm
+        fresh_inventory = {
+            "total_stock_mm": 25740,  # 13 * 1980
+            "beam_length_mm": 1980,
+            "kerf_loss_mm": 3,
+            "available_beams": [],
+            "used_elements": [],
+            "total_waste_mm": 0,
+            "total_utilization_percent": 0.0,
+            "cutting_sessions": [],
+            "last_updated": datetime.now().isoformat(),
+            "metadata": {
+                "cross_section": "5x5cm",
+                "material_type": "timber",
+                "project": "bridge_design",
+                "version": "1.0",
+                "units": "millimeters"
+            },
+            "statistics": {
+                "total_beams": 13,
+                "full_beams": 13,
+                "partial_beams": 0,
+                "average_beam_length_mm": 1980.0,
+                "material_efficiency_target": 95.0,
+                "waste_tolerance_mm": 100
+            }
+        }
+        
+        # Create 13 pristine beams
+        for i in range(1, 14):
+            beam_data = {
+                "id": f"beam_{i:03d}",
+                "original_length_mm": 1980,
+                "remaining_length_mm": 1980,
+                "cuts": [],
+                "waste_mm": 0,
+                "utilization_percent": 0.0
+            }
+            fresh_inventory["available_beams"].append(beam_data)
+        
+        # Save the fresh inventory
+        inventory_manager.inventory_data = fresh_inventory
+        inventory_manager._save_inventory()
+        
+        logger.info("✅ Full reset completed - all 13 beams restored to 1980mm")
+        return {
+            "operation": "full_reset",
+            "beams_reset": 13,
+            "total_material_restored_mm": 25740,
+            "sessions_cleared": "all",
+            "cuts_cleared": "all"
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Full reset failed: {e}")
+        raise
+
+
+def _perform_session_reset(inventory_manager, session_id: str) -> dict:
+    """Reset inventory to state before a specific cutting session."""
+    try:
+        sessions = inventory_manager.inventory_data.get("cutting_sessions", [])
+        
+        # Find the target session
+        target_session_index = None
+        for i, session in enumerate(sessions):
+            if session["session_id"] == session_id:
+                target_session_index = i
+                break
+        
+        if target_session_index is None:
+            raise ValueError(f"Session '{session_id}' not found")
+        
+        # Create inventory state as it was before this session
+        # We need to reverse all sessions from the target onwards
+        sessions_to_reverse = sessions[target_session_index:]
+        
+        logger.info(f"🔄 Reversing {len(sessions_to_reverse)} sessions from '{session_id}' onwards")
+        
+        # Start with current beams and reverse the operations
+        beams = inventory_manager.get_beams()
+        cuts_removed = 0
+        
+        for session in reversed(sessions_to_reverse):
+            cutting_plan = session.get("cutting_plan", {}).get("cutting_plan", [])
+            for cut in cutting_plan:
+                # Find the beam and remove this cut
+                for beam in beams:
+                    if beam.beam_id == cut["beam_id"]:
+                        # Remove the cut if it exists
+                        beam.cuts = [c for c in beam.cuts if c.element_id != cut["element_id"]]
+                        # Recalculate remaining length
+                        total_cuts_length = sum(c.length_mm + c.kerf_loss_mm for c in beam.cuts)
+                        beam.remaining_length_mm = beam.original_length_mm - total_cuts_length
+                        beam.utilization_percent = ((beam.original_length_mm - beam.remaining_length_mm) / beam.original_length_mm) * 100
+                        cuts_removed += 1
+                        break
+        
+        # Update inventory with reversed state
+        inventory_manager.update_beams(beams)
+        
+        # Remove the reversed sessions from history
+        inventory_manager.inventory_data["cutting_sessions"] = sessions[:target_session_index]
+        inventory_manager._save_inventory()
+        
+        logger.info(f"✅ Session reset completed - removed {cuts_removed} cuts")
+        return {
+            "operation": "session_reset",
+            "target_session": session_id,
+            "sessions_removed": len(sessions_to_reverse),
+            "cuts_removed": cuts_removed,
+            "remaining_sessions": len(inventory_manager.inventory_data["cutting_sessions"])
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Session reset failed: {e}")
+        raise
+
+
+def _perform_backup_restore(inventory_manager, backup_name: str) -> dict:
+    """Restore inventory from a named backup file."""
+    try:
+        restored_data = inventory_manager._restore_backup(backup_name)
+        
+        logger.info(f"✅ Backup restore completed from '{backup_name}'")
+        return {
+            "operation": "backup_restore",
+            "backup_name": backup_name,
+            "restored_beams": len(restored_data.get("available_beams", [])),
+            "restored_sessions": len(restored_data.get("cutting_sessions", [])),
+            "restore_timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Backup restore failed: {e}")
+        raise
+
+
 # ==================== HELPER FUNCTIONS ====================
 
 def _format_cutting_plan_visual(cutting_result: dict) -> str:
@@ -959,7 +1216,8 @@ def create_syslogic_agent(
         track_material_usage,
         plan_cutting_sequence,
         get_material_status,
-        validate_material_feasibility
+        validate_material_feasibility,
+        reset_material_inventory
     ]
     
     # Extract max_steps from kwargs to avoid duplicate parameter error

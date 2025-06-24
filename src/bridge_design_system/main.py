@@ -13,6 +13,7 @@ from .config.logging_config import get_logger
 from .config.model_config import ModelProvider
 from .config.settings import settings
 from .state.component_registry import initialize_registry, get_global_registry
+from .tools.material_tools import MaterialInventoryManager
 
 logger = get_logger(__name__)
 
@@ -159,6 +160,188 @@ def get_monitoring_callback(enable_embedded_monitoring=False):
         except Exception as e:
             logger.debug(f"Remote monitoring not available: {e}")
             return None
+
+
+def handle_material_reset(args) -> bool:
+    """Handle material inventory reset operations from CLI."""
+    try:
+        print("🔧 Material Inventory Reset Tool")
+        print("=" * 40)
+        
+        # Initialize material manager
+        inventory_manager = MaterialInventoryManager()
+        
+        if args.reset_material == "list-sessions":
+            # List available cutting sessions
+            sessions = inventory_manager.inventory_data.get("cutting_sessions", [])
+            if not sessions:
+                print("📋 No cutting sessions found in inventory")
+                return True
+            
+            print(f"📋 Found {len(sessions)} cutting sessions:")
+            for i, session in enumerate(sessions, 1):
+                session_id = session.get("session_id", f"session_{i}")
+                timestamp = session.get("timestamp", "unknown")
+                elements = len(session.get("elements", []))
+                print(f"  {i}. {session_id} - {timestamp} ({elements} elements)")
+            
+            print("\nUse --reset-material with --session-id to reset to a specific session")
+            return True
+            
+        elif args.reset_material == "list-backups":
+            # List available backups
+            backups = inventory_manager._list_backups()
+            if not backups:
+                print("📋 No backup files found")
+                return True
+            
+            print(f"📋 Found {len(backups)} backup files:")
+            for backup in backups:
+                name = backup["name"]
+                created = backup["created_at"]
+                size_kb = backup["file_size_bytes"] / 1024
+                print(f"  • {name} - {created} ({size_kb:.1f} KB)")
+            
+            print("\nUse --reset-material with --backup-name to restore from a backup")
+            return True
+            
+        elif args.reset_material == "full":
+            # Show current status and ask for confirmation
+            current_status = inventory_manager.get_status(detailed=False)
+            
+            print("🔍 Current Material Inventory Status:")
+            print(f"  Total beams: {current_status['total_beams']}")
+            print(f"  Overall utilization: {current_status['overall_utilization_percent']:.1f}%")
+            print(f"  Total cuts made: {sum(len(beam.cuts) for beam in inventory_manager.get_beams())}")
+            print(f"  Cutting sessions: {len(inventory_manager.inventory_data.get('cutting_sessions', []))}")
+            
+            if current_status["overall_utilization_percent"] > 0:
+                print("\n⚠️ WARNING: This will reset ALL material usage data!")
+                print("   All cuts, sessions, and utilization will be lost.")
+                print("   Use --reset-material confirm to proceed without this warning.")
+                
+                try:
+                    response = input("\nContinue with full reset? (y/N): ").strip().lower()
+                    if response not in ['y', 'yes']:
+                        print("Reset cancelled by user")
+                        return True
+                except KeyboardInterrupt:
+                    print("\nReset cancelled by user")
+                    return True
+            
+            # Perform the full reset
+            print("\n🔄 Performing full material inventory reset...")
+            reset_result = _perform_cli_full_reset(inventory_manager)
+            
+            if reset_result["success"]:
+                print(f"✅ {reset_result['message']}")
+                print(f"   Beams reset: {reset_result['beams_reset']}")
+                print(f"   Material restored: {reset_result['total_material_restored_mm']}mm")
+                return True
+            else:
+                print(f"❌ Reset failed: {reset_result.get('error', 'Unknown error')}")
+                return False
+                
+        elif args.reset_material == "confirm":
+            # Force full reset without confirmation
+            print("🔄 Performing confirmed full material inventory reset...")
+            reset_result = _perform_cli_full_reset(inventory_manager)
+            
+            if reset_result["success"]:
+                print(f"✅ {reset_result['message']}")
+                return True
+            else:
+                print(f"❌ Reset failed: {reset_result.get('error', 'Unknown error')}")
+                return False
+        
+        # Handle session or backup specific resets via the reset tool
+        if args.session_id:
+            print(f"🔄 Resetting to session: {args.session_id}")
+            # This would use the session reset functionality
+            print("⚠️ Session reset not yet implemented in CLI")
+            return False
+            
+        if args.backup_name:
+            print(f"🔄 Restoring from backup: {args.backup_name}")
+            # This would use the backup restore functionality  
+            print("⚠️ Backup restore not yet implemented in CLI")
+            return False
+            
+        return True
+        
+    except Exception as e:
+        print(f"❌ Material reset failed: {e}")
+        logger.error(f"Material reset error: {e}")
+        return False
+
+
+def _perform_cli_full_reset(inventory_manager) -> dict:
+    """Perform full reset for CLI operations."""
+    try:
+        from datetime import datetime
+        
+        # Create automatic backup
+        backup_name = f"cli_backup_before_reset_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        inventory_manager._create_backup(backup_name)
+        print(f"📋 Automatic backup created: {backup_name}")
+        
+        # Create fresh inventory data
+        fresh_inventory = {
+            "total_stock_mm": 25740,  # 13 * 1980
+            "beam_length_mm": 1980,
+            "kerf_loss_mm": 3,
+            "available_beams": [],
+            "used_elements": [],
+            "total_waste_mm": 0,
+            "total_utilization_percent": 0.0,
+            "cutting_sessions": [],
+            "last_updated": datetime.now().isoformat(),
+            "metadata": {
+                "cross_section": "5x5cm",
+                "material_type": "timber",
+                "project": "bridge_design",
+                "version": "1.0",
+                "units": "millimeters"
+            },
+            "statistics": {
+                "total_beams": 13,
+                "full_beams": 13,
+                "partial_beams": 0,
+                "average_beam_length_mm": 1980.0,
+                "material_efficiency_target": 95.0,
+                "waste_tolerance_mm": 100
+            }
+        }
+        
+        # Create 13 pristine beams
+        for i in range(1, 14):
+            beam_data = {
+                "id": f"beam_{i:03d}",
+                "original_length_mm": 1980,
+                "remaining_length_mm": 1980,
+                "cuts": [],
+                "waste_mm": 0,
+                "utilization_percent": 0.0
+            }
+            fresh_inventory["available_beams"].append(beam_data)
+        
+        # Save the fresh inventory
+        inventory_manager.inventory_data = fresh_inventory
+        inventory_manager._save_inventory(backup=False)  # We already created our own backup
+        
+        return {
+            "success": True,
+            "message": "Material inventory reset completed successfully",
+            "beams_reset": 13,
+            "total_material_restored_mm": 25740,
+            "backup_created": backup_name
+        }
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
 
 
 def test_system():
@@ -417,11 +600,29 @@ def main():
         default="http://localhost:8080",
         help="URL of Grasshopper HTTP server (default: http://localhost:8080)"
     )
+    parser.add_argument(
+        "--reset-material",
+        choices=["full", "confirm", "list-sessions", "list-backups"],
+        help="Reset material inventory: 'full' (with confirmation), 'confirm' (force reset), 'list-sessions', 'list-backups'"
+    )
+    parser.add_argument(
+        "--session-id",
+        type=str,
+        help="Session ID for session-based material reset (use with reset commands)"
+    )
+    parser.add_argument(
+        "--backup-name",
+        type=str,
+        help="Backup name for backup-based material operations (use with reset commands)"
+    )
     
     args = parser.parse_args()
     
     if args.test:
         success = test_system()
+        exit(0 if success else 1)
+    elif args.reset_material:
+        success = handle_material_reset(args)
         exit(0 if success else 1)
     elif args.start_streamable_http:
         # Use Clean FastMCP implementation (recommended approach)
