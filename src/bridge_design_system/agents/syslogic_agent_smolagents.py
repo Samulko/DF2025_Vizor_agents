@@ -16,6 +16,7 @@ from smolagents import CodeAgent, tool
 
 from ..config.logging_config import get_logger
 from ..config.model_config import ModelProvider
+from ..tools.material_tools import MaterialInventoryManager, CuttingOptimizer, extract_element_lengths, create_session_record
 
 logger = get_logger(__name__)
 
@@ -460,6 +461,467 @@ def _calculate_triangle_closure(elements: List[dict], module_type: str) -> dict:
     }
 
 
+# ==================== MATERIAL TRACKING TOOLS ====================
+
+@tool
+def track_material_usage(elements: list, session_id: str = None) -> dict:
+    """
+    Track material consumption from geometry agent elements and update inventory.
+    
+    Automatically updates the material inventory JSON with consumption data,
+    calculates waste, and provides usage summary for design feedback.
+    
+    Args:
+        elements: List of AssemblyElement objects or dicts with length property
+        session_id: Optional session identifier for tracking (auto-generated if None)
+        
+    Returns:
+        Dict with usage summary, waste calculation, and updated inventory status
+    """
+    logger.info(f"🔧 Tracking material usage for {len(elements)} elements")
+    
+    try:
+        # Initialize material manager
+        inventory_manager = MaterialInventoryManager()
+        optimizer = CuttingOptimizer()
+        
+        # Extract element lengths
+        element_lengths = extract_element_lengths(elements)
+        
+        if not element_lengths:
+            return {
+                "success": False,
+                "error": "No valid element lengths found",
+                "elements_processed": 0
+            }
+        
+        # Generate session ID if not provided
+        if session_id is None:
+            session_id = f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        
+        # Get current beams and plan cutting
+        beams = inventory_manager.get_beams()
+        cutting_result = optimizer.first_fit_decreasing(element_lengths, beams)
+        
+        # Check if cutting is feasible
+        if not cutting_result["summary"]["feasible"]:
+            return {
+                "success": False,
+                "feasible": False,
+                "error": "Insufficient material for requested elements",
+                "required_elements": len(element_lengths),
+                "unassigned_elements": cutting_result["summary"]["unassigned_elements"],
+                "suggestions": optimizer._generate_optimization_suggestions(cutting_result),
+                "available_material_mm": sum(beam.remaining_length_mm for beam in beams)
+            }
+        
+        # Apply cuts to inventory
+        updated_beams = []
+        for beam_assignment in cutting_result["beam_assignments"]:
+            # Find the corresponding beam
+            beam = next((b for b in beams if b.beam_id == beam_assignment["beam_id"]), None)
+            if beam:
+                # Update beam with new cuts from the optimization result
+                beam.remaining_length_mm = beam_assignment["remaining_length_mm"]
+                beam.utilization_percent = beam_assignment["utilization_percent"]
+                beam.waste_mm = beam_assignment["waste_mm"]
+                # Add new cuts
+                for cut_data in beam_assignment["cuts"]:
+                    if cut_data["element_id"] not in [cut.element_id for cut in beam.cuts]:
+                        beam.add_cut(
+                            cut_data["element_id"],
+                            cut_data["length_mm"],
+                            cut_data.get("kerf_loss_mm", 3)
+                        )
+                updated_beams.append(beam)
+        
+        # Update inventory
+        inventory_manager.update_beams(updated_beams)
+        
+        # Create session record
+        session_record = create_session_record(session_id, elements, cutting_result)
+        
+        # Add session to inventory data
+        inventory_manager.inventory_data.setdefault("cutting_sessions", []).append(session_record)
+        inventory_manager._save_inventory()
+        
+        # Get updated status
+        status = inventory_manager.get_status(detailed=False)
+        
+        return {
+            "success": True,
+            "session_id": session_id,
+            "elements_processed": len(element_lengths),
+            "cutting_plan": cutting_result["cutting_plan"],
+            "material_summary": {
+                "total_length_used_mm": sum(element_lengths),
+                "total_kerf_loss_mm": len(element_lengths) * 3,
+                "waste_generated_mm": cutting_result["summary"]["total_waste_mm"],
+                "efficiency_percent": cutting_result["summary"]["material_efficiency_percent"]
+            },
+            "inventory_status": status,
+            "recommendations": optimizer._generate_optimization_suggestions(cutting_result)
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Material tracking failed: {e}")
+        return {
+            "success": False,
+            "error": f"Material tracking error: {str(e)}",
+            "elements_processed": 0
+        }
+
+
+@tool
+def plan_cutting_sequence(required_lengths: list, optimize: bool = True) -> dict:
+    """
+    Generate optimized cutting sequence using First Fit Decreasing algorithm.
+    
+    Plans cuts without modifying inventory, useful for design validation
+    and optimization before committing to actual material usage.
+    
+    Args:
+        required_lengths: List of required element lengths in mm (or cm, auto-converted)
+        optimize: Whether to optimize for minimum waste (default True)
+        
+    Returns:
+        Dict with cutting plan, beam assignments, and waste prediction
+    """
+    logger.info(f"📐 Planning cutting sequence for {len(required_lengths)} elements")
+    
+    try:
+        # Initialize managers
+        inventory_manager = MaterialInventoryManager()
+        optimizer = CuttingOptimizer()
+        
+        # Convert to proper lengths if needed
+        if isinstance(required_lengths[0], (int, float)) and all(isinstance(x, (int, float)) for x in required_lengths):
+            # Direct length values - convert to mm if needed
+            element_lengths = []
+            for length in required_lengths:
+                if length < 100:  # Assume cm, convert to mm
+                    element_lengths.append(int(length * 10))
+                else:  # Already mm
+                    element_lengths.append(int(length))
+        else:
+            # Extract from element objects
+            element_lengths = extract_element_lengths(required_lengths)
+        
+        if not element_lengths:
+            return {
+                "success": False,
+                "error": "No valid element lengths provided",
+                "planning_result": None
+            }
+        
+        # Get current beam status
+        beams = inventory_manager.get_beams()
+        
+        # Plan cutting sequence
+        if optimize:
+            cutting_result = optimizer.first_fit_decreasing(element_lengths, beams)
+        else:
+            # Simple first-fit without sorting
+            cutting_result = optimizer.first_fit_decreasing(element_lengths, beams)
+        
+        # Get current inventory status
+        current_status = inventory_manager.get_status(detailed=True)
+        
+        return {
+            "success": True,
+            "planning_result": cutting_result,
+            "current_inventory": current_status,
+            "feasibility": {
+                "possible": cutting_result["summary"]["feasible"],
+                "efficiency_percent": cutting_result["summary"]["material_efficiency_percent"],
+                "waste_mm": cutting_result["summary"]["total_waste_mm"],
+                "unassigned_count": cutting_result["summary"]["unassigned_elements"]
+            },
+            "recommendations": optimizer._generate_optimization_suggestions(cutting_result),
+            "visual_plan": _format_cutting_plan_visual(cutting_result)
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Cutting sequence planning failed: {e}")
+        return {
+            "success": False,
+            "error": f"Planning error: {str(e)}",
+            "planning_result": None
+        }
+
+
+@tool
+def get_material_status(detailed: bool = False) -> dict:
+    """
+    Get current material inventory status and availability.
+    
+    Provides real-time view of material inventory including remaining
+    capacity, utilization statistics, and beam-by-beam breakdown.
+    
+    Args:
+        detailed: Whether to include detailed beam-by-beam breakdown
+        
+    Returns:
+        Dict with inventory summary, remaining capacity, and utilization stats
+    """
+    logger.info(f"📊 Getting material status (detailed={detailed})")
+    
+    try:
+        # Initialize material manager
+        inventory_manager = MaterialInventoryManager()
+        
+        # Get comprehensive status
+        status = inventory_manager.get_status(detailed=detailed)
+        
+        # Add additional analysis
+        beams = inventory_manager.get_beams()
+        
+        # Calculate beam utilization distribution
+        utilization_ranges = {
+            "unused": len([b for b in beams if b.utilization_percent == 0]),
+            "low_use_0_25": len([b for b in beams if 0 < b.utilization_percent <= 25]),
+            "medium_use_25_75": len([b for b in beams if 25 < b.utilization_percent <= 75]),
+            "high_use_75_100": len([b for b in beams if 75 < b.utilization_percent <= 100])
+        }
+        
+        # Calculate remaining capacity by beam size
+        capacity_analysis = {
+            "beams_with_500mm_plus": len([b for b in beams if b.remaining_length_mm >= 500]),
+            "beams_with_200_500mm": len([b for b in beams if 200 <= b.remaining_length_mm < 500]),
+            "beams_with_50_200mm": len([b for b in beams if 50 <= b.remaining_length_mm < 200]),
+            "beams_unusable": len([b for b in beams if b.remaining_length_mm < 50])
+        }
+        
+        # Recent usage analysis
+        total_cuts = sum(len(beam.cuts) for beam in beams)
+        recent_sessions = inventory_manager.inventory_data.get("cutting_sessions", [])
+        
+        return {
+            "success": True,
+            "inventory_status": status,
+            "utilization_distribution": utilization_ranges,
+            "capacity_analysis": capacity_analysis,
+            "usage_summary": {
+                "total_cuts_made": total_cuts,
+                "cutting_sessions": len(recent_sessions),
+                "last_updated": inventory_manager.inventory_data.get("last_updated", "Unknown")
+            },
+            "recommendations": _generate_inventory_recommendations(status, beams),
+            "alerts": _check_inventory_alerts(status, beams)
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to get material status: {e}")
+        return {
+            "success": False,
+            "error": f"Status retrieval error: {str(e)}",
+            "inventory_status": None
+        }
+
+
+@tool
+def validate_material_feasibility(proposed_elements: list) -> dict:
+    """
+    Validate if proposed design is feasible with current material inventory.
+    
+    Performs comprehensive feasibility analysis including capacity checks,
+    optimization suggestions, and alternative approaches for infeasible designs.
+    
+    Args:
+        proposed_elements: List of proposed elements with lengths (objects or direct lengths)
+        
+    Returns:
+        Dict with feasibility status, alternative suggestions, and constraint analysis
+    """
+    logger.info(f"✅ Validating material feasibility for {len(proposed_elements)} proposed elements")
+    
+    try:
+        # Initialize managers
+        inventory_manager = MaterialInventoryManager()
+        optimizer = CuttingOptimizer()
+        
+        # Extract element lengths
+        element_lengths = extract_element_lengths(proposed_elements)
+        
+        if not element_lengths:
+            return {
+                "feasible": False,
+                "error": "No valid element lengths found in proposed elements",
+                "analysis": None
+            }
+        
+        # Get current beams
+        beams = inventory_manager.get_beams()
+        
+        # Perform feasibility validation
+        feasibility_result = optimizer.validate_feasibility(element_lengths, beams)
+        
+        # Get detailed cutting plan if feasible
+        detailed_plan = None
+        if feasibility_result["feasible"]:
+            detailed_plan = optimizer.first_fit_decreasing(element_lengths, beams)
+        
+        # Generate alternatives if not feasible
+        alternatives = []
+        if not feasibility_result["feasible"]:
+            alternatives = _generate_design_alternatives(element_lengths, beams, optimizer)
+        
+        # Calculate design metrics
+        total_required = sum(element_lengths)
+        total_available = sum(beam.remaining_length_mm for beam in beams)
+        
+        return {
+            "feasible": feasibility_result["feasible"],
+            "analysis": {
+                "total_elements": len(element_lengths),
+                "total_length_required_mm": total_required,
+                "total_length_available_mm": total_available,
+                "capacity_utilization_percent": (total_required / total_available * 100) if total_available > 0 else 0,
+                "largest_element_mm": max(element_lengths) if element_lengths else 0,
+                "smallest_element_mm": min(element_lengths) if element_lengths else 0
+            },
+            "feasibility_details": feasibility_result,
+            "cutting_plan": detailed_plan,
+            "alternatives": alternatives,
+            "recommendations": _generate_feasibility_recommendations(feasibility_result, element_lengths, beams),
+            "constraints": {
+                "max_beam_length_available_mm": max((beam.remaining_length_mm for beam in beams), default=0),
+                "min_cut_length_recommended_mm": 50,
+                "kerf_loss_per_cut_mm": 3
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Material feasibility validation failed: {e}")
+        return {
+            "feasible": False,
+            "error": f"Feasibility validation error: {str(e)}",
+            "analysis": None
+        }
+
+
+# ==================== HELPER FUNCTIONS ====================
+
+def _format_cutting_plan_visual(cutting_result: dict) -> str:
+    """Create ASCII visual representation of cutting plan."""
+    try:
+        visual_lines = ["CUTTING PLAN VISUALIZATION:", "=" * 40]
+        
+        for beam_assignment in cutting_result["beam_assignments"]:
+            beam_id = beam_assignment["beam_id"]
+            original_length = beam_assignment["original_length_mm"]
+            remaining_length = beam_assignment["remaining_length_mm"]
+            cuts = beam_assignment["cuts"]
+            
+            # Create visual bar (scaled to 40 chars max)
+            scale = 40 / original_length if original_length > 0 else 0
+            used_length = original_length - remaining_length
+            used_chars = int(used_length * scale)
+            remaining_chars = 40 - used_chars
+            
+            bar = "█" * used_chars + "░" * remaining_chars
+            visual_lines.append(f"{beam_id}: [{bar}] {used_length}/{original_length}mm")
+            
+            # Show cuts
+            if cuts:
+                cut_info = ", ".join([f"{cut['element_id']}({cut['length_mm']}mm)" for cut in cuts])
+                visual_lines.append(f"   Cuts: {cut_info}")
+            
+            visual_lines.append("")
+        
+        return "\n".join(visual_lines)
+    except Exception:
+        return "Visual representation unavailable"
+
+
+def _generate_inventory_recommendations(status: dict, beams: list) -> list:
+    """Generate recommendations based on current inventory status."""
+    recommendations = []
+    
+    if status["waste_percentage"] > 10:
+        recommendations.append("High waste percentage - consider design optimization")
+    
+    if status["beams_available"] < 2:
+        recommendations.append("Low beam availability - consider restocking")
+    
+    if status["overall_utilization_percent"] > 90:
+        recommendations.append("Very high utilization - consider additional material procurement")
+    
+    unused_beams = len([beam for beam in beams if beam.utilization_percent == 0])
+    if unused_beams == 0:
+        recommendations.append("All beams in use - excellent resource utilization")
+    
+    return recommendations if recommendations else ["Material inventory is in good condition"]
+
+
+def _check_inventory_alerts(status: dict, beams: list) -> list:
+    """Check for critical inventory alerts."""
+    alerts = []
+    
+    if status["total_remaining_mm"] < 1000:
+        alerts.append("CRITICAL: Low material remaining (<1000mm)")
+    
+    if status["beams_available"] == 0:
+        alerts.append("CRITICAL: No beams available for cutting")
+    
+    if status["waste_percentage"] > 15:
+        alerts.append("WARNING: High waste percentage (>15%)")
+    
+    return alerts
+
+
+def _generate_design_alternatives(element_lengths: list, beams: list, optimizer) -> list:
+    """Generate alternative design suggestions for infeasible designs."""
+    alternatives = []
+    
+    # Try reducing largest elements
+    if element_lengths:
+        max_length = max(element_lengths)
+        max_available = max((beam.remaining_length_mm for beam in beams), default=0)
+        
+        if max_length > max_available:
+            reduced_length = max_available - 10  # Account for kerf
+            alternatives.append({
+                "type": "reduce_largest_element",
+                "description": f"Reduce largest element from {max_length}mm to {reduced_length}mm",
+                "impact": "Allows design to fit within available material"
+            })
+    
+    # Try splitting large elements
+    large_elements = [length for length in element_lengths if length > 800]
+    if large_elements:
+        alternatives.append({
+            "type": "split_large_elements",
+            "description": f"Split {len(large_elements)} large elements into smaller segments",
+            "impact": "Better material utilization but may require joining"
+        })
+    
+    return alternatives
+
+
+def _generate_feasibility_recommendations(feasibility_result: dict, element_lengths: list, beams: list) -> list:
+    """Generate specific recommendations based on feasibility analysis."""
+    recommendations = []
+    
+    if not feasibility_result["feasible"]:
+        if "reason" in feasibility_result:
+            if "Insufficient total material" in feasibility_result["reason"]:
+                shortage = feasibility_result.get("shortage_mm", 0)
+                recommendations.append(f"Need additional {shortage}mm of material")
+            elif "Largest element exceeds" in feasibility_result["reason"]:
+                max_space = feasibility_result.get("max_beam_space_mm", 0)
+                recommendations.append(f"Reduce largest element to max {max_space-3}mm")
+    
+    # Efficiency recommendations
+    efficiency = feasibility_result.get("efficiency_percent", 0)
+    if efficiency < 70:
+        recommendations.append("Design has low material efficiency - consider optimization")
+    elif efficiency > 95:
+        recommendations.append("Excellent material efficiency!")
+    
+    return recommendations if recommendations else ["Design appears feasible with current approach"]
+
+
 def create_syslogic_agent(
     model_name: str = "syslogic", 
     component_registry: Optional[Any] = None,
@@ -486,12 +948,18 @@ def create_syslogic_agent(
     # Get model configuration
     model = ModelProvider.get_model(model_name)
     
-    # Define validation tools
+    # Define validation and material tracking tools
     validation_tools = [
+        # Structural validation tools
         check_element_connectivity,
         generate_geometry_agent_instructions,
         calculate_closure_correction,
-        validate_planar_orientation
+        validate_planar_orientation,
+        # Material tracking tools
+        track_material_usage,
+        plan_cutting_sequence,
+        get_material_status,
+        validate_material_feasibility
     ]
     
     # Extract max_steps from kwargs to avoid duplicate parameter error

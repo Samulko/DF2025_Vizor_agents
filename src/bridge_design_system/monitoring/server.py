@@ -33,10 +33,24 @@ async def startup_event():
     status_tracker.register_agent("geometry_agent", "ToolCallingAgent") 
     status_tracker.register_agent("syslogic_agent", "CodeAgent")
     
+    # NEW AGENT TEMPLATE - UNCOMMENT AND MODIFY FOR NEW AGENTS
+    # status_tracker.register_agent("material_agent", "ToolCallingAgent")
+    
+    # AGENT TYPE REFERENCE:
+    # - "CodeAgent" for agents that execute code (triage_agent, syslogic_agent)
+    # - "ToolCallingAgent" for agents that use tools (geometry_agent)
+    #
+    # TEMPLATE USAGE:
+    # 1. Uncomment the line above
+    # 2. Replace "material_agent" with your agent name
+    # 3. Choose appropriate agent type
+    # 4. Update the count in the print statement below
+    
     # Start periodic cleanup task for stale WebSocket connections
     asyncio.create_task(periodic_cleanup())
     
     print("📊 Agent monitoring system initialized with 3 agents")
+    # NOTE: Update the agent count above when adding new agents
 
 
 async def periodic_cleanup():

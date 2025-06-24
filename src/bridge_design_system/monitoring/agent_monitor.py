@@ -307,6 +307,39 @@ class MonitorCallback:
     def _extract_response_content(self, memory_step: ActionStep) -> Optional[str]:
         """Extract the agent's response content from the memory step."""
         try:
+            # Check action_output first - this is where the final response is usually stored
+            if hasattr(memory_step, "action_output") and memory_step.action_output:
+                action_output = str(memory_step.action_output)
+                
+                # Handle different agent response formats
+                if self.agent_name == "triage_agent":
+                    # For triage agent, extract from "Final answer:" format
+                    final_answer_match = action_output.split("Final answer: ")
+                    if len(final_answer_match) > 1:
+                        clean_answer = final_answer_match[-1].strip()
+                        # Remove trailing metadata like [Step X: Duration...]
+                        clean_answer = clean_answer.split("[Step")[0].strip()
+                        if clean_answer:
+                            return clean_answer
+                elif "geometry_agent" in self.agent_name or "syslogic_agent" in self.agent_name:
+                    # For geometry and syslogic agents, look for structured responses
+                    if "### 1. Task outcome" in action_output:
+                        return action_output
+                    # Also check for clean final answer format
+                    if "Here is the final answer from your managed agent" in action_output:
+                        # Extract the content after this header
+                        parts = action_output.split("Here is the final answer from your managed agent")
+                        if len(parts) > 1:
+                            clean_response = parts[-1].strip()
+                            # Remove the agent name part if present
+                            if clean_response.startswith("'") and "':" in clean_response:
+                                clean_response = clean_response.split("':", 1)[1].strip()
+                            return clean_response
+                
+                # If structured response found, return it
+                if "### 1. Task outcome" in action_output:
+                    return action_output
+            
             # Check observations for response content
             if hasattr(memory_step, "observations") and memory_step.observations:
                 observations = memory_step.observations
@@ -362,7 +395,7 @@ class MonitorCallback:
                 if "### 1. Task outcome" in result_str:
                     return result_str
             
-            # Check the step as a whole string
+            # Check the step as a whole string as last resort
             step_str = str(memory_step)
             
             # Special handling for triage agent
@@ -705,6 +738,39 @@ class RemoteMonitorCallback:
     def _extract_response_content_remote(self, memory_step) -> Optional[str]:
         """Extract response content for remote monitoring."""
         try:
+            # Check action_output first - this is where the final response is usually stored
+            if hasattr(memory_step, "action_output") and memory_step.action_output:
+                action_output = str(memory_step.action_output)
+                
+                # Handle different agent response formats
+                if self.agent_name == "triage_agent":
+                    # For triage agent, extract from "Final answer:" format
+                    final_answer_match = action_output.split("Final answer: ")
+                    if len(final_answer_match) > 1:
+                        clean_answer = final_answer_match[-1].strip()
+                        # Remove trailing metadata like [Step X: Duration...]
+                        clean_answer = clean_answer.split("[Step")[0].strip()
+                        if clean_answer:
+                            return clean_answer
+                elif "geometry_agent" in self.agent_name or "syslogic_agent" in self.agent_name:
+                    # For geometry and syslogic agents, look for structured responses
+                    if "### 1. Task outcome" in action_output:
+                        return action_output
+                    # Also check for clean final answer format
+                    if "Here is the final answer from your managed agent" in action_output:
+                        # Extract the content after this header
+                        parts = action_output.split("Here is the final answer from your managed agent")
+                        if len(parts) > 1:
+                            clean_response = parts[-1].strip()
+                            # Remove the agent name part if present
+                            if clean_response.startswith("'") and "':" in clean_response:
+                                clean_response = clean_response.split("':", 1)[1].strip()
+                            return clean_response
+                
+                # If structured response found, return it
+                if "### 1. Task outcome" in action_output:
+                    return action_output
+            
             # Similar to the local version but adapted for remote
             if hasattr(memory_step, "observations") and memory_step.observations:
                 observations = memory_step.observations
@@ -755,7 +821,7 @@ class RemoteMonitorCallback:
                 if "### 1. Task outcome" in result_str:
                     return result_str
             
-            # Check the whole step
+            # Check the whole step as last resort
             step_str = str(memory_step)
             
             # Special handling for triage agent

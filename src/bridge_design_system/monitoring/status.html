@@ -213,6 +213,31 @@
             background: var(--lcars-purple);
         }
 
+        /* NEW AGENT TEMPLATE - UNCOMMENT AND MODIFY FOR NEW AGENTS */
+        /*
+        .agent-card[data-agent="material_agent"] .lcars-main-panel {
+            background: var(--lcars-blue);
+        }
+        .agent-card[data-agent="material_agent"] .lcars-status-section {
+            background: var(--lcars-blue);
+        }
+        */
+
+        /* AVAILABLE LCARS COLORS FOR NEW AGENTS:
+         * --lcars-orange (used by triage_agent)
+         * --lcars-red (used by geometry_agent) 
+         * --lcars-purple (used by syslogic_agent)
+         * --lcars-blue (available)
+         * --lcars-pink (available)
+         * --lcars-yellow (available)
+         * 
+         * TEMPLATE USAGE:
+         * 1. Uncomment the template above
+         * 2. Replace "material_agent" with your agent name
+         * 3. Replace "var(--lcars-blue)" with your chosen color
+         * 4. Save and refresh the interface
+         */
+
         /* Status-based modifications */
         .agent-card.status-thinking .lcars-main-panel,
         .agent-card.status-thinking .lcars-status-section,
@@ -410,7 +435,7 @@
 
         .task-agent {
             font-weight: 600;
-            color: var(--lcars-orange);
+            color: #000000;
             text-transform: uppercase;
         }
 
@@ -420,7 +445,7 @@
         }
 
         .task-summary {
-            color: rgba(255, 255, 255, 0.9);
+            color: #000000;
             font-size: 0.95rem;
             line-height: 1.4;
             margin-bottom: 8px;
@@ -443,7 +468,7 @@
 
         .task-toggle {
             cursor: pointer;
-            color: var(--lcars-blue);
+            color: #4444AA;
             font-size: 0.85rem;
             text-decoration: underline;
         }
@@ -683,8 +708,7 @@
             handleMessage(message) {
                 if (message.type === 'status_update' && message.data) {
                     this.updateAgentStatus(message.data);
-                    const stardate = this.calculateStardate(new Date());
-                    this.lastUpdate.textContent = `STARDATE: ${stardate} - LAST SYSTEM UPDATE: ${new Date().toLocaleTimeString()}`;
+                    this.lastUpdate.textContent = `LAST SYSTEM UPDATE: ${new Date().toLocaleTimeString()}`;
                 } else if (message.type === 'ping') {
                     // Respond to server ping
                     if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
@@ -867,6 +891,17 @@
 
             renderAgents() {
                 const agentOrder = ['triage_agent', 'geometry_agent', 'syslogic_agent'];
+                
+                /* NEW AGENT TEMPLATE - ADD YOUR AGENT TO THE ARRAY ABOVE
+                 * 
+                 * EXAMPLE: Add 'material_agent' to the array:
+                 * const agentOrder = ['triage_agent', 'geometry_agent', 'syslogic_agent', 'material_agent'];
+                 * 
+                 * NOTES:
+                 * - Agent name must match exactly what you registered in server.py
+                 * - Order in array determines display order in the interface
+                 * - Agents not in this array will not be displayed
+                 */
                 
                 this.statusGrid.innerHTML = agentOrder.map(agentName => {
                     const agent = this.agents[agentName];

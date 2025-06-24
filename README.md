@@ -78,6 +78,32 @@ uv run python -m bridge_design_system.main
 ```
 You can then use natural language to create designs (e.g., "create a spiral staircase").
 
+#### LCARS Agent Monitoring Interface
+
+The system includes a Star Trek LCARS-styled real-time monitoring interface to track agent status and activities.
+
+**Start monitoring interface:**
+```bash
+# Option 1: Start monitoring with the main system
+uv run python -m bridge_design_system.main 
+
+# Option 2: Start monitoring interface separately
+uv run python -m bridge_design_system.monitoring.lcars_interface
+```
+
+**Access the interface:**
+- Open your browser to http://localhost:5000
+- View real-time agent status (Triage, Geometry, SysLogic agents)
+- Monitor task history and tool usage
+- LCARS-styled interface with Star Trek theming
+
+**Features:**
+- Real-time WebSocket updates
+- Agent status indicators (STANDBY, PROCESSING, ACTIVE, etc.)
+- Task completion history with expandable details
+- Network accessible (viewable from any device on local network)
+- Automatic reconnection and heartbeat monitoring
+
 ## Architecture Overview
 
 The system operates through the following flow:
@@ -89,8 +115,7 @@ WSL/Windows Environment -> MCP via STDIO -> STDIO MCP Server -> TCP Bridge (Port
 ### Multi-Agent System
 * **Triage Agent**: Orchestrates design workflows.
 * **Geometry Agent**: Controls Grasshopper for 3D modeling.
-* **Material Agent**: Manages construction material data.
-* **Structural Agent**: Performs engineering analyses.
+* **SysLogic**: Manages construction material data, validity of the strucutre that is being designed and handles post-rationalization process.
 
 ## Available Tools
 

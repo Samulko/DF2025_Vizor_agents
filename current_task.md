@@ -1,150 +1,260 @@
-# **Fix Agent Response Formatting and Task History Display**
+# **Enhanced SysLogic Agent with Material Inventory Tracking**
 
 ## **CORE OBJECTIVE**
 
-Fix the monitoring system to display clean, consistent response formats across all agents and ensure proper task history capture for individual agents.
+Enhance the SysLogic Agent with sophisticated material inventory tracking and cutting sequence optimization capabilities to minimize waste and provide real-time material usage feedback during bridge design.
 
-## **🚨 CURRENT PROBLEMS**
+## **🎯 PROJECT CONTEXT**
 
-### **Critical Issues to Solve**
-1. **Different Response Formats Between Agents** - Geometry Agent returns clean structured format, SysLogic Agent returns messy dictionary format
-2. **Task History Display Problems** - Triage agent shows verbose wrapper text instead of clean final answers
-3. **Missing Individual Agent History** - Geometry and SysLogic agents don't appear in task history at all
-4. **Inconsistent Agent Response Patterns** - Different smolagents types (ToolCallingAgent vs CodeAgent) produce different output formats
+### **Current Agent Architecture**
+- **Triage Agent** (`CodeAgent`): Orchestrator using `managed_agents=[geometry_agent, syslogic_agent]`
+- **Geometry Agent** (`ToolCallingAgent`): Creates `AssemblyElement` objects with precise length specifications (20-80cm)
+- **SysLogic Agent** (`CodeAgent`): Currently validates structural integrity, needs material tracking enhancement
+- **Communication Pattern**: Autonomous agents communicate through triage agent delegation
 
-### **Root Cause Analysis**
-From smolagents documentation:
-- **ToolCallingAgent** (Geometry): Uses `final_answer(string)` → Clean structured output ✅
-- **CodeAgent** (SysLogic): Uses `final_answer({dictionary})` in Python → Dictionary output ❌
-- **Response Extraction**: Current implementation should clean triage responses but isn't working properly
+### **Material Constraints & Requirements**
+- **Raw Material**: 1.98m (1980mm) timber beams, 5x5cm cross-section
+- **Total Inventory**: 13 beams × 1.98m = 25.74 meters total material
+- **Element Lengths**: Variable 20-80cm per geometry agent specifications
+- **Optimization Goal**: Minimize waste through intelligent cutting sequence planning
 
-## **🎯 PROPOSED SOLUTION: CONSISTENT AGENT FORMATTING**
-
-### **Expected Final Outcome**
+### **Enhanced Workflow Integration**
 ```
-Task History Display:
-├── Triage Agent: "The Geometry Agent has tools for getting and editing Python 3 scripts..." (clean, concise)
-├── Geometry Agent: Full 3-section structured response (### 1, ### 2, ### 3)
-└── SysLogic Agent: Full 3-section structured response (### 1, ### 2, ### 3)
+User Request → Triage Agent → Geometry Agent (creates design with lengths)
+                    ↓
+Triage Agent → SysLogic Agent (material tracking + structural validation)
+                    ↓
+Triage Agent → User (integrated response: design + material analysis)
 ```
 
 ## **🛠️ IMPLEMENTATION PHASES**
 
-### **Phase 1: Fix SysLogic Agent Response Format**
+### **Phase 1: Create Material Inventory Infrastructure**
 
-**Problem**: SysLogic Agent (CodeAgent) returns dictionary format instead of structured text
+**Objective**: Establish persistent material tracking with JSON-based inventory system
 
-**Solutions**:
-1. **Modify SysLogic Agent's `final_answer` usage**:
-   - Change from `final_answer({dictionary})` to `final_answer(formatted_string)`
-   - Make it return the same 3-section format as geometry agent
-   - Ensure consistent ### 1, ### 2, ### 3 structure
+**Files to create**:
+- `src/bridge_design_system/data/material_inventory.json` - Core inventory tracking
+- `src/bridge_design_system/tools/material_tools.py` - Shared material utility functions
 
-**Files to modify**:
-- `src/bridge_design_system/agents/syslogic_agent_smolagents.py`
-  - Update all `final_answer()` calls to use formatted strings
-  - Create structured response format matching geometry agent
-
-### **Phase 2: Fix Response Extraction (Debug Current Implementation)**
-
-**Problem**: Triage response extraction should clean responses but it's not working
-
-**Solutions**:
-1. **Debug why triage response extraction isn't working**:
-   - Test the current `_extract_response_content` method
-   - Ensure it properly extracts clean final answers from triage agent
-   - Fix any issues with the "Final answer: " parsing logic
-
-**Files to modify**:
-- `src/bridge_design_system/monitoring/agent_monitor.py`
-  - Debug and fix `_extract_response_content` method
-  - Improve extraction logic for triage agent responses
-  - Test both local and remote monitoring callbacks
-
-### **Phase 3: Capture Individual Agent Task History**
-
-**Problem**: Geometry and SysLogic agents don't appear in task history as separate entries
-
-**Solutions**:
-1. **Modify monitoring to intercept individual agent completions**:
-   - Add monitoring callback to capture geometry/syslogic agent `final_answer` calls
-   - Create separate task history entries for each agent BEFORE triage wraps them
-   - Show geometry and syslogic with their full structured responses
-   - Show triage with only the clean final answer
-
-**Files to modify**:
-- `src/bridge_design_system/monitoring/agent_monitor.py`
-  - Enhance completion detection for individual agents
-  - Add separate task history capture for managed agents
-- `src/bridge_design_system/agents/triage_agent_smolagents.py`
-  - Ensure individual agent monitoring callbacks are properly configured
-
-### **Phase 4: Improve UI Task History Display**
-
-**Problem**: Task history UI doesn't handle different agent types properly
-
-**Solutions**:
-1. **Enhance status.html formatting**:
-   - Ensure triage agent shows only clean final answers (max 100 chars summary)
-   - Display geometry/syslogic agents with their full 3-section responses
-   - Improve visual separation between agent types
-   - Fix any remaining formatting issues in the UI
-
-**Files to modify**:
-- `src/bridge_design_system/monitoring/status.html`
-  - Improve task history display logic
-  - Handle different agent response formats appropriately
-  - Ensure clean, readable formatting for all agent types
-
-## **🎯 ENHANCED RESPONSE FORMATS**
-
-### **Target Response Structure for All Agents**
-```
-### 1. Task outcome (short version):
-Successfully listed all available tools.
-
-### 2. Task outcome (extremely detailed version):
-The following tools are available for use:
-- **tool_name**: Description of what it does
-- **another_tool**: Another description
-
-### 3. Additional context (if relevant):
-This information helps understand the capabilities...
+**Material Inventory JSON Structure**:
+```json
+{
+  "total_stock_mm": 13000,
+  "beam_length_mm": 1980,
+  "kerf_loss_mm": 3,
+  "available_beams": [
+    {
+      "id": "beam_001", 
+      "original_length_mm": 1980, 
+      "remaining_length_mm": 1980,
+      "cuts": [],
+      "waste_mm": 0
+    },
+    // ... up to beam_007 (6.56 beams total)
+  ],
+  "used_elements": [],
+  "total_waste_mm": 0,
+  "cutting_sessions": [],
+  "last_updated": "2025-01-24T...",
+  "metadata": {
+    "cross_section": "5x5cm",
+    "material_type": "timber",
+    "project": "bridge_design"
+  }
+}
 ```
 
-### **Task History Display Goals**
-- **Triage History**: Clean final answers only (e.g., "The Geometry Agent has tools for...")
-- **Geometry History**: Full structured 3-section responses  
-- **SysLogic History**: Full structured 3-section responses (not dictionary format)
-- **All agents**: Appear as separate entries in task history
+### **Phase 2: Enhance SysLogic Agent Tools**
+
+**Objective**: Add four new material tracking tools to the SysLogic Agent
+
+**File to modify**: `src/bridge_design_system/agents/syslogic_agent_smolagents.py`
+
+**New Tools**:
+
+#### Tool 1: `track_material_usage`
+```python
+@tool
+def track_material_usage(elements: list, session_id: str = None) -> dict:
+    """
+    Track material consumption from geometry agent elements.
+    
+    Args:
+        elements: List of AssemblyElement objects with length property
+        session_id: Optional session identifier for tracking
+        
+    Returns:
+        Dict with usage summary, waste calculation, updated inventory
+    """
+```
+
+#### Tool 2: `plan_cutting_sequence`
+```python
+@tool
+def plan_cutting_sequence(required_lengths: list, optimize: bool = True) -> dict:
+    """
+    Generate optimized cutting sequence using First Fit Decreasing algorithm.
+    
+    Args:
+        required_lengths: List of required element lengths in mm
+        optimize: Whether to optimize for minimum waste
+        
+    Returns:
+        Dict with cutting plan, beam assignments, waste prediction
+    """
+```
+
+#### Tool 3: `get_material_status`
+```python
+@tool
+def get_material_status(detailed: bool = False) -> dict:
+    """
+    Get current material inventory status and availability.
+    
+    Args:
+        detailed: Whether to include detailed beam-by-beam breakdown
+        
+    Returns:
+        Dict with inventory summary, remaining capacity, utilization stats
+    """
+```
+
+#### Tool 4: `validate_material_feasibility`
+```python
+@tool
+def validate_material_feasibility(proposed_elements: list) -> dict:
+    """
+    Validate if proposed design is feasible with current material inventory.
+    
+    Args:
+        proposed_elements: List of proposed elements with lengths
+        
+    Returns:
+        Dict with feasibility status, alternative suggestions, constraint analysis
+    """
+```
+
+### **Phase 3: Update SysLogic System Prompt**
+
+**File to modify**: `system_prompts/SysLogic_agent.md`
+
+**Enhanced Responsibilities**:
+- **Material Inventory Management**: Track and optimize material usage automatically
+- **Design Feasibility**: Validate material availability during design phase  
+- **Cutting Optimization**: Provide intelligent cutting sequences to minimize waste
+- **Integration Protocol**: Request element length data from geometry agent via triage
+- **User Feedback**: Generate actionable material reports with waste analysis
+
+**New Prompt Sections**:
+```markdown
+## Material Inventory Tools
+
+Your material tracking capabilities include:
+- `track_material_usage`: Update inventory based on geometry agent elements
+- `plan_cutting_sequence`: Generate optimal cutting plans
+- `get_material_status`: Report current inventory status
+- `validate_material_feasibility`: Check design material requirements
+
+## Material Workflow Integration
+
+1. **After geometry operations**: Automatically request element data and update inventory
+2. **During design validation**: Check material feasibility and suggest optimizations  
+3. **Cutting sequence output**: Provide clear cutting instructions for fabrication
+4. **Waste reporting**: Alert on material constraints and optimization opportunities
+```
+
+### **Phase 4: Integrate Material Planning in Triage Workflow**
+
+**File to modify**: `src/bridge_design_system/agents/triage_agent_smolagents.py`
+
+**Enhanced Delegation Pattern**:
+```python
+# Example enhanced workflow in triage agent
+def handle_design_request(self, request: str):
+    # Step 1: Geometry agent creates design
+    if "create" in request or "design" in request:
+        geometry_result = self.geometry_agent.run(request)
+        
+        # Step 2: Extract elements for material tracking
+        elements = self._extract_elements_from_result(geometry_result)
+        
+        # Step 3: SysLogic agent tracks material + validates structure
+        material_task = f"Track material usage and validate structural integrity for these elements: {elements}"
+        material_result = self.syslogic_agent.run(material_task, additional_args={"elements": elements})
+        
+        # Step 4: Provide integrated response with proactive guidance
+        return self._create_integrated_response(geometry_result, material_result)
+```
+
+### **Phase 5: Advanced Material Optimization**
+
+**Objective**: Implement sophisticated cutting algorithms and reporting
+
+**Files to create/enhance**:
+- Enhanced cutting algorithms in `material_tools.py`
+- Material visualization and reporting utilities
+- Backup and rollback functionality for design iterations
+
+**Features**:
+- **First Fit Decreasing Algorithm**: Optimal bin packing for timber beams
+- **Kerf Loss Calculation**: Account for 3mm material loss per cut
+- **Waste Minimization**: Target <5% material waste per design
+- **Visual Cutting Plans**: ASCII representation of beam utilization
+- **Session Tracking**: Support for design iteration and comparison
 
 ## **📁 FILES TO CREATE/MODIFY**
 
+### **New Files**
+- `src/bridge_design_system/data/material_inventory.json` - Persistent material inventory
+- `src/bridge_design_system/tools/material_tools.py` - Shared material utilities and algorithms
+
 ### **Modified Files**
-- `src/bridge_design_system/agents/syslogic_agent_smolagents.py` - Fix response format to use structured strings
-- `src/bridge_design_system/monitoring/agent_monitor.py` - Fix response extraction and individual agent capture
-- `src/bridge_design_system/monitoring/status.html` - Improve task history display formatting
+- `src/bridge_design_system/agents/syslogic_agent_smolagents.py` - Add 4 new material tracking tools
+- `system_prompts/SysLogic_agent.md` - Update system prompt with material responsibilities
+- `src/bridge_design_system/agents/triage_agent_smolagents.py` - Integrate material planning workflow
 
-## **💯 SUCCESS CRITERIA**
+## **🎯 EXPECTED BENEFITS & SUCCESS CRITERIA**
 
-### **Fixed Issues**
-1. ✅ **Consistent Response Formats** - All agents return structured 3-section responses
-2. ✅ **Clean Triage History** - Triage agent shows only clean final answers in task history
-3. ✅ **Individual Agent History** - Geometry and SysLogic agents appear as separate entries
-4. ✅ **Proper UI Formatting** - Task history displays cleanly with appropriate formatting for each agent type
+### **Material Optimization**
+- ✅ **15-20% waste reduction** through intelligent cutting sequence optimization
+- ✅ **Real-time inventory tracking** with precise material consumption monitoring
+- ✅ **Design feasibility validation** before geometry finalization
+- ✅ **Proactive user guidance** ("450mm waste detected - optimize design?")
+
+### **Workflow Enhancement**
+- ✅ **Seamless integration** with existing smolagents autonomous architecture
+- ✅ **Automatic material tracking** after every geometry operation
+- ✅ **Structured reporting** with actionable material insights
+- ✅ **Design iteration support** with material comparison capabilities
 
 ### **User Experience**
-- **Clean task history** - Triage shows concise answers, individual agents show full details
-- **Consistent formatting** - All agents follow the same 3-section structure
-- **Separate agent entries** - Each agent completion appears in task history
-- **Improved readability** - No more messy dictionary formats or verbose wrapper text
+- ✅ **Transparent material usage** with clear cutting sequences
+- ✅ **Optimization suggestions** during design phase
+- ✅ **Constraint awareness** with early material limitation warnings
+- ✅ **Fabrication-ready output** with precise cutting instructions
 
 ## **🚀 IMPLEMENTATION ORDER**
 
-1. **Fix SysLogic response format** - Make it return structured strings instead of dictionaries
-2. **Debug triage response extraction** - Ensure clean final answers are captured properly
-3. **Add individual agent capture** - Make geometry/syslogic appear in task history
-4. **Improve UI display** - Clean up formatting and presentation
-5. **Test integration** - Verify all agents show properly in task history
+1. **Create material inventory infrastructure** - JSON structure and utility functions
+2. **Add material tracking tools to SysLogic Agent** - Core functionality implementation
+3. **Update SysLogic system prompt** - Enhanced responsibilities and workflow
+4. **Integrate triage workflow** - Automatic material planning delegation
+5. **Implement advanced optimization** - Cutting algorithms and reporting
+6. **Test integration** - Validate material tracking with geometry agent interaction
 
-This plan will provide consistent, clean response formats across all agents and ensure proper task history capture for better user experience.
+## **💡 TECHNICAL ARCHITECTURE NOTES**
+
+### **Smolagents Integration**
+- Maintains autonomous agent architecture with internal state management
+- Uses existing `managed_agents` pattern for seamless integration
+- Leverages `additional_args` for element data passing between agents
+- Preserves `final_answer()` termination pattern for proper execution flow
+
+### **Data Persistence**
+- JSON-based inventory for simplicity and human readability  
+- Atomic updates with backup/rollback capability
+- Session tracking for design iteration support
+- Timestamp-based change logging for audit trail
+
+This enhancement transforms the SysLogic Agent into a comprehensive material planning system while maintaining the sophisticated autonomous architecture and smolagents best practices already established in the codebase.

@@ -100,7 +100,7 @@ def validate_environment():
 
 
 def start_monitoring_server(enable_monitoring=True):
-    """Start the monitoring server in a background thread."""
+    """Start the LCARS monitoring interface in a background thread."""
     global monitoring_server_started
     
     if not enable_monitoring:
@@ -111,14 +111,15 @@ def start_monitoring_server(enable_monitoring=True):
         return
     
     try:
-        from .monitoring.server import start_status_monitor
+        from .monitoring.lcars_interface import start_lcars_interface
         
         def run_server():
-            print("📊 Starting Agent Status Monitor on http://localhost:5000")
-            print("🌐 Dashboard accessible from any device on local network")
-            start_status_monitor(host='0.0.0.0', port=5000)
+            print("🚀 Starting LCARS Engineering Systems Monitor on http://localhost:5000")
+            print("🌐 LCARS dashboard accessible from any device on local network")
+            print("🖖 Live long and prosper!")
+            start_lcars_interface(host='0.0.0.0', port=5000)
         
-        # Start monitoring server in background thread
+        # Start LCARS monitoring server in background thread
         monitor_thread = threading.Thread(target=run_server, daemon=True)
         monitor_thread.start()
         
@@ -126,10 +127,10 @@ def start_monitoring_server(enable_monitoring=True):
         time.sleep(2)
         monitoring_server_started = True
         
-        logger.info("✅ Monitoring server started successfully")
+        logger.info("✅ LCARS monitoring interface started successfully")
         
     except Exception as e:
-        logger.warning(f"⚠️ Failed to start monitoring server: {e}")
+        logger.warning(f"⚠️ Failed to start LCARS monitoring interface: {e}")
         logger.info("Continuing without monitoring...")
 
 
@@ -270,10 +271,11 @@ def interactive_mode(use_legacy=False, reset_memory=False, hard_reset=False, ena
         
         # Show monitoring information
         if enable_monitoring:
-            print("📊 Remote Agent Monitoring enabled - connect to http://localhost:5000")
-            print("🌐 Make sure monitoring server is running in separate terminal")
+            print("🚀 LCARS Agent Monitoring enabled - connect to http://localhost:5000")
+            print("🌐 Make sure LCARS monitoring interface is running in separate terminal")
+            print("🖖 Live long and prosper!")
         else:
-            print("⚠️ Agent monitoring disabled (use --monitoring to enable)")
+            print("⚠️ LCARS monitoring disabled (use --monitoring to enable)")
         
         print("\nType 'exit' to quit, 'reset' to clear agent memories, 'hardreset' to clear everything")
         print("Type 'status' to see agent status")
@@ -387,7 +389,7 @@ def main():
     parser.add_argument(
         "--monitoring",
         action="store_true",
-        help="Enable embedded agent monitoring dashboard (disabled by default for clean CLI)"
+        help="Enable LCARS agent monitoring interface (disabled by default for clean CLI)"
     )
     parser.add_argument(
         "--start-mcp-server",
