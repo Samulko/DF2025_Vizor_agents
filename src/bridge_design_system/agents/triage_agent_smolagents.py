@@ -492,10 +492,9 @@ class TriageSystemWrapper:
                 additional_args={"gazed_object_id": gaze_id} if gaze_id and self._validate_gaze_id(gaze_id) else None
             )
 
-            # Step 2: TriageAgent parses text into structured JSON using direct Python method
-            logger.info("📊 Step 2: Parsing geometry output to structured data")
-            # No need for a separate task or LLM call. The wrapper itself handles parsing.
-            element_data = self._extract_json_from_response(geometry_text_result)
+            # Step 2: TriageAgent parses text into structured JSON using LLM
+            logger.info("📊 Step 2: Parsing geometry output to structured data using LLM")
+            element_data = self._parse_with_llm(geometry_text_result)
 
             # Step 3: Pass clean structured data to SysLogicAgent
             syslogic_agent = self._get_syslogic_agent()
@@ -544,9 +543,66 @@ class TriageSystemWrapper:
         import re
         return bool(re.match(r'^dynamic_\d{3}$', gaze_id))
 
+    def _parse_with_llm(self, geometry_text: str) -> Dict[str, Any]:
+        """
+        Use TriageAgent's LLM to parse geometry description into structured JSON.
+        
+        This is the critical Step 2 of the orchestrator-parser workflow where
+        the TriageAgent transforms descriptive text from GeometryAgent into
+        clean structured data for SysLogicAgent.
+        
+        Args:
+            geometry_text: Descriptive text from GeometryAgent
+            
+        Returns:
+            Parsed ElementData v1.0 JSON structure or empty dict if parsing fails
+        """
+        try:
+            parsing_task = (
+                "Parse the following geometry description into valid JSON following ElementData contract v1.0. "
+                "Extract all structural elements with these properties:\n"
+                "- id: element identifier (e.g., '001', '021')\n"
+                "- type: element type (e.g., 'green_a', 'blue_b')\n"
+                "- length_mm: length in millimeters (convert from meters if needed)\n"
+                "- center_point: [x, y, z] coordinates\n"
+                "- direction: [x, y, z] direction vector\n\n"
+                "Format as JSON with this structure:\n"
+                "{\n"
+                '  "data_type": "element_collection",\n'
+                '  "elements": [\n'
+                '    {\n'
+                '      "id": "001",\n'
+                '      "type": "green_a",\n'
+                '      "length_mm": 400,\n'
+                '      "center_point": [-187.4, -100, 25],\n'
+                '      "direction": [-34.5, -20, 0]\n'
+                '    }\n'
+                '  ]\n'
+                '}\n\n'
+                f"Geometry description to parse:\n\n{geometry_text}"
+            )
+            
+            logger.info("🤖 Using TriageAgent LLM for text-to-JSON parsing")
+            llm_result = self.manager.run(parsing_task)
+            
+            # Extract JSON from the LLM's response
+            parsed_data = self._extract_json_from_response(str(llm_result))
+            
+            # Validate the structure
+            if parsed_data and "elements" in parsed_data:
+                logger.info(f"✅ Successfully parsed {len(parsed_data['elements'])} elements")
+                return parsed_data
+            else:
+                logger.warning("⚠️ LLM parsing returned invalid structure")
+                return {"data_type": "element_collection", "elements": []}
+                
+        except Exception as e:
+            logger.error(f"❌ LLM parsing failed: {e}")
+            return {"data_type": "element_collection", "elements": []}
+
     def _extract_json_from_response(self, llm_response: str) -> Dict[str, Any]:
         """
-        Extract clean JSON from LLM response text.
+        Extract clean JSON from LLM response text with enhanced robustness.
         
         Args:
             llm_response: Raw LLM response that may contain JSON
@@ -561,11 +617,26 @@ class TriageSystemWrapper:
             # Convert to string if needed
             response_text = str(llm_response)
             
-            # Method 1: Find JSON block in markdown code fence
-            json_match = re.search(r'```json\n(.*?)\n```', response_text, re.DOTALL)
-            if json_match:
-                json_str = json_match.group(1)
-                return json.loads(json_str)
+            # Method 1: Find JSON block in markdown code fence (multiple patterns)
+            json_patterns = [
+                r'```json\n(.*?)\n```',  # Standard markdown
+                r'```JSON\n(.*?)\n```',  # Uppercase
+                r'```\n(.*?)\n```',      # Generic code block
+                r'```json(.*?)```'       # No newlines
+            ]
+            
+            for pattern in json_patterns:
+                json_match = re.search(pattern, response_text, re.DOTALL | re.IGNORECASE)
+                if json_match:
+                    json_str = json_match.group(1).strip()
+                    try:
+                        result = json.loads(json_str)
+                        if self._validate_element_data(result):
+                            return result
+                        logger.debug(f"🔍 Pattern {pattern} found JSON but validation failed")
+                    except json.JSONDecodeError:
+                        logger.debug(f"🔍 Pattern {pattern} found content but not valid JSON")
+                        continue
             
             # Method 2: Find JSON object directly (look for balanced braces)
             json_start = response_text.find('{')
@@ -584,15 +655,83 @@ class TriageSystemWrapper:
                 
                 if json_end > json_start:
                     json_str = response_text[json_start:json_end]
-                    return json.loads(json_str)
+                    try:
+                        result = json.loads(json_str)
+                        if self._validate_element_data(result):
+                            return result
+                        logger.debug("🔍 Balanced braces found JSON but validation failed")
+                    except json.JSONDecodeError:
+                        logger.debug("🔍 Balanced braces found content but not valid JSON")
             
             # Method 3: Try to parse the entire response as JSON
-            return json.loads(response_text)
+            try:
+                result = json.loads(response_text)
+                if self._validate_element_data(result):
+                    return result
+                logger.debug("🔍 Full response is JSON but validation failed")
+            except json.JSONDecodeError:
+                logger.debug("🔍 Full response is not valid JSON")
             
-        except (json.JSONDecodeError, AttributeError, IndexError) as e:
+            # If all methods fail, return empty structure
+            logger.warning("⚠️ No valid JSON found in response")
+            return {"data_type": "element_collection", "elements": []}
+            
+        except (AttributeError, IndexError) as e:
             logger.warning(f"⚠️ Failed to extract JSON from response: {e}")
             # Return empty structure that matches expected format
             return {"data_type": "element_collection", "elements": []}
+
+    def _validate_element_data(self, data: Dict[str, Any]) -> bool:
+        """
+        Validate that the parsed data follows ElementData v1.0 contract.
+        
+        Args:
+            data: Parsed JSON data to validate
+            
+        Returns:
+            True if data is valid ElementData structure, False otherwise
+        """
+        try:
+            # Check top-level structure
+            if not isinstance(data, dict):
+                return False
+            
+            if "elements" not in data:
+                return False
+            
+            elements = data["elements"]
+            if not isinstance(elements, list):
+                return False
+            
+            # Validate each element (allow empty list)
+            for element in elements:
+                if not isinstance(element, dict):
+                    return False
+                
+                # Check required fields
+                required_fields = ["id", "type"]
+                for field in required_fields:
+                    if field not in element:
+                        logger.debug(f"🔍 Element missing required field: {field}")
+                        return False
+                
+                # Optional: validate field types if present
+                if "length_mm" in element and not isinstance(element["length_mm"], (int, float)):
+                    logger.debug("🔍 Element length_mm is not numeric")
+                    return False
+                
+                if "center_point" in element:
+                    cp = element["center_point"]
+                    if not isinstance(cp, list) or len(cp) != 3:
+                        logger.debug("🔍 Element center_point is not [x,y,z] array")
+                        return False
+            
+            logger.debug(f"✅ Validated ElementData with {len(elements)} elements")
+            return True
+            
+        except Exception as e:
+            logger.debug(f"🔍 Validation error: {e}")
+            return False
 
     def _get_geometry_agent(self):
         """
