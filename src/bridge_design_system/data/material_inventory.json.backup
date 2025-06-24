@@ -30,42 +30,50 @@
     {
       "id": "beam_003",
       "original_length_mm": 1980,
-      "remaining_length_mm": 471,
+      "remaining_length_mm": 68,
       "cuts": [],
       "waste_mm": 0,
-      "utilization_percent": 76.2121212121212
+      "utilization_percent": 96.56565656565657
     },
     {
       "id": "beam_004",
       "original_length_mm": 1980,
-      "remaining_length_mm": 1980,
+      "remaining_length_mm": 284,
       "cuts": [],
       "waste_mm": 0,
-      "utilization_percent": 0.0
+      "utilization_percent": 85.65656565656565
     },
     {
       "id": "beam_005",
       "original_length_mm": 1980,
-      "remaining_length_mm": 1980,
+      "remaining_length_mm": 294,
       "cuts": [],
       "waste_mm": 0,
-      "utilization_percent": 0.0
+      "utilization_percent": 85.15151515151516
     },
     {
       "id": "beam_006",
       "original_length_mm": 1980,
-      "remaining_length_mm": 1980,
+      "remaining_length_mm": 374,
       "cuts": [],
       "waste_mm": 0,
-      "utilization_percent": 0.0
+      "utilization_percent": 81.11111111111111
     },
     {
       "id": "beam_007",
       "original_length_mm": 1980,
-      "remaining_length_mm": 1980,
-      "cuts": [],
+      "remaining_length_mm": 368,
+      "cuts": [
+        {
+          "element_id": "element_008",
+          "length_mm": 400,
+          "position_mm": 1209,
+          "kerf_loss_mm": 3,
+          "timestamp": "2025-06-24T08:05:16.301432"
+        }
+      ],
       "waste_mm": 0,
-      "utilization_percent": 0.0
+      "utilization_percent": 81.41414141414141
     },
     {
       "id": "beam_008",
@@ -118,7 +126,7 @@
   ],
   "used_elements": [],
   "total_waste_mm": 0,
-  "total_utilization_percent": 18.364413364413362,
+  "total_utilization_percent": 45.57109557109557,
   "cutting_sessions": [
     {
       "session_id": "session_12345",
@@ -364,9 +372,261 @@
         "waste_mm": 0,
         "efficiency_percent": 8.205128205128204
       }
+    },
+    {
+      "session_id": "session_12345",
+      "timestamp": "2025-06-24T06:47:08.456560",
+      "elements": [
+        {
+          "id": "element_A1",
+          "center_point": [
+            300,
+            200,
+            2.5
+          ],
+          "direction": [
+            1,
+            0,
+            0
+          ],
+          "length": 600
+        },
+        {
+          "id": "element_A2",
+          "center_point": [
+            600,
+            450,
+            2.5
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "length": 500
+        },
+        {
+          "id": "element_A3",
+          "center_point": [
+            350,
+            700,
+            2.5
+          ],
+          "direction": [
+            1,
+            0,
+            0
+          ],
+          "length": 500
+        },
+        {
+          "id": "element_A4",
+          "center_point": [
+            100,
+            450,
+            2.5
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "length": 500
+        }
+      ],
+      "cutting_plan": {
+        "cutting_plan": [
+          {
+            "element_id": "element_001",
+            "length_mm": 600,
+            "beam_id": "beam_002",
+            "position_mm": 1006,
+            "kerf_loss_mm": 3
+          },
+          {
+            "element_id": "element_002",
+            "length_mm": 500,
+            "beam_id": "beam_003",
+            "position_mm": 0,
+            "kerf_loss_mm": 3
+          },
+          {
+            "element_id": "element_003",
+            "length_mm": 500,
+            "beam_id": "beam_003",
+            "position_mm": 503,
+            "kerf_loss_mm": 3
+          },
+          {
+            "element_id": "element_004",
+            "length_mm": 500,
+            "beam_id": "beam_003",
+            "position_mm": 1006,
+            "kerf_loss_mm": 3
+          }
+        ],
+        "beam_assignments": [
+          {
+            "beam_id": "beam_001",
+            "original_length_mm": 1980,
+            "remaining_length_mm": 371,
+            "cuts": [],
+            "utilization_percent": 81.26262626262626,
+            "waste_mm": 0
+          },
+          {
+            "beam_id": "beam_002",
+            "original_length_mm": 1980,
+            "remaining_length_mm": 371,
+            "cuts": [
+              {
+                "element_id": "element_004",
+                "length_mm": 500,
+                "position_mm": 503,
+                "kerf_loss_mm": 3,
+                "timestamp": "2025-06-24T06:46:52.350213"
+              },
+              {
+                "element_id": "element_001",
+                "length_mm": 600,
+                "position_mm": 1006,
+                "kerf_loss_mm": 3,
+                "timestamp": "2025-06-24T06:47:08.450310"
+              }
+            ],
+            "utilization_percent": 81.26262626262626,
+            "waste_mm": 0
+          },
+          {
+            "beam_id": "beam_003",
+            "original_length_mm": 1980,
+            "remaining_length_mm": 471,
+            "cuts": [
+              {
+                "element_id": "element_002",
+                "length_mm": 500,
+                "position_mm": 0,
+                "kerf_loss_mm": 3,
+                "timestamp": "2025-06-24T06:47:08.450342"
+              },
+              {
+                "element_id": "element_003",
+                "length_mm": 500,
+                "position_mm": 503,
+                "kerf_loss_mm": 3,
+                "timestamp": "2025-06-24T06:47:08.450425"
+              },
+              {
+                "element_id": "element_004",
+                "length_mm": 500,
+                "position_mm": 1006,
+                "kerf_loss_mm": 3,
+                "timestamp": "2025-06-24T06:47:08.450445"
+              }
+            ],
+            "utilization_percent": 76.2121212121212,
+            "waste_mm": 0
+          },
+          {
+            "beam_id": "beam_004",
+            "original_length_mm": 1980,
+            "remaining_length_mm": 1980,
+            "cuts": [],
+            "utilization_percent": 0.0,
+            "waste_mm": 0
+          },
+          {
+            "beam_id": "beam_005",
+            "original_length_mm": 1980,
+            "remaining_length_mm": 1980,
+            "cuts": [],
+            "utilization_percent": 0.0,
+            "waste_mm": 0
+          },
+          {
+            "beam_id": "beam_006",
+            "original_length_mm": 1980,
+            "remaining_length_mm": 1980,
+            "cuts": [],
+            "utilization_percent": 0.0,
+            "waste_mm": 0
+          },
+          {
+            "beam_id": "beam_007",
+            "original_length_mm": 1980,
+            "remaining_length_mm": 1980,
+            "cuts": [],
+            "utilization_percent": 0.0,
+            "waste_mm": 0
+          },
+          {
+            "beam_id": "beam_008",
+            "original_length_mm": 1980,
+            "remaining_length_mm": 1980,
+            "cuts": [],
+            "utilization_percent": 0.0,
+            "waste_mm": 0
+          },
+          {
+            "beam_id": "beam_009",
+            "original_length_mm": 1980,
+            "remaining_length_mm": 1980,
+            "cuts": [],
+            "utilization_percent": 0.0,
+            "waste_mm": 0
+          },
+          {
+            "beam_id": "beam_010",
+            "original_length_mm": 1980,
+            "remaining_length_mm": 1980,
+            "cuts": [],
+            "utilization_percent": 0.0,
+            "waste_mm": 0
+          },
+          {
+            "beam_id": "beam_011",
+            "original_length_mm": 1980,
+            "remaining_length_mm": 1980,
+            "cuts": [],
+            "utilization_percent": 0.0,
+            "waste_mm": 0
+          },
+          {
+            "beam_id": "beam_012",
+            "original_length_mm": 1980,
+            "remaining_length_mm": 1980,
+            "cuts": [],
+            "utilization_percent": 0.0,
+            "waste_mm": 0
+          },
+          {
+            "beam_id": "beam_013",
+            "original_length_mm": 1980,
+            "remaining_length_mm": 1980,
+            "cuts": [],
+            "utilization_percent": 0.0,
+            "waste_mm": 0
+          }
+        ],
+        "unassigned_elements": [],
+        "summary": {
+          "total_elements": 4,
+          "assigned_elements": 4,
+          "unassigned_elements": 0,
+          "total_waste_mm": 0,
+          "material_efficiency_percent": 8.205128205128204,
+          "feasible": true
+        }
+      },
+      "summary": {
+        "total_elements": 4,
+        "total_length_mm": 2100,
+        "waste_mm": 0,
+        "efficiency_percent": 8.205128205128204
+      }
     }
   ],
-  "last_updated": "2025-06-24T06:47:08.453113",
+  "last_updated": "2025-06-24T08:05:16.303792",
   "metadata": {
     "cross_section": "5x5cm",
     "material_type": "timber",

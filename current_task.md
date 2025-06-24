@@ -1,260 +1,202 @@
-# **Enhanced SysLogic Agent with Material Inventory Tracking**
+# **Refactor MCPGeometryAgent to Follow Smolagents Best Practices**
 
 ## **CORE OBJECTIVE**
 
-Enhance the SysLogic Agent with sophisticated material inventory tracking and cutting sequence optimization capabilities to minimize waste and provide real-time material usage feedback during bridge design.
+Eliminate the unnecessary `MCPGeometryAgent` class from `triage_agent_smolagents.py` and refactor the codebase to follow proper smolagents patterns using the existing standalone geometry agent.
 
-## **🎯 PROJECT CONTEXT**
+## **🎯 PROBLEM ANALYSIS**
 
-### **Current Agent Architecture**
-- **Triage Agent** (`CodeAgent`): Orchestrator using `managed_agents=[geometry_agent, syslogic_agent]`
-- **Geometry Agent** (`ToolCallingAgent`): Creates `AssemblyElement` objects with precise length specifications (20-80cm)
-- **SysLogic Agent** (`CodeAgent`): Currently validates structural integrity, needs material tracking enhancement
-- **Communication Pattern**: Autonomous agents communicate through triage agent delegation
+### **Current Architecture Issues**
+- **Pattern Violation**: Embedding 400+ line agent class inside triage agent file violates smolagents composition principles
+- **Duplication**: Two geometry agent implementations exist (`MCPGeometryAgent` vs `SmolagentsGeometryAgent`)
+- **Obsolete Methods**: Several methods solve problems that no longer exist in current workflow
+- **Workflow Mismatch**: Complex component tracking for a workflow that only edits existing python3 scripts
 
-### **Material Constraints & Requirements**
-- **Raw Material**: 1.98m (1980mm) timber beams, 5x5cm cross-section
-- **Total Inventory**: 13 beams × 1.98m = 25.74 meters total material
-- **Element Lengths**: Variable 20-80cm per geometry agent specifications
-- **Optimization Goal**: Minimize waste through intelligent cutting sequence planning
+### **Current Workflow Reality**
+Based on `system_prompts/geometry_agent.md`:
+- **FIND** → **SELECT** → **READ** → **MODIFY** → **CHECK** → **PERSIST**
+- Only operates on existing `component_1`, `component_2`, etc. python3 script components
+- No component creation, just script modification via MCP tools
+- Simple workflow that doesn't need complex state management
 
-### **Enhanced Workflow Integration**
-```
-User Request → Triage Agent → Geometry Agent (creates design with lengths)
-                    ↓
-Triage Agent → SysLogic Agent (material tracking + structural validation)
-                    ↓
-Triage Agent → User (integrated response: design + material analysis)
+### **Smolagents Best Practice**
+```python
+# Correct pattern from smolagents docs
+web_agent = ToolCallingAgent(
+    tools=[WebSearchTool()],
+    model=model,
+    name="web_search_agent",  # Required for managed_agents
+    description="Runs web searches for you."  # Required for managed_agents
+)
+
+manager_agent = CodeAgent(
+    tools=[],
+    model=model,
+    managed_agents=[web_agent]  # Simple reference, no embedding
+)
 ```
 
 ## **🛠️ IMPLEMENTATION PHASES**
 
-### **Phase 1: Create Material Inventory Infrastructure**
+### **Phase 1: Remove MCPGeometryAgent Class**
 
-**Objective**: Establish persistent material tracking with JSON-based inventory system
-
-**Files to create**:
-- `src/bridge_design_system/data/material_inventory.json` - Core inventory tracking
-- `src/bridge_design_system/tools/material_tools.py` - Shared material utility functions
-
-**Material Inventory JSON Structure**:
-```json
-{
-  "total_stock_mm": 13000,
-  "beam_length_mm": 1980,
-  "kerf_loss_mm": 3,
-  "available_beams": [
-    {
-      "id": "beam_001", 
-      "original_length_mm": 1980, 
-      "remaining_length_mm": 1980,
-      "cuts": [],
-      "waste_mm": 0
-    },
-    // ... up to beam_007 (6.56 beams total)
-  ],
-  "used_elements": [],
-  "total_waste_mm": 0,
-  "cutting_sessions": [],
-  "last_updated": "2025-01-24T...",
-  "metadata": {
-    "cross_section": "5x5cm",
-    "material_type": "timber",
-    "project": "bridge_design"
-  }
-}
-```
-
-### **Phase 2: Enhance SysLogic Agent Tools**
-
-**Objective**: Add four new material tracking tools to the SysLogic Agent
-
-**File to modify**: `src/bridge_design_system/agents/syslogic_agent_smolagents.py`
-
-**New Tools**:
-
-#### Tool 1: `track_material_usage`
-```python
-@tool
-def track_material_usage(elements: list, session_id: str = None) -> dict:
-    """
-    Track material consumption from geometry agent elements.
-    
-    Args:
-        elements: List of AssemblyElement objects with length property
-        session_id: Optional session identifier for tracking
-        
-    Returns:
-        Dict with usage summary, waste calculation, updated inventory
-    """
-```
-
-#### Tool 2: `plan_cutting_sequence`
-```python
-@tool
-def plan_cutting_sequence(required_lengths: list, optimize: bool = True) -> dict:
-    """
-    Generate optimized cutting sequence using First Fit Decreasing algorithm.
-    
-    Args:
-        required_lengths: List of required element lengths in mm
-        optimize: Whether to optimize for minimum waste
-        
-    Returns:
-        Dict with cutting plan, beam assignments, waste prediction
-    """
-```
-
-#### Tool 3: `get_material_status`
-```python
-@tool
-def get_material_status(detailed: bool = False) -> dict:
-    """
-    Get current material inventory status and availability.
-    
-    Args:
-        detailed: Whether to include detailed beam-by-beam breakdown
-        
-    Returns:
-        Dict with inventory summary, remaining capacity, utilization stats
-    """
-```
-
-#### Tool 4: `validate_material_feasibility`
-```python
-@tool
-def validate_material_feasibility(proposed_elements: list) -> dict:
-    """
-    Validate if proposed design is feasible with current material inventory.
-    
-    Args:
-        proposed_elements: List of proposed elements with lengths
-        
-    Returns:
-        Dict with feasibility status, alternative suggestions, constraint analysis
-    """
-```
-
-### **Phase 3: Update SysLogic System Prompt**
-
-**File to modify**: `system_prompts/SysLogic_agent.md`
-
-**Enhanced Responsibilities**:
-- **Material Inventory Management**: Track and optimize material usage automatically
-- **Design Feasibility**: Validate material availability during design phase  
-- **Cutting Optimization**: Provide intelligent cutting sequences to minimize waste
-- **Integration Protocol**: Request element length data from geometry agent via triage
-- **User Feedback**: Generate actionable material reports with waste analysis
-
-**New Prompt Sections**:
-```markdown
-## Material Inventory Tools
-
-Your material tracking capabilities include:
-- `track_material_usage`: Update inventory based on geometry agent elements
-- `plan_cutting_sequence`: Generate optimal cutting plans
-- `get_material_status`: Report current inventory status
-- `validate_material_feasibility`: Check design material requirements
-
-## Material Workflow Integration
-
-1. **After geometry operations**: Automatically request element data and update inventory
-2. **During design validation**: Check material feasibility and suggest optimizations  
-3. **Cutting sequence output**: Provide clear cutting instructions for fabrication
-4. **Waste reporting**: Alert on material constraints and optimization opportunities
-```
-
-### **Phase 4: Integrate Material Planning in Triage Workflow**
+**Objective**: Delete the embedded agent class and unnecessary methods
 
 **File to modify**: `src/bridge_design_system/agents/triage_agent_smolagents.py`
 
-**Enhanced Delegation Pattern**:
+**Methods to Remove**:
+- `class MCPGeometryAgent` (lines 203-619) - Entire 400+ line class
+- `_resolve_context_from_task()` - No longer needed (no script creation)
+- `_track_component_in_state()` - Custom approach, use native smolagents memory
+- `_extract_and_register_components()` - Barely used, just logs
+- `_determine_component_type()` - Obsolete (only classifies bridge components, workflow only edits scripts)
+- `_fuzzy_type_match()` - Supporting method for obsolete functionality
+
+**Rationale**:
+- Script creation was removed from geometry agent
+- Current workflow only edits existing components
+- Native smolagents memory (`agent.memory.steps`) handles persistence
+- Component classification irrelevant for script editing workflow
+
+### **Phase 2: Update Geometry Agent for Managed Agents**
+
+**Objective**: Ensure existing `SmolagentsGeometryAgent` works with `managed_agents` pattern
+
+**File to modify**: `src/bridge_design_system/agents/geometry_agent_smolagents.py`
+
+**Required Changes**:
 ```python
-# Example enhanced workflow in triage agent
-def handle_design_request(self, request: str):
-    # Step 1: Geometry agent creates design
-    if "create" in request or "design" in request:
-        geometry_result = self.geometry_agent.run(request)
+class SmolagentsGeometryAgent:
+    def __init__(self, ...):
+        # Ensure these attributes exist for managed_agents
+        self.name = "geometry_agent"  # Already exists (line 41)
+        self.description = "Creates 3D geometry in Rhino Grasshopper via persistent MCP connection"  # Already exists (line 42)
         
-        # Step 2: Extract elements for material tracking
-        elements = self._extract_elements_from_result(geometry_result)
-        
-        # Step 3: SysLogic agent tracks material + validates structure
-        material_task = f"Track material usage and validate structural integrity for these elements: {elements}"
-        material_result = self.syslogic_agent.run(material_task, additional_args={"elements": elements})
-        
-        # Step 4: Provide integrated response with proactive guidance
-        return self._create_integrated_response(geometry_result, material_result)
+        # The rest remains the same - no major changes needed
 ```
 
-### **Phase 5: Advanced Material Optimization**
+**Verification**:
+- Check that `name` and `description` attributes are properly set
+- Ensure `run(task: str)` method signature is compatible
+- Verify MCP connection management works correctly
 
-**Objective**: Implement sophisticated cutting algorithms and reporting
+### **Phase 3: Simplify Triage Agent Creation**
 
-**Files to create/enhance**:
-- Enhanced cutting algorithms in `material_tools.py`
-- Material visualization and reporting utilities
-- Backup and rollback functionality for design iterations
+**Objective**: Use composition instead of complex embedding
 
-**Features**:
-- **First Fit Decreasing Algorithm**: Optimal bin packing for timber beams
-- **Kerf Loss Calculation**: Account for 3mm material loss per cut
-- **Waste Minimization**: Target <5% material waste per design
-- **Visual Cutting Plans**: ASCII representation of beam utilization
-- **Session Tracking**: Support for design iteration and comparison
+**File to modify**: `src/bridge_design_system/agents/triage_agent_smolagents.py`
 
-## **📁 FILES TO CREATE/MODIFY**
+**Replace `_create_mcp_enabled_geometry_agent()` function**:
+```python
+def _create_mcp_enabled_geometry_agent(
+    custom_tools: Optional[List] = None, 
+    component_registry: Optional[Any] = None,
+    monitoring_callback: Optional[Any] = None
+) -> Any:
+    """
+    Create geometry agent using existing standalone implementation.
+    
+    Following smolagents best practices, this imports and configures
+    the standalone geometry agent for use in managed_agents.
+    """
+    from .geometry_agent_smolagents import create_geometry_agent
+    
+    return create_geometry_agent(
+        custom_tools=custom_tools,
+        component_registry=component_registry,
+        monitoring_callback=monitoring_callback
+    )
+```
 
-### **New Files**
-- `src/bridge_design_system/data/material_inventory.json` - Persistent material inventory
-- `src/bridge_design_system/tools/material_tools.py` - Shared material utilities and algorithms
+**Benefits**:
+- ✅ Follows smolagents composition pattern
+- ✅ Eliminates 400+ lines of duplicated code
+- ✅ Uses existing, tested geometry agent implementation
+- ✅ Maintains all current functionality
 
-### **Modified Files**
-- `src/bridge_design_system/agents/syslogic_agent_smolagents.py` - Add 4 new material tracking tools
-- `system_prompts/SysLogic_agent.md` - Update system prompt with material responsibilities
-- `src/bridge_design_system/agents/triage_agent_smolagents.py` - Integrate material planning workflow
+### **Phase 4: Clean Up Unused Helper Functions**
+
+**Objective**: Remove obsolete helper functions that supported removed methods
+
+**File to modify**: `src/bridge_design_system/agents/triage_agent_smolagents.py`
+
+**Functions to Remove or Simplify**:
+- Helper functions that were only used by removed methods
+- Any component type classification logic
+- Custom memory management utilities (use native smolagents memory)
+
+### **Phase 5: Test Integration**
+
+**Objective**: Verify the refactored system works correctly
+
+**Testing Steps**:
+1. **Basic Agent Creation**: Ensure triage system creates without errors
+2. **Geometry Agent Delegation**: Test that tasks are properly delegated to geometry agent
+3. **MCP Integration**: Verify MCP connection and tool access works
+4. **Memory Management**: Confirm native smolagents memory handles conversation state
+5. **Error Handling**: Test fallback behavior when MCP connection fails
+
+## **📁 FILES TO MODIFY**
+
+### **Major Changes**
+- `src/bridge_design_system/agents/triage_agent_smolagents.py` - Remove MCPGeometryAgent class, simplify creation function
+
+### **Minor Changes**  
+- `src/bridge_design_system/agents/geometry_agent_smolagents.py` - Verify managed_agents compatibility
 
 ## **🎯 EXPECTED BENEFITS & SUCCESS CRITERIA**
 
-### **Material Optimization**
-- ✅ **15-20% waste reduction** through intelligent cutting sequence optimization
-- ✅ **Real-time inventory tracking** with precise material consumption monitoring
-- ✅ **Design feasibility validation** before geometry finalization
-- ✅ **Proactive user guidance** ("450mm waste detected - optimize design?")
+### **Code Quality Improvements**
+- ✅ **400+ lines removed** - Eliminate unnecessary complexity
+- ✅ **Separation of concerns** - Agents in separate files as intended
+- ✅ **Smolagents compliance** - Follow framework best practices
+- ✅ **No duplication** - Single geometry agent implementation
 
-### **Workflow Enhancement**
-- ✅ **Seamless integration** with existing smolagents autonomous architecture
-- ✅ **Automatic material tracking** after every geometry operation
-- ✅ **Structured reporting** with actionable material insights
-- ✅ **Design iteration support** with material comparison capabilities
+### **Maintainability Enhancement**
+- ✅ **Cleaner architecture** - Composition over complex inheritance
+- ✅ **Easier debugging** - Clear separation between triage and geometry logic
+- ✅ **Better testing** - Standalone agents can be tested independently
+- ✅ **Framework alignment** - Uses smolagents as intended
 
-### **User Experience**
-- ✅ **Transparent material usage** with clear cutting sequences
-- ✅ **Optimization suggestions** during design phase
-- ✅ **Constraint awareness** with early material limitation warnings
-- ✅ **Fabrication-ready output** with precise cutting instructions
+### **Functional Preservation**
+- ✅ **Same capabilities** - All current functionality preserved
+- ✅ **Same performance** - MCP connection management unchanged
+- ✅ **Same reliability** - Existing tested geometry agent used
+- ✅ **Same monitoring** - Callback system preserved
 
 ## **🚀 IMPLEMENTATION ORDER**
 
-1. **Create material inventory infrastructure** - JSON structure and utility functions
-2. **Add material tracking tools to SysLogic Agent** - Core functionality implementation
-3. **Update SysLogic system prompt** - Enhanced responsibilities and workflow
-4. **Integrate triage workflow** - Automatic material planning delegation
-5. **Implement advanced optimization** - Cutting algorithms and reporting
-6. **Test integration** - Validate material tracking with geometry agent interaction
+1. **Remove MCPGeometryAgent class** - Delete embedded class and obsolete methods
+2. **Simplify geometry agent creation** - Use import-based composition
+3. **Verify managed_agents compatibility** - Ensure existing agent works properly
+4. **Clean up unused helpers** - Remove supporting functions for deleted methods
+5. **Test integration** - Validate functionality preservation
+6. **Update documentation** - Reflect new simplified architecture
 
 ## **💡 TECHNICAL ARCHITECTURE NOTES**
 
-### **Smolagents Integration**
-- Maintains autonomous agent architecture with internal state management
-- Uses existing `managed_agents` pattern for seamless integration
-- Leverages `additional_args` for element data passing between agents
-- Preserves `final_answer()` termination pattern for proper execution flow
+### **Smolagents Pattern Compliance**
+```python
+# BEFORE (embedded, complex)
+class MCPGeometryAgent(ToolCallingAgent):
+    # 400+ lines of embedded complexity
+    pass
 
-### **Data Persistence**
-- JSON-based inventory for simplicity and human readability  
-- Atomic updates with backup/rollback capability
-- Session tracking for design iteration support
-- Timestamp-based change logging for audit trail
+# AFTER (composition, simple)
+from .geometry_agent_smolagents import create_geometry_agent
+geometry_agent = create_geometry_agent(...)
+manager = CodeAgent(managed_agents=[geometry_agent])
+```
 
-This enhancement transforms the SysLogic Agent into a comprehensive material planning system while maintaining the sophisticated autonomous architecture and smolagents best practices already established in the codebase.
+### **Memory Management**
+- **Before**: Custom `internal_component_cache` with manual management
+- **After**: Native smolagents `agent.memory.steps` automatic persistence
+- **Benefit**: Framework-provided reliability and consistency
+
+### **Workflow Alignment**
+- **Current Reality**: Edit existing python3 scripts only
+- **Old Code**: Complex component creation and tracking
+- **New Code**: Simple script editing focus
+- **Result**: Code matches actual usage patterns
+
+This refactoring aligns the codebase with smolagents best practices while eliminating unnecessary complexity that doesn't match the current simplified workflow.

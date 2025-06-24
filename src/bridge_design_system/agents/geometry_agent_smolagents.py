@@ -6,17 +6,16 @@ following smolagents best practices, eliminating unnecessary wrappers
 and custom abstractions.
 """
 
-import logging
-from typing import List, Optional, Any
 from pathlib import Path
+from typing import Any, List, Optional
 
-from smolagents import ToolCallingAgent, tool, PromptTemplates
 from mcp import StdioServerParameters
 from mcpadapt.core import MCPAdapt
 from mcpadapt.smolagents_adapter import SmolAgentsAdapter
+from smolagents import ToolCallingAgent
 
-from ..config.model_config import ModelProvider
 from ..config.logging_config import get_logger
+from ..config.model_config import ModelProvider
 from ..config.settings import settings
 
 logger = get_logger(__name__)
@@ -76,6 +75,11 @@ class SmolagentsGeometryAgent:
             custom_prompt = get_geometry_system_prompt()
             self.agent.prompt_templates["system_prompt"] = self.agent.prompt_templates["system_prompt"] + "\n\n" + custom_prompt
             
+            # TODO: VizorListener not available in current setup
+            # self.listener = VizorListener()
+            # self.transforms = self.listener.get_transforms()
+            # self.current_element = self.listener.get_current_element()
+
             logger.info(f"🎯 Persistent geometry agent initialized successfully with model {model_name}")
             
         except Exception as e:
@@ -153,12 +157,12 @@ def create_geometry_agent(
     component_registry: Optional[Any] = None,
     monitoring_callback: Optional[Any] = None,
     **kwargs
-) -> SmolagentsGeometryAgent:
+) -> Any:
     """
     Factory for creating MCP-enabled geometry agent using smolagents patterns.
     
-    This creates a wrapper that properly manages MCPAdapt lifecycle while using
-    native smolagents ToolCallingAgent internally.
+    This creates a wrapper that properly manages MCPAdapt lifecycle and returns
+    the internal ToolCallingAgent for use with managed_agents pattern.
     
     Args:
         custom_tools: Additional tools to include
@@ -168,14 +172,28 @@ def create_geometry_agent(
         **kwargs: Additional arguments (for compatibility)
         
     Returns:
-        SmolagentsGeometryAgent instance with proper MCP lifecycle management
+        ToolCallingAgent instance configured for managed_agents pattern
     """
-    return SmolagentsGeometryAgent(
+    wrapper = SmolagentsGeometryAgent(
         custom_tools=custom_tools,
         model_name=model_name,
         component_registry=component_registry,
         monitoring_callback=monitoring_callback
     )
+    
+    # Return the internal ToolCallingAgent for managed_agents compatibility
+    # The wrapper manages MCP lifecycle, but managed_agents needs the raw agent
+    internal_agent = wrapper.agent
+    
+    # Ensure the internal agent has required attributes for managed_agents
+    internal_agent.name = "geometry_agent"
+    internal_agent.description = "Creates 3D geometry in Rhino Grasshopper via MCP connection"
+    
+    # Store reference to wrapper for cleanup purposes
+    internal_agent._wrapper = wrapper
+    
+    logger.info("✅ Created geometry agent for managed_agents pattern")
+    return internal_agent
 
 
 
