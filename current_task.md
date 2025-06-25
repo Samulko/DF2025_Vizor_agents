@@ -16,7 +16,7 @@ Implement a reliable Direct Parameter Update workflow where HoloLens users can m
 
 4. **Calculation in main.py**: main.py receives this data. It uses a new, self-contained helper function to convert the quaternion into a direction vector. It now has the final [x,y,z] for the center and [a,b,c] for the direction.
 
-5. **Queueing**: main.py formats a highly specific task (e.g., "Update element '021' by replacing its center and direction values") and adds it to the TRANSFORM_UPDATE_QUEUE.
+5. **Queueing**: main.py formats a highly specific task (e.g., "Update element '001' by replacing its center and direction values") and adds it to the TRANSFORM_UPDATE_QUEUE.
 
 6. **Agent Execution**: The GeometryAgent receives this task. Its job is now simple text replacement: find the correct lines in the script and overwrite the values in rg.Point3d(...) and rg.Vector3d(...).
 
@@ -95,7 +95,7 @@ def interactive_mode(...):
             for transform_batch in TRANSFORM_UPDATE_QUEUE:
                 for element_name, pose in transform_batch.items():
                     # element_name is "dynamic_001", id is "001"
-                    element_id = element_name.split('_')[-1].lstrip('0') 
+                    element_id = element_name.split('_')[-1]  # Keep full ID: 001, 002, 021
 
                     # Use the helper function in main.py
                     new_pos = pose['position']
@@ -127,9 +127,9 @@ Delete any previous "Transformation Handling Workflow". Replace it with the foll
 
 When you receive a task to perform a "direct parameter update," you must follow these steps precisely:
 
-1.  **Parse Task:** The task will contain an `element_id` (e.g., '021'), a list of new center point values, and a list of new direction vector values. Extract these three pieces of information.
+1.  **Parse Task:** The task will contain an `element_id` (e.g., '001'), a list of new center point values, and a list of new direction vector values. Extract these three pieces of information.
 2.  **Read Script:** Use `get_python3_script` to read the code of the relevant component.
-3.  **Find Target Variables:** In the script, locate the variable names associated with the target `element_id`. For `id="021"`, you would be looking for the variables `center1` and `direction1`.
+3.  **Find Target Variables:** In the script, locate the variable names associated with the target `element_id`. For `id="001"`, you would be looking for the variables `center1` and `direction1`.
 4.  **Perform Text Replacement:**
     * Find the line defining the center point (e.g., `center1 = rg.Point3d(...)`).
     * Replace the numbers inside the parentheses with the new center point values from the task. The result should be, for example: `center1 = rg.Point3d(1.23, 4.56, 7.89)`.

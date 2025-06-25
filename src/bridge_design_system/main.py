@@ -534,8 +534,8 @@ def interactive_mode(use_legacy=False, reset_memory=False, hard_reset=False, ena
                     # Process all data batches in the queue
                     for transform_batch in TRANSFORM_UPDATE_QUEUE:
                         for element_name, pose in transform_batch.items():
-                            # element_name is "dynamic_001", id is "001"
-                            element_id = element_name.split('_')[-1].lstrip('0') or '1'  # Default to '1' if empty
+                            # element_name is "dynamic_001", id is "001" 
+                            element_id = element_name.split('_')[-1]  # Keep the full ID format: 001, 002, 021, etc.
 
                             # Use the helper function in main.py
                             new_pos = pose['position']

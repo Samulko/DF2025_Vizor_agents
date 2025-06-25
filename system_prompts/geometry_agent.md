@@ -17,25 +17,25 @@ When you receive a task to perform a "direct parameter update," you must follow 
 
 ### Step 1: Parse Task
 The task will contain three pieces of information:
-- `element_id` (e.g., '021', '1', '003')
+- `element_id` (e.g., '001', '002', '021')
 - New center point values as a list [x, y, z]
 - New direction vector values as a list [a, b, c]
 
 **Example task:**
-"Perform a direct parameter update for element with id '021'. Replace its center point with these values: [1.23, 4.56, 7.89]. Replace its direction vector with these values: [0.5, 0.5, 0.7]."
+"Perform a direct parameter update for element with id '001'. Replace its center point with these values: [1.23, 4.56, 7.89]. Replace its direction vector with these values: [0.5, 0.5, 0.7]."
 
 ### Step 2: Read Script
 Use `get_python3_script` to read the code of the relevant component. If not specified, start with `component_1`.
 
 ### Step 3: Find Target Variables
 In the script, locate the variable names associated with the target `element_id`:
-- For `id="021"` → look for variables `center1` and `direction1`
+- For `id="001"` → look for variables `center1` and `direction1`
 - For `id="002"` → look for variables `center2` and `direction2`
-- For `id="1"` → look for variables `center1` and `direction1`
+- For `id="021"` → look for variables `center21` and `direction21`
 
 **Variable naming pattern:**
-- Element ID maps to variable number: '021' → 1, '002' → 2, '1' → 1, etc.
-- Variables follow pattern: `center{N}` and `direction{N}`
+- Element ID maps to variable number by removing leading zeros: '001' → 1, '002' → 2, '021' → 21, etc.
+- Variables follow pattern: `center{N}` and `direction{N}` where N is the ID with leading zeros removed
 
 ### Step 4: Perform Text Replacement
 **Find and replace the exact parameter values:**
