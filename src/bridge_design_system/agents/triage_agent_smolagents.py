@@ -21,10 +21,10 @@ logger = get_logger(__name__)
 
 
 def create_triage_system(
-    component_registry: Optional[Any] = None, 
-    model_name: str = "triage", 
+    component_registry: Optional[Any] = None,
+    model_name: str = "triage",
     monitoring_callback: Optional[Any] = None,
-    **kwargs
+    **kwargs,
 ) -> CodeAgent:
     """
     Create triage system using smolagents ManagedAgent pattern.
@@ -46,40 +46,40 @@ def create_triage_system(
     model = ModelProvider.get_model(model_name)
 
     # REFACTORED: Removed shared component tracking - geometry agent is now autonomous
-    
+
     # Create autonomous geometry agent with full MCP access (proper smolagents pattern)
     geometry_monitor = None
     if monitoring_callback:
-        # Check if it's a remote callback factory or local callback  
-        if callable(monitoring_callback) and str(type(monitoring_callback)).find('function') != -1:
+        # Check if it's a remote callback factory or local callback
+        if callable(monitoring_callback) and str(type(monitoring_callback)).find("function") != -1:
             # Remote monitoring - create callback for this agent
             geometry_monitor = monitoring_callback("geometry_agent")
         else:
             # Local monitoring - use existing pattern
             from ..monitoring.agent_monitor import create_monitor_callback
+
             geometry_monitor = create_monitor_callback("geometry_agent", monitoring_callback)
-    
+
     geometry_agent = _create_mcp_enabled_geometry_agent(
-        custom_tools=_create_registry_tools(component_registry) if component_registry else None,
-        component_registry=component_registry,
-        monitoring_callback=geometry_monitor
+        monitoring_callback=geometry_monitor,
     )
 
     # Create autonomous SysLogic agent for structural validation
     from .syslogic_agent_smolagents import create_syslogic_agent
+
     syslogic_monitor = None
     if monitoring_callback:
         # Check if it's a remote callback factory or local callback
-        if callable(monitoring_callback) and str(type(monitoring_callback)).find('function') != -1:
+        if callable(monitoring_callback) and str(type(monitoring_callback)).find("function") != -1:
             # Remote monitoring - create callback for this agent
             syslogic_monitor = monitoring_callback("syslogic_agent")
         else:
             # Local monitoring - use existing pattern
             from ..monitoring.agent_monitor import create_monitor_callback
+
             syslogic_monitor = create_monitor_callback("syslogic_agent", monitoring_callback)
-    
+
     syslogic_agent = create_syslogic_agent(
-        component_registry=component_registry,
         monitoring_callback=syslogic_monitor
     )
 
@@ -106,12 +106,13 @@ def create_triage_system(
     step_callbacks = kwargs.pop("step_callbacks", [])
     if monitoring_callback:
         # Check if it's a remote callback factory or local callback
-        if callable(monitoring_callback) and str(type(monitoring_callback)).find('function') != -1:
+        if callable(monitoring_callback) and str(type(monitoring_callback)).find("function") != -1:
             # Remote monitoring - create callback for this agent
             triage_monitor = monitoring_callback("triage_agent")
         else:
             # Local monitoring - use existing pattern
             from ..monitoring.agent_monitor import create_monitor_callback
+
             triage_monitor = create_monitor_callback("triage_agent", monitoring_callback)
         step_callbacks.append(triage_monitor)
 
@@ -123,10 +124,10 @@ def create_triage_system(
         max_steps=max_steps,
         step_callbacks=step_callbacks,
         additional_authorized_imports=["typing", "json", "datetime"],
-        managed_agents=[geometry_agent, syslogic_agent],  # Pass agents directly in kwargs
+        managed_agents=[geometry_agent, syslogic_agent],  # Pass ManagedAgent instances
         **kwargs,
     )
-    
+
     # REFACTORED: Removed geometry memory tools - geometry agent is now autonomous
     # The geometry agent handles its own context resolution and memory management
 
@@ -153,32 +154,26 @@ def get_triage_system_prompt() -> str:
 
 
 def _create_mcp_enabled_geometry_agent(
-    custom_tools: Optional[List] = None, 
-    component_registry: Optional[Any] = None,
-    monitoring_callback: Optional[Any] = None
+    monitoring_callback: Optional[Any] = None,
 ) -> Any:
     """
     Create geometry agent using existing standalone implementation.
-    
+
     Following smolagents best practices, this imports and configures
     the standalone geometry agent for use in managed_agents.
-    
+
     Args:
-        custom_tools: Additional tools to include
-        component_registry: Registry for tracking components
         monitoring_callback: Optional callback for real-time monitoring
 
     Returns:
         SmolagentsGeometryAgent instance configured for managed_agents
     """
     logger.info("Creating geometry agent using standalone implementation")
-    
+
     from .geometry_agent_smolagents import create_geometry_agent
-    
+
     return create_geometry_agent(
-        custom_tools=custom_tools,
-        component_registry=component_registry,
-        monitoring_callback=monitoring_callback
+        monitoring_callback=monitoring_callback,
     )
 
 
@@ -241,10 +236,10 @@ def _create_coordination_tools() -> List:
     def debug_component_tracking() -> str:
         """
         Debug tool to show autonomous geometry agent state.
-        
+
         REFACTORED: Now shows the autonomous geometry agent's internal state
         instead of shared component tracking cache.
-        
+
         Returns:
             Debug information about geometry agent state
         """
@@ -252,18 +247,18 @@ def _create_coordination_tools() -> List:
             debug_info = []
             debug_info.append("=== AUTONOMOUS GEOMETRY AGENT DEBUG ===")
             debug_info.append("Component tracking: Handled internally by geometry agent")
-            
+
             # Note: We can't directly access the geometry agent's internal cache from here
             # because it's encapsulated. This is by design for the autonomous architecture.
             debug_info.append("\\nTo see component details, delegate a task to the geometry agent")
             debug_info.append("that asks it to report its internal component state.")
-            
+
             debug_info.append("\\n=== END DEBUG ===")
-            
+
             result = "\\n".join(debug_info)
             logger.info("🐛 Autonomous geometry agent debug info requested")
             return result
-            
+
         except Exception as e:
             logger.error(f"❌ Error in debug tool: {e}")
             return f"Debug tool error: {e}"
@@ -278,13 +273,13 @@ def _create_coordination_tools() -> List:
 def _create_registry_tools(component_registry: Any) -> List:
     """
     Create tools for component registry integration.
-    
+
     NOTE: The component registry is orthogonal to the autonomous agent architecture.
     It serves as a cross-agent communication mechanism and external component tracking,
     while the geometry agent's internal_component_cache handles autonomous context resolution.
-    
+
     This separation allows:
-    - Autonomous operation: Agent resolves context internally  
+    - Autonomous operation: Agent resolves context internally
     - Cross-agent communication: Registry enables material/structural agents to access geometry
     - External integration: Registry provides API for external tools/monitoring
     """
@@ -415,18 +410,48 @@ class TriageSystemWrapper:
     smolagents-native pattern.
     """
 
-    def __init__(self, component_registry: Optional[Any] = None, monitoring_callback: Optional[Any] = None):
-        """Initialize wrapper with smolagents manager and direct agent references."""
-        # Create the triage manager (without managed_agents to avoid string conversion)
+    def __init__(
+        self, component_registry: Optional[Any] = None, monitoring_callback: Optional[Any] = None
+    ):
+        """Initialize wrapper with smolagents manager and ManagedAgent instances."""
+        # Create the triage manager with proper managed_agents
         model = ModelProvider.get_model("triage")
-        
+
         # Create coordination tools
         material_tool = create_material_placeholder()
         structural_tool = create_structural_placeholder()
         basic_coordination_tools = _create_coordination_tools()
         manager_tools = [material_tool, structural_tool] + basic_coordination_tools
-        
-        # Create triage manager without managed_agents
+
+        # Create managed agents using factory functions
+        geometry_monitor = None
+        syslogic_monitor = None
+
+        if monitoring_callback:
+            if (
+                callable(monitoring_callback)
+                and str(type(monitoring_callback)).find("function") != -1
+            ):
+                geometry_monitor = monitoring_callback("geometry_agent")
+                syslogic_monitor = monitoring_callback("syslogic_agent")
+            else:
+                from ..monitoring.agent_monitor import create_monitor_callback
+
+                geometry_monitor = create_monitor_callback("geometry_agent", monitoring_callback)
+                syslogic_monitor = create_monitor_callback("syslogic_agent", monitoring_callback)
+
+        # Create agents using the updated factory functions (returns agents directly)
+        self.geometry_agent = _create_mcp_enabled_geometry_agent(
+            monitoring_callback=geometry_monitor,
+        )
+
+        from .syslogic_agent_smolagents import create_syslogic_agent
+
+        self.syslogic_agent = create_syslogic_agent(
+            monitoring_callback=syslogic_monitor
+        )
+
+        # Create triage manager with managed_agents
         self.manager = CodeAgent(
             tools=manager_tools,
             model=model,
@@ -434,44 +459,19 @@ class TriageSystemWrapper:
             description="Coordinates bridge design tasks by delegating to specialized agents",
             max_steps=6,
             additional_authorized_imports=["typing", "json", "datetime"],
+            managed_agents=[self.geometry_agent, self.syslogic_agent],
         )
-        
-        # Create agents directly and store as instance variables to bypass smolagents issue
-        geometry_monitor = None
-        syslogic_monitor = None
-        
-        if monitoring_callback:
-            if callable(monitoring_callback) and str(type(monitoring_callback)).find('function') != -1:
-                geometry_monitor = monitoring_callback("geometry_agent")
-                syslogic_monitor = monitoring_callback("syslogic_agent")
-            else:
-                from ..monitoring.agent_monitor import create_monitor_callback
-                geometry_monitor = create_monitor_callback("geometry_agent", monitoring_callback)
-                syslogic_monitor = create_monitor_callback("syslogic_agent", monitoring_callback)
-        
-        self.geometry_agent = _create_mcp_enabled_geometry_agent(
-            custom_tools=_create_registry_tools(component_registry) if component_registry else None,
-            component_registry=component_registry,
-            monitoring_callback=geometry_monitor
-        )
-        
-        from .syslogic_agent_smolagents import create_syslogic_agent
-        self.syslogic_agent = create_syslogic_agent(
-            component_registry=component_registry,
-            monitoring_callback=syslogic_monitor
-        )
-        
+
         self.component_registry = component_registry
         self.logger = logger
-        
-        logger.info("✅ Created TriageSystemWrapper with direct agent pattern (bypassing smolagents managed_agents issue)")
 
-    def handle_design_request(self, request: str, gaze_id: Optional[str] = None) -> ResponseCompatibilityWrapper:
+        logger.info("✅ Created TriageSystemWrapper with proper managed_agents pattern")
+
+    def handle_design_request(
+        self, request: str, gaze_id: Optional[str] = None
+    ) -> ResponseCompatibilityWrapper:
         """
-        Handle design request using three-step orchestrator-parser workflow:
-        1. Delegate to GeometryAgent for simple text description
-        2. Parse text to structured JSON using TriageAgent's LLM  
-        3. Delegate clean structured data to SysLogicAgent
+        Handle design request using native smolagents delegation.
 
         Args:
             request: Human designer's request
@@ -481,50 +481,26 @@ class TriageSystemWrapper:
             ResponseCompatibilityWrapper for backward compatibility
         """
         try:
-            # Step 1: Delegate to GeometryAgent for simple text description
-            geometry_agent = self._get_geometry_agent()
-            if not geometry_agent:
-                raise ValueError("Geometry agent not available")
-                
-            logger.info("🔧 Step 1: Delegating to GeometryAgent for execution")
-            geometry_text_result = geometry_agent.run(
-                task=request,
-                additional_args={"gazed_object_id": gaze_id} if gaze_id and self._validate_gaze_id(gaze_id) else None
-            )
+            # Use the manager agent for coordinated multi-agent workflow
+            logger.info("🤖 Using manager agent for coordinated design workflow")
 
-            # Step 2: TriageAgent parses text into structured JSON using LLM
-            logger.info("📊 Step 2: Parsing geometry output to structured data using LLM")
-            element_data = self._parse_with_llm(geometry_text_result)
+            # Add gaze context to the request if available
+            enhanced_request = request
+            if gaze_id and self._validate_gaze_id(gaze_id):
+                enhanced_request = f"{request}\n\nGaze context: focusing on object {gaze_id}"
 
-            # Step 3: Pass clean structured data to SysLogicAgent
-            syslogic_agent = self._get_syslogic_agent()
-            if syslogic_agent and element_data and element_data.get("elements"):
-                logger.info("🔍 Step 3: Delegating to SysLogicAgent for validation")
-                syslogic_result = syslogic_agent.run(
-                    task="update material stock and validate structural integrity",
-                    additional_args={"elements": element_data}
-                )
-            else:
-                syslogic_result = "SysLogic processing skipped - no structural elements to validate"
-                logger.info("⚠️ Step 3: SysLogic skipped - no elements to process")
+            # Let smolagents handle the coordination automatically
+            result = self.manager.run(enhanced_request)
 
-            # Step 4: Combine and return comprehensive response
-            final_response = {
-                "geometry_outcome": str(geometry_text_result),
-                "parsed_elements": element_data,
-                "syslogic_analysis": str(syslogic_result),
-                "workflow_status": "completed_successfully"
-            }
-            
-            logger.info("✅ Three-step orchestrator workflow completed successfully")
-            return ResponseCompatibilityWrapper(final_response, success=True)
+            logger.info("✅ Smolagents coordination completed successfully")
+            return ResponseCompatibilityWrapper(result, success=True)
 
         except Exception as e:
-            logger.error(f"Orchestrator workflow failed: {e}")
+            logger.error(f"Manager coordination failed: {e}")
             error_result = {
-                "error": str(e), 
+                "error": str(e),
                 "workflow_status": "failed",
-                "error_type": type(e).__name__
+                "error_type": type(e).__name__,
             }
             return ResponseCompatibilityWrapper(
                 error_result, success=False, error_type=type(e).__name__
@@ -533,261 +509,44 @@ class TriageSystemWrapper:
     def _validate_gaze_id(self, gaze_id: str) -> bool:
         """
         Validate gaze ID follows expected dynamic_XXX format.
-        
+
         Args:
             gaze_id: Gaze ID string from VizorListener
-            
+
         Returns:
             True if valid format, False otherwise
         """
         import re
-        return bool(re.match(r'^dynamic_\d{3}$', gaze_id))
 
-    def _parse_with_llm(self, geometry_text: str) -> Dict[str, Any]:
-        """
-        Use TriageAgent's LLM to parse geometry description into structured JSON.
-        
-        This is the critical Step 2 of the orchestrator-parser workflow where
-        the TriageAgent transforms descriptive text from GeometryAgent into
-        clean structured data for SysLogicAgent.
-        
-        Args:
-            geometry_text: Descriptive text from GeometryAgent
-            
-        Returns:
-            Parsed ElementData v1.0 JSON structure or empty dict if parsing fails
-        """
-        try:
-            parsing_task = (
-                "Parse the following geometry description into valid JSON following ElementData contract v1.0. "
-                "Extract all structural elements with these properties:\n"
-                "- id: element identifier (e.g., '001', '021')\n"
-                "- type: element type (e.g., 'green_a', 'blue_b')\n"
-                "- length_mm: length in millimeters (convert from meters if needed)\n"
-                "- center_point: [x, y, z] coordinates\n"
-                "- direction: [x, y, z] direction vector\n\n"
-                "Format as JSON with this structure:\n"
-                "{\n"
-                '  "data_type": "element_collection",\n'
-                '  "elements": [\n'
-                '    {\n'
-                '      "id": "001",\n'
-                '      "type": "green_a",\n'
-                '      "length_mm": 400,\n'
-                '      "center_point": [-187.4, -100, 25],\n'
-                '      "direction": [-34.5, -20, 0]\n'
-                '    }\n'
-                '  ]\n'
-                '}\n\n'
-                f"Geometry description to parse:\n\n{geometry_text}"
-            )
-            
-            logger.info("🤖 Using TriageAgent LLM for text-to-JSON parsing")
-            llm_result = self.manager.run(parsing_task)
-            
-            # Extract JSON from the LLM's response
-            parsed_data = self._extract_json_from_response(str(llm_result))
-            
-            # Validate the structure
-            if parsed_data and "elements" in parsed_data:
-                logger.info(f"✅ Successfully parsed {len(parsed_data['elements'])} elements")
-                return parsed_data
-            else:
-                logger.warning("⚠️ LLM parsing returned invalid structure")
-                return {"data_type": "element_collection", "elements": []}
-                
-        except Exception as e:
-            logger.error(f"❌ LLM parsing failed: {e}")
-            return {"data_type": "element_collection", "elements": []}
-
-    def _extract_json_from_response(self, llm_response: str) -> Dict[str, Any]:
-        """
-        Extract clean JSON from LLM response text with enhanced robustness.
-        
-        Args:
-            llm_response: Raw LLM response that may contain JSON
-            
-        Returns:
-            Parsed JSON dictionary or empty dict if parsing fails
-        """
-        import json
-        import re
-        
-        try:
-            # Convert to string if needed
-            response_text = str(llm_response)
-            
-            # Method 1: Find JSON block in markdown code fence (multiple patterns)
-            json_patterns = [
-                r'```json\n(.*?)\n```',  # Standard markdown
-                r'```JSON\n(.*?)\n```',  # Uppercase
-                r'```\n(.*?)\n```',      # Generic code block
-                r'```json(.*?)```'       # No newlines
-            ]
-            
-            for pattern in json_patterns:
-                json_match = re.search(pattern, response_text, re.DOTALL | re.IGNORECASE)
-                if json_match:
-                    json_str = json_match.group(1).strip()
-                    try:
-                        result = json.loads(json_str)
-                        if self._validate_element_data(result):
-                            return result
-                        logger.debug(f"🔍 Pattern {pattern} found JSON but validation failed")
-                    except json.JSONDecodeError:
-                        logger.debug(f"🔍 Pattern {pattern} found content but not valid JSON")
-                        continue
-            
-            # Method 2: Find JSON object directly (look for balanced braces)
-            json_start = response_text.find('{')
-            if json_start != -1:
-                # Find matching closing brace
-                brace_count = 0
-                json_end = json_start
-                for i, char in enumerate(response_text[json_start:]):
-                    if char == '{':
-                        brace_count += 1
-                    elif char == '}':
-                        brace_count -= 1
-                        if brace_count == 0:
-                            json_end = json_start + i + 1
-                            break
-                
-                if json_end > json_start:
-                    json_str = response_text[json_start:json_end]
-                    try:
-                        result = json.loads(json_str)
-                        if self._validate_element_data(result):
-                            return result
-                        logger.debug("🔍 Balanced braces found JSON but validation failed")
-                    except json.JSONDecodeError:
-                        logger.debug("🔍 Balanced braces found content but not valid JSON")
-            
-            # Method 3: Try to parse the entire response as JSON
-            try:
-                result = json.loads(response_text)
-                if self._validate_element_data(result):
-                    return result
-                logger.debug("🔍 Full response is JSON but validation failed")
-            except json.JSONDecodeError:
-                logger.debug("🔍 Full response is not valid JSON")
-            
-            # If all methods fail, return empty structure
-            logger.warning("⚠️ No valid JSON found in response")
-            return {"data_type": "element_collection", "elements": []}
-            
-        except (AttributeError, IndexError) as e:
-            logger.warning(f"⚠️ Failed to extract JSON from response: {e}")
-            # Return empty structure that matches expected format
-            return {"data_type": "element_collection", "elements": []}
-
-    def _validate_element_data(self, data: Dict[str, Any]) -> bool:
-        """
-        Validate that the parsed data follows ElementData v1.0 contract.
-        
-        Args:
-            data: Parsed JSON data to validate
-            
-        Returns:
-            True if data is valid ElementData structure, False otherwise
-        """
-        try:
-            # Check top-level structure
-            if not isinstance(data, dict):
-                return False
-            
-            if "elements" not in data:
-                return False
-            
-            elements = data["elements"]
-            if not isinstance(elements, list):
-                return False
-            
-            # Validate each element (allow empty list)
-            for element in elements:
-                if not isinstance(element, dict):
-                    return False
-                
-                # Check required fields
-                required_fields = ["id", "type"]
-                for field in required_fields:
-                    if field not in element:
-                        logger.debug(f"🔍 Element missing required field: {field}")
-                        return False
-                
-                # Optional: validate field types if present
-                if "length_mm" in element and not isinstance(element["length_mm"], (int, float)):
-                    logger.debug("🔍 Element length_mm is not numeric")
-                    return False
-                
-                if "center_point" in element:
-                    cp = element["center_point"]
-                    if not isinstance(cp, list) or len(cp) != 3:
-                        logger.debug("🔍 Element center_point is not [x,y,z] array")
-                        return False
-            
-            logger.debug(f"✅ Validated ElementData with {len(elements)} elements")
-            return True
-            
-        except Exception as e:
-            logger.debug(f"🔍 Validation error: {e}")
-            return False
-
-    def _get_geometry_agent(self):
-        """
-        Get geometry agent from direct instance reference.
-        
-        Returns:
-            Geometry agent instance or None if not found
-        """
-        try:
-            if hasattr(self, 'geometry_agent') and self.geometry_agent:
-                logger.debug("🔍 Found geometry agent via direct reference")
-                return self.geometry_agent
-            else:
-                logger.warning("⚠️ No geometry agent available in direct reference")
-                return None
-                
-        except Exception as e:
-            logger.error(f"❌ Error getting geometry agent: {e}")
-            return None
-
-    def _get_syslogic_agent(self):
-        """
-        Get syslogic agent from direct instance reference.
-        
-        Returns:
-            SysLogic agent instance or None if not found
-        """
-        try:
-            if hasattr(self, 'syslogic_agent') and self.syslogic_agent:
-                logger.debug("🔍 Found syslogic agent via direct reference")
-                return self.syslogic_agent
-            else:
-                logger.warning("⚠️ No syslogic agent available in direct reference")
-                return None
-                
-        except Exception as e:
-            logger.error(f"❌ Error getting syslogic agent: {e}")
-            return None
+        return bool(re.match(r"^dynamic_\d{3}$", gaze_id))
 
     def get_status(self) -> Dict[str, Any]:
         """Get status of the triage system."""
         return {
             "triage": {
                 "initialized": True,
-                "type": "smolagents_orchestrator",
-                "direct_agents": 2,  # geometry_agent + syslogic_agent
+                "type": "smolagents_managed_agents",
+                "managed_agents": 2,  # managed_geometry + managed_syslogic
                 "max_steps": self.manager.max_steps,
             },
             "geometry_agent": {
-                "initialized": hasattr(self, 'geometry_agent') and self.geometry_agent is not None,
-                "type": type(self.geometry_agent).__name__ if hasattr(self, 'geometry_agent') else "Unknown",
+                "initialized": hasattr(self, "geometry_agent") and self.geometry_agent is not None,
+                "type": (
+                    type(self.geometry_agent).__name__
+                    if hasattr(self, "geometry_agent")
+                    else "Unknown"
+                ),
+                "name": "geometry_specialist",
                 "mcp_integration": "enabled",
             },
             "syslogic_agent": {
-                "initialized": hasattr(self, 'syslogic_agent') and self.syslogic_agent is not None,
-                "type": type(self.syslogic_agent).__name__ if hasattr(self, 'syslogic_agent') else "Unknown",
+                "initialized": hasattr(self, "syslogic_agent") and self.syslogic_agent is not None,
+                "type": (
+                    type(self.syslogic_agent).__name__
+                    if hasattr(self, "syslogic_agent")
+                    else "Unknown"
+                ),
+                "name": "structural_validator",
                 "validation_tools": "enabled",
             },
         }
@@ -805,17 +564,22 @@ class TriageSystemWrapper:
             if hasattr(self.manager, "managed_agents") and self.manager.managed_agents:
                 for i, agent in enumerate(self.manager.managed_agents):
                     agent_name = getattr(agent, "name", f"agent_{i}")
-                    
+
+                    # Reset agent memory directly
                     if hasattr(agent, "memory") and hasattr(agent.memory, "steps"):
                         steps_cleared = len(agent.memory.steps)
                         agent.memory.steps.clear()
                         logger.info(f"✅ Cleared {steps_cleared} {agent_name} memory steps")
-                    
+
                     # Special handling for geometry agent's internal component cache
-                    if hasattr(agent, "internal_component_cache"):
-                        cache_cleared = len(agent.internal_component_cache)
-                        agent.internal_component_cache.clear()
-                        logger.info(f"✅ Cleared {cache_cleared} {agent_name} component cache entries")
+                    if hasattr(agent, "_wrapper"):
+                        wrapper = agent._wrapper
+                        if hasattr(wrapper, "internal_component_cache"):
+                            cache_cleared = len(wrapper.internal_component_cache)
+                            wrapper.internal_component_cache.clear()
+                            logger.info(
+                                f"✅ Cleared {cache_cleared} {agent_name} component cache entries"
+                            )
 
             logger.info("🔄 All agent memories have been reset - starting fresh session")
 

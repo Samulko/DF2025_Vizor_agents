@@ -1,468 +1,207 @@
-"""Agent configuration templates for production-ready deployments.
-
-This module provides standardized configuration templates for different
-agent types, including security settings, monitoring, and production
-optimizations following smolagents best practices.
 """
-import logging
-import os
-from dataclasses import asdict, dataclass
-from enum import Enum
-from typing import Any, Dict, List, Optional
+Minimal Agent Template for Workshop Students
 
-logger = logging.getLogger(__name__)
+This is a simple, working agent template that demonstrates the essential elements
+of creating agents with smolagents. Students can use this as their starting point
+and expand from here.
 
+This template shows the absolute minimum needed to create a functional agent:
+1. Import the necessary smolagents components
+2. Create a simple tool using the @tool decorator
+3. Initialize the agent with model, tools, and basic configuration
+4. Run the agent with a task
 
-class ExecutionEnvironment(Enum):
-    """Supported execution environments for agent security."""
-    LOCAL = "local"              # Local execution with import restrictions
-    DOCKER = "docker"            # Docker containerization
-    E2B = "e2b"                 # E2B remote sandboxing (production)
+All examples follow official smolagents documentation patterns.
+"""
 
+from typing import List
 
-class SecurityLevel(Enum):
-    """Security levels for different deployment scenarios."""
-    DEVELOPMENT = "development"  # Minimal restrictions for development
-    STAGING = "staging"         # Moderate restrictions for testing
-    PRODUCTION = "production"   # Maximum security for production
+from smolagents import CodeAgent, tool
+from ..config.model_config import ModelProvider
 
 
-@dataclass
-class SecurityConfig:
-    """Security configuration for agent execution."""
-    execution_environment: ExecutionEnvironment
-    security_level: SecurityLevel
-    authorized_imports: List[str]
-    executor_kwargs: Dict[str, Any]
-    max_steps: int
-    rate_limit_requests: Optional[int] = None
+# =============================================================================
+# STEP 1: CREATE A SIMPLE TOOL
+# This shows students how to create their own agent tools
+# =============================================================================
+
+@tool
+def simple_calculator(x: float, y: float, operation: str) -> float:
+    """
+    A basic calculator tool that demonstrates tool creation for students.
     
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for agent initialization."""
-        config = asdict(self)
-        config["execution_environment"] = self.execution_environment.value
-        config["security_level"] = self.security_level.value
-        return config
+    This shows the essential pattern:
+    - Use @tool decorator
+    - Clear docstring explaining what the tool does
+    - Typed parameters with descriptions
+    - Return the result
+    
+    Args:
+        x: First number
+        y: Second number
+        operation: "add", "subtract", "multiply", or "divide"
+        
+    Returns:
+        The calculation result
+    """
+    if operation == "add":
+        return x + y
+    elif operation == "subtract":
+        return x - y
+    elif operation == "multiply":
+        return x * y
+    elif operation == "divide":
+        if y == 0:
+            raise ValueError("Cannot divide by zero")
+        return x / y
+    else:
+        raise ValueError(f"Unknown operation: {operation}")
 
 
-@dataclass
-class MonitoringConfig:
-    """Monitoring and observability configuration."""
-    enable_logging: bool
-    log_level: str
-    stream_outputs: bool
-    enable_metrics: bool
-    enable_tracing: bool
-    performance_monitoring: bool
+# =============================================================================
+# STEP 2: CREATE THE AGENT TEMPLATE
+# This is the MVP agent that students will expand
+# =============================================================================
+
+def create_basic_agent(tools: List = None, model_name: str = "default") -> CodeAgent:
+    """
+    Create a basic agent - the minimal viable agent for students.
     
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for monitoring setup."""
-        return asdict(self)
+    This demonstrates the essential smolagents pattern:
+    1. Get a model from the model provider
+    2. Create a CodeAgent with model and tools
+    3. Configure basic settings (max_steps, imports)
+    4. Return the ready-to-use agent
+    
+    Students can copy this function and modify it for their needs.
+    
+    Args:
+        tools: List of tools for the agent (optional)
+        model_name: Name of the model to use
+        
+    Returns:
+        A configured CodeAgent ready to use
+    """
+    # ESSENTIAL ELEMENT 1: Get the AI model
+    # This connects to the language model that powers the agent
+    model = ModelProvider.get_model(model_name)
+    
+    # ESSENTIAL ELEMENT 2: Prepare the tools
+    # Tools are functions the agent can call to perform actions
+    agent_tools = tools or [simple_calculator]  # Use provided tools or default
+    
+    # ESSENTIAL ELEMENT 3: Create the agent
+    # This is the core smolagents pattern
+    agent = CodeAgent(
+        tools=agent_tools,                                    # What the agent can do
+        model=model,                                          # How the agent thinks
+        max_steps=10,                                        # How many reasoning steps
+        additional_authorized_imports=["math", "json"],      # What Python modules it can use
+        name="basic_agent",                                  # Agent identifier
+        description="A simple agent for learning purposes"   # What this agent does
+    )
+    
+    return agent
 
 
-@dataclass
-class AgentTemplate:
-    """Complete agent configuration template."""
-    agent_type: str
-    security_config: SecurityConfig
-    monitoring_config: MonitoringConfig
-    model_temperature: Optional[float]
-    max_context_tokens: int
-    description: str
+# =============================================================================
+# STEP 3: EXAMPLE USAGE
+# Shows students how to use their agent
+# =============================================================================
+
+def demo_basic_agent():
+    """
+    Demonstrates how to create and use the basic agent.
     
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for agent factory."""
-        return {
-            "agent_type": self.agent_type,
-            "security": self.security_config.to_dict(),
-            "monitoring": self.monitoring_config.to_dict(),
-            "model_temperature": self.model_temperature,
-            "max_context_tokens": self.max_context_tokens,
-            "description": self.description
-        }
+    Students can run this function to see the agent in action,
+    then modify it for their own tasks.
+    """
+    print("🤖 Creating basic agent...")
+    
+    # Create the agent
+    agent = create_basic_agent()
+    
+    # Show agent info
+    print(f"Agent created: {agent.name}")
+    print(f"Available tools: {len(agent.tools)}")
+    print(f"Max steps: {agent.max_steps}")
+    
+    # Example task - students can change this
+    print("\n📝 Running example task...")
+    
+    # This is how you use an agent - just call agent.run() with your task
+    result = agent.run("Calculate 15 + 27, then multiply the result by 2")
+    
+    print(f"Result: {result}")
+    
+    return agent
 
 
-class AgentTemplates:
-    """Factory for agent configuration templates."""
+# =============================================================================
+# STEP 4: CUSTOMIZATION HELPERS
+# Simple functions to help students modify the template
+# =============================================================================
+
+def create_agent_with_custom_tools(custom_tools: List) -> CodeAgent:
+    """
+    Creates an agent with student's custom tools.
     
-    @staticmethod
-    def get_geometry_template(
-        environment: ExecutionEnvironment = ExecutionEnvironment.LOCAL,
-        security_level: SecurityLevel = SecurityLevel.DEVELOPMENT
-    ) -> AgentTemplate:
-        """Get configuration template for geometry agents.
-        
-        Args:
-            environment: Execution environment for security
-            security_level: Security level for deployment
-            
-        Returns:
-            AgentTemplate configured for geometry operations
-        """
-        # Geometry-specific imports (minimal since it uses MCP tools)
-        base_imports = [
-            "json", "datetime", "pathlib", "typing", "dataclasses", "enum",
-            "re", "collections", "functools", "math"
-        ]
-        
-        # Security configuration
-        security_config = SecurityConfig(
-            execution_environment=environment,
-            security_level=security_level,
-            authorized_imports=base_imports,
-            executor_kwargs=AgentTemplates._get_executor_kwargs(environment),
-            max_steps=10,  # Lower for MCP operations
-            rate_limit_requests=60 if security_level == SecurityLevel.PRODUCTION else None
-        )
-        
-        # Monitoring configuration
-        monitoring_config = MonitoringConfig(
-            enable_logging=True,
-            log_level="INFO" if security_level != SecurityLevel.PRODUCTION else "WARNING",
-            stream_outputs=security_level == SecurityLevel.DEVELOPMENT,
-            enable_metrics=security_level == SecurityLevel.PRODUCTION,
-            enable_tracing=security_level == SecurityLevel.PRODUCTION,
-            performance_monitoring=True
-        )
-        
-        return AgentTemplate(
-            agent_type="geometry",
-            security_config=security_config,
-            monitoring_config=monitoring_config,
-            model_temperature=0.1,  # Precise for geometry operations
-            max_context_tokens=8000,
-            description="Creates 3D geometry in Rhino Grasshopper via MCP integration"
-        )
+    This shows students how to use their own tools with the basic template.
     
-    @staticmethod
-    def get_material_template(
-        environment: ExecutionEnvironment = ExecutionEnvironment.LOCAL,
-        security_level: SecurityLevel = SecurityLevel.DEVELOPMENT
-    ) -> AgentTemplate:
-        """Get configuration template for material agents.
-        
-        Args:
-            environment: Execution environment for security
-            security_level: Security level for deployment
-            
-        Returns:
-            AgentTemplate configured for material management
-        """
-        # Material management imports
-        base_imports = [
-            "json", "datetime", "pathlib", "typing", "dataclasses", "enum",
-            "re", "collections", "functools", "math", "sqlite3", "csv"
-        ]
-        
-        # Add data analysis libraries for production
-        if security_level == SecurityLevel.PRODUCTION:
-            base_imports.extend(["pandas", "numpy"])
-        
-        # Security configuration
-        security_config = SecurityConfig(
-            execution_environment=environment,
-            security_level=security_level,
-            authorized_imports=base_imports,
-            executor_kwargs=AgentTemplates._get_executor_kwargs(environment),
-            max_steps=15,  # More steps for optimization algorithms
-            rate_limit_requests=100 if security_level == SecurityLevel.PRODUCTION else None
-        )
-        
-        # Monitoring configuration
-        monitoring_config = MonitoringConfig(
-            enable_logging=True,
-            log_level="INFO",
-            stream_outputs=security_level == SecurityLevel.DEVELOPMENT,
-            enable_metrics=True,  # Important for inventory tracking
-            enable_tracing=security_level == SecurityLevel.PRODUCTION,
-            performance_monitoring=True
-        )
-        
-        return AgentTemplate(
-            agent_type="material",
-            security_config=security_config,
-            monitoring_config=monitoring_config,
-            model_temperature=0.3,  # Balance between creativity and precision
-            max_context_tokens=10000,
-            description="Manages construction material inventory and optimization"
-        )
-    
-    @staticmethod
-    def get_structural_template(
-        environment: ExecutionEnvironment = ExecutionEnvironment.LOCAL,
-        security_level: SecurityLevel = SecurityLevel.DEVELOPMENT
-    ) -> AgentTemplate:
-        """Get configuration template for structural agents.
-        
-        Args:
-            environment: Execution environment for security
-            security_level: Security level for deployment
-            
-        Returns:
-            AgentTemplate configured for structural analysis
-        """
-        # Structural analysis imports
-        base_imports = [
-            "json", "datetime", "pathlib", "typing", "dataclasses", "enum",
-            "re", "collections", "functools", "math", "numpy", "scipy"
-        ]
-        
-        # Add visualization for development
-        if security_level == SecurityLevel.DEVELOPMENT:
-            base_imports.extend(["matplotlib", "plotly"])
-        
-        # Security configuration
-        security_config = SecurityConfig(
-            execution_environment=environment,
-            security_level=security_level,
-            authorized_imports=base_imports,
-            executor_kwargs=AgentTemplates._get_executor_kwargs(environment),
-            max_steps=20,  # More steps for complex calculations
-            rate_limit_requests=50 if security_level == SecurityLevel.PRODUCTION else None
-        )
-        
-        # Monitoring configuration
-        monitoring_config = MonitoringConfig(
-            enable_logging=True,
-            log_level="INFO",
-            stream_outputs=security_level == SecurityLevel.DEVELOPMENT,
-            enable_metrics=True,  # Critical for safety calculations
-            enable_tracing=True,   # Always trace structural calculations
-            performance_monitoring=True
-        )
-        
-        return AgentTemplate(
-            agent_type="structural",
-            security_config=security_config,
-            monitoring_config=monitoring_config,
-            model_temperature=0.2,  # Low temperature for safety calculations
-            max_context_tokens=12000,  # More context for complex analysis
-            description="Performs structural analysis and safety calculations"
-        )
-    
-    @staticmethod
-    def get_triage_template(
-        environment: ExecutionEnvironment = ExecutionEnvironment.LOCAL,
-        security_level: SecurityLevel = SecurityLevel.DEVELOPMENT
-    ) -> AgentTemplate:
-        """Get configuration template for triage/coordination agents.
-        
-        Args:
-            environment: Execution environment for security
-            security_level: Security level for deployment
-            
-        Returns:
-            AgentTemplate configured for task coordination
-        """
-        # Coordination and async processing imports
-        base_imports = [
-            "json", "datetime", "pathlib", "typing", "dataclasses", "enum",
-            "re", "collections", "functools", "math", "asyncio", "concurrent.futures"
-        ]
-        
-        # Security configuration
-        security_config = SecurityConfig(
-            execution_environment=environment,
-            security_level=security_level,
-            authorized_imports=base_imports,
-            executor_kwargs=AgentTemplates._get_executor_kwargs(environment),
-            max_steps=25,  # More steps for coordination
-            rate_limit_requests=200 if security_level == SecurityLevel.PRODUCTION else None
-        )
-        
-        # Monitoring configuration
-        monitoring_config = MonitoringConfig(
-            enable_logging=True,
-            log_level="INFO",
-            stream_outputs=security_level == SecurityLevel.DEVELOPMENT,
-            enable_metrics=True,  # Important for coordination metrics
-            enable_tracing=True,   # Always trace delegation decisions
-            performance_monitoring=True
-        )
-        
-        return AgentTemplate(
-            agent_type="triage",
-            security_config=security_config,
-            monitoring_config=monitoring_config,
-            model_temperature=0.4,  # Higher for coordination reasoning
-            max_context_tokens=15000,  # Large context for multi-agent coordination
-            description="Coordinates tasks and delegates to specialized agents"
-        )
-    
-    @staticmethod
-    def get_production_template(agent_type: str) -> AgentTemplate:
-        """Get production-ready template for any agent type.
-        
-        Args:
-            agent_type: Type of agent (geometry, material, structural, triage)
-            
-        Returns:
-            AgentTemplate configured for production deployment
-        """
-        template_map = {
-            "geometry": AgentTemplates.get_geometry_template,
-            "material": AgentTemplates.get_material_template,
-            "structural": AgentTemplates.get_structural_template,
-            "triage": AgentTemplates.get_triage_template
-        }
-        
-        if agent_type not in template_map:
-            raise ValueError(f"Unknown agent type: {agent_type}")
-        
-        # Get production template with E2B sandboxing
-        return template_map[agent_type](
-            environment=ExecutionEnvironment.E2B,
-            security_level=SecurityLevel.PRODUCTION
-        )
-    
-    @staticmethod
-    def get_development_template(agent_type: str) -> AgentTemplate:
-        """Get development template for any agent type.
-        
-        Args:
-            agent_type: Type of agent (geometry, material, structural, triage)
-            
-        Returns:
-            AgentTemplate configured for development
-        """
-        template_map = {
-            "geometry": AgentTemplates.get_geometry_template,
-            "material": AgentTemplates.get_material_template,
-            "structural": AgentTemplates.get_structural_template,
-            "triage": AgentTemplates.get_triage_template
-        }
-        
-        if agent_type not in template_map:
-            raise ValueError(f"Unknown agent type: {agent_type}")
-        
-        # Get development template with local execution
-        return template_map[agent_type](
-            environment=ExecutionEnvironment.LOCAL,
-            security_level=SecurityLevel.DEVELOPMENT
-        )
-    
-    @staticmethod
-    def _get_executor_kwargs(environment: ExecutionEnvironment) -> Dict[str, Any]:
-        """Get executor configuration for environment.
-        
-        Args:
-            environment: Execution environment
-            
-        Returns:
-            Dictionary with executor configuration
-        """
-        if environment == ExecutionEnvironment.E2B:
-            # E2B remote sandboxing for production
-            api_key = os.environ.get("E2B_API_KEY")
-            if not api_key:
-                logger.warning("E2B_API_KEY not found, falling back to local execution")
-                return {}
-            
-            return {
-                "api_key": api_key,
-                "timeout": 30
-            }
-        
-        elif environment == ExecutionEnvironment.DOCKER:
-            # Docker containerization
-            return {
-                "image": "python:3.11-slim",
-                "timeout": 60
-            }
-        
-        else:
-            # Local execution (default)
-            return {}
-    
-    @staticmethod
-    def validate_template(template: AgentTemplate) -> Dict[str, Any]:
-        """Validate that a template configuration is valid.
-        
-        Args:
-            template: Agent template to validate
-            
-        Returns:
-            Dictionary with validation results
-        """
-        issues = []
-        
-        # Validate security configuration
-        if template.security_config.max_steps > 50:
-            issues.append("max_steps too high (>50), may cause timeouts")
-        
-        if not template.security_config.authorized_imports:
-            issues.append("No authorized imports specified")
-        
-        # Validate monitoring configuration
-        if template.monitoring_config.enable_tracing and not template.monitoring_config.enable_metrics:
-            issues.append("Tracing enabled without metrics may cause overhead")
-        
-        # Validate model configuration
-        if template.model_temperature and (template.model_temperature < 0 or template.model_temperature > 1):
-            issues.append("Invalid temperature (must be 0-1)")
-        
-        if template.max_context_tokens > 32000:
-            issues.append("Context tokens too high (>32000), may cause API errors")
-        
-        return {
-            "valid": len(issues) == 0,
-            "issues": issues,
-            "template_type": template.agent_type
-        }
+    Example:
+        my_tools = [my_custom_tool, another_tool]
+        agent = create_agent_with_custom_tools(my_tools)
+    """
+    return create_basic_agent(tools=custom_tools)
 
 
-class ProductionConfig:
-    """Production-ready configurations for the bridge design system."""
+def create_agent_with_more_steps(max_steps: int = 20) -> CodeAgent:
+    """
+    Creates an agent with more reasoning steps for complex tasks.
     
-    @staticmethod
-    def get_bridge_system_config() -> Dict[str, AgentTemplate]:
-        """Get complete system configuration for production deployment.
-        
-        Returns:
-            Dictionary mapping agent names to production templates
-        """
-        return {
-            "triage": AgentTemplates.get_production_template("triage"),
-            "geometry": AgentTemplates.get_production_template("geometry"),
-            "material": AgentTemplates.get_production_template("material"),
-            "structural": AgentTemplates.get_production_template("structural")
-        }
+    Students can use this when their tasks need more thinking time.
+    """
+    model = ModelProvider.get_model("default")
     
-    @staticmethod
-    def get_development_config() -> Dict[str, AgentTemplate]:
-        """Get complete system configuration for development.
-        
-        Returns:
-            Dictionary mapping agent names to development templates
-        """
-        return {
-            "triage": AgentTemplates.get_development_template("triage"),
-            "geometry": AgentTemplates.get_development_template("geometry"),
-            "material": AgentTemplates.get_development_template("material"),
-            "structural": AgentTemplates.get_development_template("structural")
-        }
+    agent = CodeAgent(
+        tools=[simple_calculator],
+        model=model,
+        max_steps=max_steps,  # More steps for complex reasoning
+        additional_authorized_imports=["math", "json", "datetime"],
+        name="extended_agent",
+        description="Agent with more reasoning steps"
+    )
     
-    @staticmethod
-    def validate_system_config(config: Dict[str, AgentTemplate]) -> Dict[str, Any]:
-        """Validate complete system configuration.
-        
-        Args:
-            config: Dictionary of agent templates
-            
-        Returns:
-            Dictionary with validation results
-        """
-        results = {}
-        overall_valid = True
-        
-        for agent_name, template in config.items():
-            validation = AgentTemplates.validate_template(template)
-            results[agent_name] = validation
-            if not validation["valid"]:
-                overall_valid = False
-        
-        return {
-            "overall_valid": overall_valid,
-            "agent_results": results,
-            "total_agents": len(config)
-        }
+    return agent
+
+
+# =============================================================================
+# QUICK START FOR STUDENTS
+# =============================================================================
+
+if __name__ == "__main__":
+    """
+    Students can run this file directly to see the agent working.
+    
+    To use in workshop:
+    1. Run: python agent_templates.py
+    2. See the basic agent in action
+    3. Copy the create_basic_agent() function to start building
+    4. Add your own tools and modify as needed
+    """
+    print("=" * 50)
+    print("SMOLAGENTS BASIC AGENT TEMPLATE")
+    print("=" * 50)
+    
+    # Run the demonstration
+    agent = demo_basic_agent()
+    
+    print("\n" + "=" * 50)
+    print("NEXT STEPS FOR STUDENTS:")
+    print("=" * 50)
+    print("1. Copy the create_basic_agent() function")
+    print("2. Create your own tools using @tool decorator")
+    print("3. Modify the agent configuration for your needs")
+    print("4. Test with agent.run('your task here')")
+    print("5. Expand with more tools and capabilities")
+    print("\nHappy coding! 🚀")

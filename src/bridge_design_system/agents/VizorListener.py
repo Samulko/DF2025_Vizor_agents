@@ -1,24 +1,24 @@
-'''
-VizorListener Behaviour: 
+"""
+VizorListener Behaviour:
 
 Listens to topic: HOLO1_GazePoint
 The received input is a string message, giving an element name (uniquely identifiable)
-The element names are mostly 01red, 01green, 01blue, 02red, 02green, 02blue, etc. 
-But it can also be link1, link2, link3 etc. 
+The element names are mostly 01red, 01green, 01blue, 02red, 02green, 02blue, etc.
+But it can also be link1, link2, link3 etc.
 When the input is received, store it in variable: current_element
 
 Listens to topic: HOLO1_Model
-The received input is a custom message containing: 
+The received input is a custom message containing:
 string[] names
 geometry_msgs/Pose[] poses
-It describes the transformed position of element [name] to pose [pose]. 
+It describes the transformed position of element [name] to pose [pose].
 When the input is received, transform the element based on pose (containing position + orientation)
-If the transform is zero (no movement), simply ignore it. 
+If the transform is zero (no movement), simply ignore it.
 If the transform is non-zero, return the list of transforms in a dictionary with the name as key
 
-The agents/geometry_agent_stdio.py will hold an instance to this class 
+The agents/geometry_agent_stdio.py will hold an instance to this class
 
-'''
+"""
 
 from typing import Dict, Optional, Union
 
@@ -26,11 +26,13 @@ from typing import Dict, Optional, Union
 try:
     import roslibpy
     from geometry_msgs.msg import Pose
+
     ROS_AVAILABLE = True
 except ImportError:
     roslibpy = None
     Pose = None
     ROS_AVAILABLE = False
+
 
 class VizorListener:
     _instance = None
@@ -44,16 +46,16 @@ class VizorListener:
     def __init__(self):
         if self._initialized:
             return
-            
+
         self._initialized = True
         self.current_element: Optional[str] = None
-        self.transforms: Dict[str, Union[dict, 'Pose']] = {}
+        self.transforms: Dict[str, Union[dict, "Pose"]] = {}
         self.ros_available = ROS_AVAILABLE
         self.client = None
         self.gaze_subscriber = None
         self.model_subscriber = None
         self._connection_attempted = False
-        
+
         # Defer ROS connection until first use (lazy loading)
         if self.ros_available:
             self._attempt_ros_connection()
@@ -62,90 +64,89 @@ class VizorListener:
         """Attempt to establish ROS connection with graceful failure handling."""
         if self._connection_attempted or not self.ros_available:
             return False
-            
+
         self._connection_attempted = True
         try:
             # Initialize ROS client
-            self.client = roslibpy.Ros(host='localhost', port=9090)
+            self.client = roslibpy.Ros(host="localhost", port=9090)
             self.client.run()
-            
+
             # Check if connection is successful
             if not self.client.is_connected:
                 print("⚠️ ROS connection failed - gaze features will be limited")
                 return False
-            
+
             # Subscribe to HOLO1_GazePoint topic
             self.gaze_subscriber = roslibpy.Topic(
-                self.client,
-                '/HOLO1_GazePoint',
-                'std_msgs/String'
+                self.client, "/HOLO1_GazePoint", "std_msgs/String"
             )
             self.gaze_subscriber.subscribe(self._handle_gaze_message)
-            
+
             # Subscribe to HOLO1_Model topic
             self.model_subscriber = roslibpy.Topic(
-                self.client,
-                '/HOLO1_Model',
-                'vizor_package/Model'
+                self.client, "/HOLO1_Model", "vizor_package/Model"
             )
             self.model_subscriber.subscribe(self._handle_model_message)
-            
+
             print("✅ ROS connection established - gaze features enabled")
             return True
-            
+
         except Exception as e:
             print(f"⚠️ ROS connection failed: {e}")
             self.client = None
             return False
 
     def _handle_gaze_message(self, message):
-        self.current_element = message['data']
+        self.current_element = message["data"]
 
     def _handle_model_message(self, message):
         """Handle incoming model transform messages from ROS."""
         self.transforms = {}
-        names = message['names']
-        poses = message['poses']
-        
+        names = message["names"]
+        poses = message["poses"]
+
         for name, pose in zip(names, poses):
             # Check if the transform is non-zero
-            position = pose['position']
-            orientation = pose['orientation']
-            
+            position = pose["position"]
+            orientation = pose["orientation"]
+
             # Check if position or orientation has changed
-            if (abs(position['x']) > 1e-6 or 
-                abs(position['y']) > 1e-6 or 
-                abs(position['z']) > 1e-6 or
-                abs(orientation['x']) > 1e-6 or
-                abs(orientation['y']) > 1e-6 or
-                abs(orientation['z']) > 1e-6 or
-                abs(orientation['w'] - 1.0) > 1e-6):
-                
+            if (
+                abs(position["x"]) > 1e-6
+                or abs(position["y"]) > 1e-6
+                or abs(position["z"]) > 1e-6
+                or abs(orientation["x"]) > 1e-6
+                or abs(orientation["y"]) > 1e-6
+                or abs(orientation["z"]) > 1e-6
+                or abs(orientation["w"] - 1.0) > 1e-6
+            ):
+
                 # ROS to Rhino coordinate system transition
-                pos = [-position['y'], position['x'], position['z']] 
-                rot = [orientation['w'], -orientation['y'], orientation['x'], orientation['z']] 
-                
+                pos = [-position["y"], position["x"], position["z"]]
+                rot = [orientation["w"], -orientation["y"], orientation["x"], orientation["z"]]
+
                 # Store as dictionary for compatibility with both ROS and non-ROS modes
                 transform = {"position": pos, "quaternion": rot}
                 self.transforms[name] = transform
-        
-        #TODO: if transforms is not empty, escalate this into the geometry agent
 
+        # TODO: if transforms is not empty, escalate this into the geometry agent
 
-    def get_transforms(self) -> Dict[str, Union[dict, 'Pose']]:
+    def get_transforms(self) -> Dict[str, Union[dict, "Pose"]]:
         """Return the current transforms dictionary."""
         return self.transforms.copy()
 
     def get_current_element(self) -> Optional[str]:
         """Return the current element being gazed at."""
         return self.current_element
-    
+
     def is_ros_connected(self) -> bool:
         """Check if ROS connection is active."""
-        return (self.client is not None and 
-                hasattr(self.client, 'is_connected') and 
-                self.client.is_connected)
-    
+        return (
+            self.client is not None
+            and hasattr(self.client, "is_connected")
+            and self.client.is_connected
+        )
+
     def get_connection_status(self) -> dict:
         """Get detailed connection status for debugging."""
         return {
@@ -154,12 +155,12 @@ class VizorListener:
             "client_exists": self.client is not None,
             "is_connected": self.is_ros_connected(),
             "gaze_subscriber_active": self.gaze_subscriber is not None,
-            "model_subscriber_active": self.model_subscriber is not None
+            "model_subscriber_active": self.model_subscriber is not None,
         }
 
     def __del__(self):
         """Cleanup when the instance is destroyed."""
-        if hasattr(self, 'client') and self.client is not None:
+        if hasattr(self, "client") and self.client is not None:
             try:
                 self.client.terminate()
             except Exception:
