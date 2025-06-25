@@ -51,8 +51,8 @@ def create_triage_system(
     geometry_monitor = None
     if monitoring_callback:
         # Check if it's a remote callback factory or local callback
-        if callable(monitoring_callback) and str(type(monitoring_callback)).find("function") != -1:
-            # Remote monitoring - create callback for this agent
+        if callable(monitoring_callback) and hasattr(monitoring_callback, '__name__') and 'create' in monitoring_callback.__name__:
+            # Remote monitoring factory - create callback for this agent
             geometry_monitor = monitoring_callback("geometry_agent")
         else:
             # Local monitoring - use existing pattern
@@ -70,8 +70,8 @@ def create_triage_system(
     syslogic_monitor = None
     if monitoring_callback:
         # Check if it's a remote callback factory or local callback
-        if callable(monitoring_callback) and str(type(monitoring_callback)).find("function") != -1:
-            # Remote monitoring - create callback for this agent
+        if callable(monitoring_callback) and hasattr(monitoring_callback, '__name__') and 'create' in monitoring_callback.__name__:
+            # Remote monitoring factory - create callback for this agent
             syslogic_monitor = monitoring_callback("syslogic_agent")
         else:
             # Local monitoring - use existing pattern
@@ -377,10 +377,7 @@ class TriageSystemWrapper:
         syslogic_monitor = None
 
         if monitoring_callback:
-            if (
-                callable(monitoring_callback)
-                and str(type(monitoring_callback)).find("function") != -1
-            ):
+            if callable(monitoring_callback) and hasattr(monitoring_callback, '__name__') and 'create' in monitoring_callback.__name__:
                 geometry_monitor = monitoring_callback("geometry_agent")
                 syslogic_monitor = monitoring_callback("syslogic_agent")
             else:
