@@ -37,19 +37,23 @@ except ImportError:
 class VizorListener:
     _instance = None
 
-    def __new__(cls):
+    def __new__(cls, update_queue=None):
         if cls._instance is None:
             cls._instance = super(VizorListener, cls).__new__(cls)
             cls._instance._initialized = False
         return cls._instance
 
-    def __init__(self):
+    def __init__(self, update_queue=None):
         if self._initialized:
+            # Update the queue if a new one is provided
+            if update_queue is not None:
+                self.update_queue = update_queue
             return
 
         self._initialized = True
         self.current_element: Optional[str] = None
         self.transforms: Dict[str, Union[dict, "Pose"]] = {}
+        self.update_queue = update_queue or []  # Queue for Direct Parameter Updates
         self.ros_available = ROS_AVAILABLE
         self.client = None
         self.gaze_subscriber = None
@@ -129,7 +133,10 @@ class VizorListener:
                 transform = {"position": pos, "quaternion": rot}
                 self.transforms[name] = transform
 
-        # TODO: if transforms is not empty, escalate this into the geometry agent
+        # Queue raw transform data for Direct Parameter Update processing
+        if self.transforms and hasattr(self, 'update_queue'):
+            self.update_queue.append(self.transforms.copy())
+            print(f"\n[SYSTEM] Transform data for {len(self.transforms)} element(s) queued for update.")
 
     def get_transforms(self) -> Dict[str, Union[dict, "Pose"]]:
         """Return the current transforms dictionary."""

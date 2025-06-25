@@ -21,6 +21,34 @@ logger = get_logger(__name__)
 monitoring_server_started = False
 
 
+def quaternion_to_direction_vector(quat_wxyz):
+    """
+    Converts a WXYZ quaternion to a forward direction vector.
+    This assumes the "forward" direction corresponds to the X-axis in the local frame.
+    
+    Args:
+        quat_wxyz: List or tuple of [w, x, y, z] quaternion components
+        
+    Returns:
+        List of [vx, vy, vz] direction vector components
+    """
+    w, x, y, z = quat_wxyz
+    # Formula to rotate a base vector (1, 0, 0) by the quaternion
+    vx = 1.0 - 2.0 * (y*y + z*z)
+    vy = 2.0 * (x*y - w*z)
+    vz = 2.0 * (x*z + w*y)
+    return [vx, vy, vz]
+
+
+def format_direct_update_task(element_id, new_center, new_direction):
+    """Formats the precise task for the GeometryAgent."""
+    return (
+        f"Perform a direct parameter update for element with id '{element_id}'. "
+        f"Replace its center point with these values: {new_center}. "
+        f"Replace its direction vector with these values: {new_direction}."
+    )
+
+
 def clear_log_files():
     """Clear all log files for a completely fresh start."""
     log_dir = Path("logs")
@@ -468,10 +496,13 @@ def interactive_mode(use_legacy=False, reset_memory=False, hard_reset=False, ena
             print("✅ Started with fresh memories (--reset flag used)")
         print()
         
+        # Initialize Direct Parameter Update queue for HoloLens transformations
+        TRANSFORM_UPDATE_QUEUE = []
+        
         # Initialize VizorListener for gaze-assisted spatial command grounding
         vizor_listener = None
         try:
-            vizor_listener = VizorListener()
+            vizor_listener = VizorListener(update_queue=TRANSFORM_UPDATE_QUEUE)
             
             # Use the improved connection status checking
             if vizor_listener.is_ros_connected():
@@ -495,6 +526,37 @@ def interactive_mode(use_legacy=False, reset_memory=False, hard_reset=False, ena
         while True:
             try:
                 user_input = input("\nDesigner> ").strip()
+                
+                # Process Direct Parameter Update queue before handling user commands
+                if TRANSFORM_UPDATE_QUEUE:
+                    print(f"[SYSTEM] Processing {len(TRANSFORM_UPDATE_QUEUE)} queued transform batch(es)...")
+
+                    # Process all data batches in the queue
+                    for transform_batch in TRANSFORM_UPDATE_QUEUE:
+                        for element_name, pose in transform_batch.items():
+                            # element_name is "dynamic_001", id is "001"
+                            element_id = element_name.split('_')[-1].lstrip('0') or '1'  # Default to '1' if empty
+
+                            # Use the helper function in main.py
+                            new_pos = pose['position']
+                            new_dir = quaternion_to_direction_vector(pose['quaternion'])
+
+                            # Format the specific, direct task for the agent
+                            task = format_direct_update_task(element_id, new_pos, new_dir)
+
+                            # Process this single element update
+                            print(f"[SYSTEM] Updating element {element_id}...")
+                            try:
+                                response = triage.handle_design_request(request=task, gaze_id=None)
+                                if response.success:
+                                    print(f"[SYSTEM] ✅ Element {element_id} updated successfully")
+                                else:
+                                    print(f"[SYSTEM] ❌ Element {element_id} update failed: {response.message}")
+                            except Exception as e:
+                                print(f"[SYSTEM] ❌ Element {element_id} update error: {e}")
+
+                    TRANSFORM_UPDATE_QUEUE.clear()
+                    print("[SYSTEM] Transform queue processed. Now handling your command.")
                 
                 if user_input.lower() == 'exit':
                     print("Exiting Bridge Design System...")
