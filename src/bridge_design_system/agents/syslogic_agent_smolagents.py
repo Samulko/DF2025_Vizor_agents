@@ -530,10 +530,10 @@ def analyze_cutting_plan(required_lengths: list) -> dict:
 
         # Perform comprehensive feasibility analysis
         feasibility_result = optimizer.validate_feasibility(element_lengths, beams)
-        
+
         # Get optimized cutting plan
         cutting_result = optimizer.first_fit_decreasing(element_lengths, beams)
-        
+
         # Generate alternatives if not feasible
         alternatives = []
         if not feasibility_result["feasible"]:
@@ -1072,9 +1072,17 @@ def _perform_backup_restore(inventory_manager, backup_name: str) -> dict:
 
 
 def _format_cutting_plan_visual(cutting_result: dict) -> str:
-    """Create ASCII visual representation of cutting plan."""
+    """Create enhanced ASCII visual representation of cutting plan with cut line indicators."""
     try:
         visual_lines = ["CUTTING PLAN VISUALIZATION:", "=" * 40]
+
+        # Calculate summary metrics
+        total_efficiency = cutting_result.get("summary", {}).get("material_efficiency_percent", 0)
+        total_waste = cutting_result.get("summary", {}).get("total_waste_mm", 0)
+        total_cuts = sum(
+            len(ba.get("cuts", [])) for ba in cutting_result.get("beam_assignments", [])
+        )
+        kerf_loss = total_cuts * 3  # 3mm per cut
 
         for beam_assignment in cutting_result["beam_assignments"]:
             beam_id = beam_assignment["beam_id"]
@@ -1089,14 +1097,26 @@ def _format_cutting_plan_visual(cutting_result: dict) -> str:
             remaining_chars = 40 - used_chars
 
             bar = "█" * used_chars + "░" * remaining_chars
-            visual_lines.append(f"{beam_id}: [{bar}] {used_length}/{original_length}mm")
 
-            # Show cuts
+            # Add unused beam indicator
+            unused_indicator = " (unused)" if used_length == 0 else ""
+            visual_lines.append(
+                f"{beam_id}: [{bar}] {used_length}/{original_length}mm{unused_indicator}"
+            )
+
+            # Show cuts with cut line indicators
             if cuts:
-                cut_info = ", ".join([f"{cut['element_id']}({cut['length_mm']}mm)" for cut in cuts])
+                cut_info = " | ".join(
+                    [f"{cut['element_id']}({cut['length_mm']}mm)" for cut in cuts]
+                )
                 visual_lines.append(f"   Cuts: {cut_info}")
 
             visual_lines.append("")
+
+        # Add summary metrics
+        visual_lines.append(
+            f"Material Efficiency: {total_efficiency:.1f}% | Total Waste: {total_waste:.0f}mm | Kerf Loss: {kerf_loss}mm ({total_cuts} cuts)"
+        )
 
         return "\n".join(visual_lines)
     except Exception:
@@ -1200,8 +1220,8 @@ def create_syslogic_agent(
         calculate_closure_correction,
         validate_planar_orientation,
         # NEW Material tracking tools (refactored for clear separation)
-        analyze_cutting_plan,        # Planning tool - does NOT modify inventory
-        commit_material_usage,       # Execution tool - commits to inventory
+        analyze_cutting_plan,  # Planning tool - does NOT modify inventory
+        commit_material_usage,  # Execution tool - commits to inventory
         get_material_status,
         reset_material_inventory,
     ]
@@ -1222,7 +1242,10 @@ def create_syslogic_agent(
         tools=validation_tools,
         model=model,
         name="syslogic_agent",
-        description="Validates truss structure integrity and provides Grasshopper fix instructions",
+        description=(
+            "Validates truss structure integrity, checks connectivity, analyzes material usage and inventory, "
+            "optimizes cutting plans, tracks material consumption, and provides fix instructions for geometric issues."
+        ),
         max_steps=max_steps,
         step_callbacks=step_callbacks,
         additional_authorized_imports=["math", "re", "datetime", "typing"],
@@ -1235,12 +1258,7 @@ def create_syslogic_agent(
         agent.prompt_templates["system_prompt"] + "\n\n" + custom_prompt
     )
 
-    # Configure agent for managed_agents pattern - ensure it has proper name/description
-    agent.name = "structural_validator"
-    agent.description = (
-        "Validates truss structure integrity, checks connectivity, material usage, "
-        "and provides fix instructions for geometric issues."
-    )
+    # Agent configured for managed_agents pattern with proper name/description in constructor
 
     logger.info("✅ Created autonomous SysLogic agent configured for managed_agents pattern")
     return agent

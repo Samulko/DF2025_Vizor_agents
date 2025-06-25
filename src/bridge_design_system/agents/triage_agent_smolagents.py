@@ -79,22 +79,18 @@ def create_triage_system(
 
             syslogic_monitor = create_monitor_callback("syslogic_agent", monitoring_callback)
 
-    syslogic_agent = create_syslogic_agent(
-        monitoring_callback=syslogic_monitor
-    )
+    syslogic_agent = create_syslogic_agent(monitoring_callback=syslogic_monitor)
 
-    # Note: Material agent would be created here when available
+    # Note: Material and structural analysis handled by SysLogic agent (no placeholders needed)
 
     # Create manager agent first (without old file-based memory tools)
     # OLD FILE-BASED MEMORY TOOLS - COMMENTED OUT, USING NATIVE MEMORY INSTEAD
     # memory_tools = [remember, recall, search_memory, clear_memory]
     memory_tools = []  # Using native smolagents memory via geometry memory tools instead
-    material_tool = create_material_placeholder()
-    structural_tool = create_structural_placeholder()
     basic_coordination_tools = _create_coordination_tools()
 
-    # REFACTORED: Manager tools simplified - no geometry memory tools needed
-    manager_tools = [material_tool, structural_tool] + basic_coordination_tools + memory_tools
+    # SIMPLIFIED: Manager tools without placeholder tools - delegate to specialized agents
+    manager_tools = basic_coordination_tools + memory_tools
 
     # Create manager agent with managed_agents pattern (smolagents best practice)
     # Extract max_steps from kwargs to avoid duplicate parameter error
@@ -106,8 +102,8 @@ def create_triage_system(
     step_callbacks = kwargs.pop("step_callbacks", [])
     if monitoring_callback:
         # Check if it's a remote callback factory or local callback
-        if callable(monitoring_callback) and str(type(monitoring_callback)).find("function") != -1:
-            # Remote monitoring - create callback for this agent
+        if callable(monitoring_callback) and hasattr(monitoring_callback, '__name__') and 'create' in monitoring_callback.__name__:
+            # Remote monitoring factory - create callback for this agent
             triage_monitor = monitoring_callback("triage_agent")
         else:
             # Local monitoring - use existing pattern
@@ -325,52 +321,7 @@ def _create_registry_tools(component_registry: Any) -> List:
     return [register_bridge_component, list_bridge_components]
 
 
-def create_material_placeholder() -> Any:
-    """Create placeholder tool for material agent (to be implemented)."""
-
-    @tool
-    def check_materials(material_type: str, quantity: float) -> dict:
-        """
-        Placeholder for material checking (Material Agent coming soon).
-
-        Args:
-            material_type: Type of material to check
-            quantity: Required quantity
-
-        Returns:
-            Placeholder response
-        """
-        return {
-            "status": "placeholder",
-            "message": "Material Agent not yet implemented",
-            "note": "This will check material availability once the Material Agent is integrated",
-        }
-
-    return check_materials
-
-
-def create_structural_placeholder() -> Any:
-    """Create placeholder tool for structural agent (to be implemented)."""
-
-    @tool
-    def analyze_structure(component_id: str, load_type: str = "standard") -> dict:
-        """
-        Placeholder for structural analysis (Structural Agent coming soon).
-
-        Args:
-            component_id: Component to analyze
-            load_type: Type of load analysis
-
-        Returns:
-            Placeholder response
-        """
-        return {
-            "status": "placeholder",
-            "message": "Structural Agent not yet implemented",
-            "note": "This will perform structural analysis once the Structural Agent is integrated",
-        }
-
-    return analyze_structure
+# Placeholder functions removed - material and structural analysis delegated to SysLogic agent
 
 
 class ResponseCompatibilityWrapper:
@@ -417,11 +368,9 @@ class TriageSystemWrapper:
         # Create the triage manager with proper managed_agents
         model = ModelProvider.get_model("triage")
 
-        # Create coordination tools
-        material_tool = create_material_placeholder()
-        structural_tool = create_structural_placeholder()
+        # Create coordination tools (no placeholders - delegate to SysLogic agent)
         basic_coordination_tools = _create_coordination_tools()
-        manager_tools = [material_tool, structural_tool] + basic_coordination_tools
+        manager_tools = basic_coordination_tools
 
         # Create managed agents using factory functions
         geometry_monitor = None
@@ -447,9 +396,7 @@ class TriageSystemWrapper:
 
         from .syslogic_agent_smolagents import create_syslogic_agent
 
-        self.syslogic_agent = create_syslogic_agent(
-            monitoring_callback=syslogic_monitor
-        )
+        self.syslogic_agent = create_syslogic_agent(monitoring_callback=syslogic_monitor)
 
         # Create triage manager with managed_agents
         self.manager = CodeAgent(
@@ -536,7 +483,7 @@ class TriageSystemWrapper:
                     if hasattr(self, "geometry_agent")
                     else "Unknown"
                 ),
-                "name": "geometry_specialist",
+                "name": "geometry_agent",
                 "mcp_integration": "enabled",
             },
             "syslogic_agent": {
@@ -546,7 +493,7 @@ class TriageSystemWrapper:
                     if hasattr(self, "syslogic_agent")
                     else "Unknown"
                 ),
-                "name": "structural_validator",
+                "name": "syslogic_agent",
                 "validation_tools": "enabled",
             },
         }

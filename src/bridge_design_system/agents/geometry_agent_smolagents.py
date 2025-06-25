@@ -39,7 +39,7 @@ class SmolagentsGeometryAgent:
 
         # Required attributes for smolagents managed_agents
         self.name = "geometry_agent"
-        self.description = "Creates 3D geometry in Rhino Grasshopper via persistent MCP connection"
+        self.description = "Creates 3D geometry in Rhino Grasshopper via MCP connection. Handles bridge components, structural elements, and geometric modeling tasks."
 
         # Get model configuration
         self.model = ModelProvider.get_model(model_name, temperature=0.1)
@@ -68,7 +68,7 @@ class SmolagentsGeometryAgent:
                 model=self.model,
                 max_steps=12,  # Increased to allow: check -> modify -> detect errors -> fix -> verify -> finalize
                 name="geometry_agent",
-                description="Creates 3D geometry in Rhino Grasshopper using persistent MCP connection",
+                description="Creates 3D geometry in Rhino Grasshopper via MCP connection. Handles bridge components, structural elements, and geometric modeling tasks.",
                 step_callbacks=step_callbacks,
             )
 
@@ -77,7 +77,6 @@ class SmolagentsGeometryAgent:
             self.agent.prompt_templates["system_prompt"] = (
                 self.agent.prompt_templates["system_prompt"] + "\n\n" + custom_prompt
             )
-
 
             logger.info(
                 f"🎯 Persistent geometry agent initialized successfully with model {model_name}"
@@ -121,7 +120,6 @@ class SmolagentsGeometryAgent:
             logger.error(f"❌ Persistent smolagents geometry agent execution failed: {e}")
             raise RuntimeError(f"Geometry agent requires active MCP connection: {e}")
 
-
     def __del__(self):
         """Cleanup persistent MCP connection on agent destruction."""
         try:
@@ -162,9 +160,7 @@ def create_geometry_agent(
     # Store reference to wrapper for cleanup purposes
     internal_agent._wrapper = wrapper
 
-    # Configure agent for managed_agents pattern - ensure it has proper name/description
-    internal_agent.name = "geometry_specialist"
-    internal_agent.description = "Creates 3D geometry in Rhino Grasshopper via MCP connection. Handles bridge components, structural elements, and geometric modeling tasks."
+    # Agent configured for managed_agents pattern with proper name/description in constructor
 
     logger.info("✅ Created geometry agent configured for managed_agents pattern")
     return internal_agent
