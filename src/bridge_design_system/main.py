@@ -489,7 +489,7 @@ def interactive_mode(use_legacy=False, reset_memory=False, hard_reset=False, ena
             print("⚠️ LCARS monitoring disabled (use --monitoring to enable)")
         
         print("\nType 'exit' to quit, 'reset' to clear agent memories, 'hardreset' to clear everything")
-        print("Type 'status' to see agent status")
+        print("Type 'status' to see agent status, 'gaze' to see detailed gaze information")
         if hard_reset:
             print("✅ Started completely fresh (--hard-reset flag used)")
         elif reset_memory:
@@ -589,17 +589,74 @@ def interactive_mode(use_legacy=False, reset_memory=False, hard_reset=False, ena
                     print(f"  Components: {registry_stats['total_components']}")
                     print(f"  Types: {', '.join(registry_stats['types'])}")
                     print(f"  Recent: {registry_stats['recent_components']}")
+                    
+                    # VizorListener status
+                    if vizor_listener:
+                        try:
+                            gaze_summary = vizor_listener.get_gaze_history_summary()
+                            print("\n👁️ Gaze Status:")
+                            print(f"  ROS Connected: {vizor_listener.is_ros_connected()}")
+                            print(f"  Current Element: {vizor_listener.get_current_element() or 'None'}")
+                            print(f"  Recent Gaze (3s): {vizor_listener.get_recent_gaze(3.0) or 'None'}")
+                            print(f"  Total Gazes (10s): {gaze_summary['total_gazes']}")
+                            print(f"  Unique Elements: {gaze_summary['unique_elements']}")
+                            if gaze_summary['recent_elements']:
+                                print(f"  Recent Elements: {', '.join(gaze_summary['recent_elements'])}")
+                        except Exception as e:
+                            print(f"\n👁️ Gaze Status: Error - {e}")
+                    else:
+                        print("\n👁️ Gaze Status: VizorListener not available")
+                    
+                    continue
+                elif user_input.lower() in ['gaze', 'gazehistory']:
+                    # Show detailed gaze information
+                    if vizor_listener:
+                        try:
+                            print("\n👁️ Detailed Gaze Information:")
+                            print("-" * 40)
+                            
+                            current = vizor_listener.get_current_element()
+                            recent_3s = vizor_listener.get_recent_gaze(3.0)
+                            recent_5s = vizor_listener.get_recent_gaze(5.0)
+                            
+                            print(f"Current gaze: {current or 'None'}")
+                            print(f"Recent gaze (3s): {recent_3s or 'None'}")
+                            print(f"Recent gaze (5s): {recent_5s or 'None'}")
+                            
+                            summary = vizor_listener.get_gaze_history_summary()
+                            print(f"\nActivity Summary (last 10 seconds):")
+                            print(f"  Total gaze events: {summary['total_gazes']}")
+                            print(f"  Unique elements: {summary['unique_elements']}")
+                            print(f"  Most gazed element: {summary['most_gazed'] or 'None'}")
+                            if summary['most_gazed']:
+                                print(f"  Times gazed: {summary['most_gazed_count']}")
+                            print(f"  Time span: {summary['time_span_seconds']:.1f} seconds")
+                            
+                            if summary['recent_elements']:
+                                print(f"  Element sequence: {' → '.join(summary['recent_elements'])}")
+                            
+                        except Exception as e:
+                            print(f"\n👁️ Gaze information error: {e}")
+                    else:
+                        print("\n👁️ VizorListener not available")
                     continue
                 elif not user_input:
                     continue
                 
-                # Capture gaze context for this specific command (single-shot policy)
+                # Capture gaze context for this specific command (time-window policy)
                 gazed_element_id = None
                 if vizor_listener:
                     try:
-                        gazed_element_id = vizor_listener.get_current_element()
+                        # Try to get recent gaze within 3-second window
+                        gazed_element_id = vizor_listener.get_recent_gaze(window_seconds=3.0)
                         if gazed_element_id:
-                            print(f"[Debug] Gaze detected on: {gazed_element_id}")
+                            print(f"[Debug] Gaze detected on: {gazed_element_id} (within 3 seconds)")
+                        else:
+                            # Also try current element as fallback
+                            current_gaze = vizor_listener.get_current_element()
+                            if current_gaze:
+                                gazed_element_id = current_gaze
+                                print(f"[Debug] Current gaze detected on: {gazed_element_id}")
                     except Exception as e:
                         logger.warning(f"⚠️ Failed to get gaze data: {e}")
                 
@@ -623,12 +680,14 @@ def interactive_mode(use_legacy=False, reset_memory=False, hard_reset=False, ena
                                 print(f"Error Details: {response.error}")
                 
                 finally:
-                    # CRITICAL: Single-shot policy - clear gaze immediately after command
+                    # Note: With time-window policy, we don't aggressively clear gaze data
+                    # The gaze history will naturally age out after 10 seconds
+                    # Only clear current element to avoid stale immediate readings
                     if vizor_listener is not None:
                         try:
                             vizor_listener.current_element = None
                         except Exception as e:
-                            logger.debug(f"Warning: Failed to clear gaze data: {e}")
+                            logger.debug(f"Warning: Failed to clear current gaze: {e}")
                         
             except KeyboardInterrupt:
                 print("\n\nInterrupted. Type 'exit' to quit.")

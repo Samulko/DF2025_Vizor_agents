@@ -130,7 +130,7 @@ async def read_index():
     """Serve the enhanced status dashboard."""
     html_path = Path(__file__).parent / "status.html"
     if html_path.exists():
-        return HTMLResponse(content=html_path.read_text())
+        return HTMLResponse(content=html_path.read_text(encoding='utf-8'))
     else:
         return HTMLResponse(content="""
         <html>
