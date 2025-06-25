@@ -94,8 +94,9 @@ def interactive_mode(...):
             # Process all data batches in the queue
             for transform_batch in TRANSFORM_UPDATE_QUEUE:
                 for element_name, pose in transform_batch.items():
-                    # element_name is "dynamic_001", id is "001"
-                    element_id = element_name.split('_')[-1]  # Keep full ID: 001, 002, 021
+                    # element_name is "dynamic_021", element_id is "021" 
+                    # ID encoding: 001-009→comp1, 011-019→comp2, 021-029→comp3, etc.
+                    element_id = element_name.split('_')[-1]  # Keep full element ID: 021, 022, 023, etc.
 
                     # Use the helper function in main.py
                     new_pos = pose['position']
@@ -127,10 +128,11 @@ Delete any previous "Transformation Handling Workflow". Replace it with the foll
 
 When you receive a task to perform a "direct parameter update," you must follow these steps precisely:
 
-1.  **Parse Task:** The task will contain an `element_id` (e.g., '001'), a list of new center point values, and a list of new direction vector values. Extract these three pieces of information.
-2.  **Read Script:** Use `get_python3_script` to read the code of the relevant component.
-3.  **Find Target Variables:** In the script, locate the variable names associated with the target `element_id`. For `id="001"`, you would be looking for the variables `center1` and `direction1`.
-4.  **Perform Text Replacement:**
+1.  **Parse Task:** The task will contain an `element_id` (e.g., '021'), a list of new center point values, and a list of new direction vector values. Extract these three pieces of information.
+2.  **Decode ID:** Element ID encodes component+beam: '021'→component_3/beam_1, '022'→component_3/beam_2, etc.  
+3.  **Read Script:** Use `get_python3_script` to read the appropriate component.
+4.  **Find Target Variables:** Locate the specific beam variables (e.g., `center1`/`direction1` for '021').
+5.  **Perform Text Replacement:**
     * Find the line defining the center point (e.g., `center1 = rg.Point3d(...)`).
     * Replace the numbers inside the parentheses with the new center point values from the task. The result should be, for example: `center1 = rg.Point3d(1.23, 4.56, 7.89)`.
     * Find the line defining the direction vector (e.g., `direction1 = rg.Vector3d(...)`).

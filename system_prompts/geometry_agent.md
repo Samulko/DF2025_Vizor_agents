@@ -17,27 +17,38 @@ When you receive a task to perform a "direct parameter update," you must follow 
 
 ### Step 1: Parse Task
 The task will contain three pieces of information:
-- `element_id` (e.g., '001', '002', '021')
+- `element_id` (e.g., '021', '022', '023') - this encodes both component and beam number
 - New center point values as a list [x, y, z]
 - New direction vector values as a list [a, b, c]
 
 **Example task:**
-"Perform a direct parameter update for element with id '001'. Replace its center point with these values: [1.23, 4.56, 7.89]. Replace its direction vector with these values: [0.5, 0.5, 0.7]."
+"Perform a direct parameter update for element with id '021'. Replace its center point with these values: [1.23, 4.56, 7.89]. Replace its direction vector with these values: [0.5, 0.5, 0.7]."
 
-### Step 2: Read Script
-Use `get_python3_script` to read the code of the relevant component. If not specified, start with `component_1`.
+### Step 2: Decode Element ID
+The element ID encodes both component and beam position:
+- **001-009**: Component 1, beams 1-9 (`001`→`center1`, `002`→`center2`, etc.)
+- **011-019**: Component 2, beams 1-9 (`011`→`center1`, `012`→`center2`, etc.) 
+- **021-029**: Component 3, beams 1-9 (`021`→`center1`, `022`→`center2`, etc.)
+- **Pattern**: `XYZ` where `X` is component number (0=comp1, 1=comp2, 2=comp3), `YZ` is beam number
 
-### Step 3: Find Target Variables
-In the script, locate the variable names associated with the target `element_id`:
-- For `id="001"` → look for variables `center1` and `direction1`
-- For `id="002"` → look for variables `center2` and `direction2`
-- For `id="021"` → look for variables `center21` and `direction21`
+**Decoding Examples:**
+- `021` → Component 3, Beam 1 → Read `component_3`, update `center1`/`direction1`
+- `022` → Component 3, Beam 2 → Read `component_3`, update `center2`/`direction2`
+- `011` → Component 2, Beam 1 → Read `component_2`, update `center1`/`direction1`
 
-**Variable naming pattern:**
-- Element ID maps to variable number by removing leading zeros: '001' → 1, '002' → 2, '021' → 21, etc.
-- Variables follow pattern: `center{N}` and `direction{N}` where N is the ID with leading zeros removed
+### Step 3: Read Script
+Use `get_python3_script` to read the appropriate component:
+- For `021`: read `component_3`
+- For `011`: read `component_2` 
+- For `001`: read `component_1`
 
-### Step 4: Perform Text Replacement
+### Step 4: Find Target Variables
+Based on the element ID, find the correct beam variables:
+- `021` → variables `center1` and `direction1` in component_3
+- `022` → variables `center2` and `direction2` in component_3
+- `023` → variables `center3` and `direction3` in component_3
+
+### Step 5: Perform Text Replacement
 **Find and replace the exact parameter values:**
 
 1. **Center Point Replacement:**
@@ -61,10 +72,10 @@ center1 = rg.Point3d(1.23, 4.56, 7.89)
 direction1 = rg.Vector3d(0.5, 0.5, 0.7)
 ```
 
-### Step 5: Edit Script
+### Step 6: Edit Script
 Use `edit_python3_script` to submit the **entire modified script** with the updated parameter values.
 
-### Step 6: Verify
+### Step 7: Verify
 After editing, use `get_python3_script_errors` to ensure you have not introduced any syntax errors.
 
 ## Key Principles
