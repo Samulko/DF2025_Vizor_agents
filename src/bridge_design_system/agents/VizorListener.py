@@ -21,6 +21,7 @@ The agents/geometry_agent_stdio.py will hold an instance to this class
 """
 
 from typing import Dict, Optional, Union
+import time
 
 # Optional ROS imports with graceful fallback
 try:
@@ -68,27 +69,62 @@ class VizorListener:
         if self.ros_available:
             self._attempt_ros_connection()
 
-    def _attempt_ros_connection(self):
-        """Attempt to establish ROS connection with graceful failure handling."""
-        if self._connection_attempted or not self.ros_available:
+    def _attempt_ros_connection(self, max_retries=3):
+        """Attempt to establish ROS connection with retry logic and graceful failure handling."""
+        if not self.ros_available:
             return False
 
-        self._connection_attempted = True
+        retry_count = 0
+        while retry_count < max_retries:
+            try:
+                print(f"🔄 Attempting ROS connection (attempt {retry_count + 1}/{max_retries})...")
+                
+                # Initialize ROS client with optimized settings
+                self.client = roslibpy.Ros(host="localhost", port=9090)
+                self.client.run()
+                
+                # Wait a moment for connection to stabilize
+                time.sleep(0.2)
+
+                # Check if connection is successful
+                if not self.client.is_connected:
+                    raise ConnectionError("ROS client failed to connect")
+                
+                print("✅ ROS connection established successfully")
+                break
+                
+            except Exception as e:
+                retry_count += 1
+                if retry_count < max_retries:
+                    wait_time = (2 ** retry_count) * 0.5  # Exponential backoff: 0.5s, 1s, 2s
+                    print(f"⚠️ Connection attempt {retry_count} failed: {e}")
+                    print(f"🕐 Retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                    
+                    # Cleanup failed connection attempt
+                    if self.client is not None:
+                        try:
+                            self.client.terminate()
+                        except:
+                            pass
+                        self.client = None
+                else:
+                    print(f"❌ All {max_retries} connection attempts failed: {e}")
+                    print("⚠️ ROS connection failed - gaze features will be limited")
+                    self._connection_attempted = True
+                    return False
+
+        if not self.client or not self.client.is_connected:
+            self._connection_attempted = True
+            return False
+
+        # Subscribe to HOLO1_GazePoint topic
         try:
-            # Initialize ROS client
-            self.client = roslibpy.Ros(host="localhost", port=9090)
-            self.client.run()
-
-            # Check if connection is successful
-            if not self.client.is_connected:
-                print("⚠️ ROS connection failed - gaze features will be limited")
-                return False
-
-            # Subscribe to HOLO1_GazePoint topic
             self.gaze_subscriber = roslibpy.Topic(
                 self.client, "/HOLO1_GazePoint", "std_msgs/String"
             )
             self.gaze_subscriber.subscribe(self._handle_gaze_message)
+            print("📡 Subscribed to /HOLO1_GazePoint for gaze data")
 
             # Subscribe to HOLO1_Model topic (optional - may not be available)
             try:
@@ -102,12 +138,30 @@ class VizorListener:
                 self.model_subscriber = None
 
             print("✅ ROS connection established - gaze features enabled")
+            self._connection_attempted = True
             return True
 
         except Exception as e:
-            print(f"⚠️ ROS connection failed: {e}")
-            self.client = None
+            print(f"⚠️ ROS subscription failed: {e}")
+            self._connection_attempted = True
             return False
+
+    def reconnect(self):
+        """Attempt to reconnect to ROS if connection was lost."""
+        if self.client is not None:
+            try:
+                self.cleanup()
+            except Exception:
+                pass
+        
+        # Reset connection state
+        self._connection_attempted = False
+        self.client = None
+        self.gaze_subscriber = None
+        self.model_subscriber = None
+        
+        # Attempt new connection
+        return self._attempt_ros_connection()
 
     def _handle_gaze_message(self, message):
         import time
@@ -119,9 +173,10 @@ class VizorListener:
         # Add to gaze history with timestamp
         self.gaze_history.append((timestamp, element))
         
-        # Clean old entries (keep only last 10 seconds of history)
-        cutoff_time = timestamp - 10.0
-        self.gaze_history = [(ts, elem) for ts, elem in self.gaze_history if ts > cutoff_time]
+        # Optimized cleanup: only clean every 10th message or when history gets too long
+        if len(self.gaze_history) % 10 == 0 or len(self.gaze_history) > 150:
+            cutoff_time = timestamp - 10.0
+            self.gaze_history = [(ts, elem) for ts, elem in self.gaze_history if ts > cutoff_time]
 
     def _handle_model_message(self, message):
         """Handle incoming model transform messages from ROS."""
@@ -250,10 +305,72 @@ class VizorListener:
             "model_subscriber_active": self.model_subscriber is not None,
         }
 
+    def cleanup(self):
+        """Properly cleanup ROS connections and subscribers."""
+        try:
+            # Unsubscribe from topics first
+            if hasattr(self, 'gaze_subscriber') and self.gaze_subscriber is not None:
+                try:
+                    self.gaze_subscriber.unsubscribe()
+                    print("🧹 Unsubscribed from gaze topic")
+                except Exception as e:
+                    print(f"⚠️ Warning: Failed to unsubscribe from gaze topic: {e}")
+                finally:
+                    self.gaze_subscriber = None
+            
+            if hasattr(self, 'model_subscriber') and self.model_subscriber is not None:
+                try:
+                    self.model_subscriber.unsubscribe()
+                    print("🧹 Unsubscribed from model topic")
+                except Exception as e:
+                    print(f"⚠️ Warning: Failed to unsubscribe from model topic: {e}")
+                finally:
+                    self.model_subscriber = None
+            
+            # Close ROS client connection
+            if hasattr(self, 'client') and self.client is not None:
+                try:
+                    if self.client.is_connected:
+                        self.client.close()
+                        print("🧹 Closed ROS client connection")
+                    self.client.terminate()
+                except Exception as e:
+                    print(f"⚠️ Warning: Failed to close ROS client: {e}")
+                finally:
+                    self.client = None
+            
+            # Clear internal state
+            self.current_element = None
+            if hasattr(self, 'gaze_history'):
+                self.gaze_history.clear()
+            if hasattr(self, 'transforms'):
+                self.transforms.clear()
+            
+            # Reset connection flags
+            self._connection_attempted = False
+            
+            print("✅ VizorListener cleanup completed")
+            
+        except Exception as e:
+            print(f"❌ Error during VizorListener cleanup: {e}")
+
+    @classmethod
+    def reset_singleton(cls):
+        """Reset the singleton instance to force fresh initialization."""
+        if cls._instance is not None:
+            try:
+                # Cleanup the existing instance
+                cls._instance.cleanup()
+            except Exception as e:
+                print(f"⚠️ Warning: Error cleaning up existing VizorListener: {e}")
+            
+            # Reset the singleton
+            cls._instance = None
+            print("🔄 VizorListener singleton reset")
+
     def __del__(self):
         """Cleanup when the instance is destroyed."""
-        if hasattr(self, "client") and self.client is not None:
-            try:
-                self.client.terminate()
-            except Exception:
-                pass  # Ignore cleanup errors
+        try:
+            self.cleanup()
+        except Exception:
+            pass  # Ignore cleanup errors in destructor

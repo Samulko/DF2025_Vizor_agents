@@ -5,6 +5,7 @@ providing stable async/sync handling and eliminating event loop issues.
 """
 import threading
 import time
+import signal
 from pathlib import Path
 
 from .agents import TriageAgent
@@ -502,6 +503,9 @@ def interactive_mode(use_legacy=False, reset_memory=False, hard_reset=False, ena
         # Initialize VizorListener for gaze-assisted spatial command grounding
         vizor_listener = None
         try:
+            # Force singleton reset to prevent stale state from previous runs
+            VizorListener.reset_singleton()
+            
             vizor_listener = VizorListener(update_queue=TRANSFORM_UPDATE_QUEUE)
             
             # Use the improved connection status checking
@@ -522,6 +526,20 @@ def interactive_mode(use_legacy=False, reset_memory=False, hard_reset=False, ena
             logger.error(f"❌ VizorListener initialization failed: {e}")
             print(f"⚠️ Gaze features disabled (initialization failed: {str(e)})")
             vizor_listener = None
+        
+        # Setup signal handlers for graceful cleanup
+        def signal_handler(signum, frame):
+            print(f"\n🔄 Received signal {signum}, cleaning up...")
+            if vizor_listener is not None:
+                try:
+                    vizor_listener.cleanup()
+                except Exception as e:
+                    print(f"⚠️ Error during cleanup: {e}")
+            print("👋 Goodbye!")
+            exit(0)
+        
+        signal.signal(signal.SIGINT, signal_handler)
+        signal.signal(signal.SIGTERM, signal_handler)
         
         while True:
             try:
@@ -561,6 +579,12 @@ def interactive_mode(use_legacy=False, reset_memory=False, hard_reset=False, ena
                 
                 if user_input.lower() == 'exit':
                     print("Exiting Bridge Design System...")
+                    # Cleanup VizorListener before exit
+                    if vizor_listener is not None:
+                        try:
+                            vizor_listener.cleanup()
+                        except Exception as e:
+                            print(f"⚠️ Error during cleanup: {e}")
                     break
                 elif user_input.lower() == 'reset':
                     print("🔄 Resetting all agent memories...")
@@ -647,16 +671,30 @@ def interactive_mode(use_legacy=False, reset_memory=False, hard_reset=False, ena
                 gazed_element_id = None
                 if vizor_listener:
                     try:
-                        # Try to get recent gaze within 3-second window
-                        gazed_element_id = vizor_listener.get_recent_gaze(window_seconds=3.0)
-                        if gazed_element_id:
-                            print(f"[Debug] Gaze detected on: {gazed_element_id} (within 3 seconds)")
+                        # Health check: verify ROS connection is still active
+                        if not vizor_listener.is_ros_connected():
+                            logger.warning("⚠️ ROS connection lost, attempting reconnection...")
+                            # Try to reconnect
+                            if vizor_listener._attempt_ros_connection():
+                                logger.info("✅ ROS reconnection successful")
+                            else:
+                                logger.warning("❌ ROS reconnection failed - gaze features unavailable")
+                        
+                        # Only attempt gaze detection if connected
+                        if vizor_listener.is_ros_connected():
+                            # Try to get recent gaze within 3-second window
+                            gazed_element_id = vizor_listener.get_recent_gaze(window_seconds=3.0)
+                            if gazed_element_id:
+                                print(f"[Debug] Gaze detected on: {gazed_element_id} (within 3 seconds)")
+                            else:
+                                # Also try current element as fallback
+                                current_gaze = vizor_listener.get_current_element()
+                                if current_gaze:
+                                    gazed_element_id = current_gaze
+                                    print(f"[Debug] Current gaze detected on: {gazed_element_id}")
                         else:
-                            # Also try current element as fallback
-                            current_gaze = vizor_listener.get_current_element()
-                            if current_gaze:
-                                gazed_element_id = current_gaze
-                                print(f"[Debug] Current gaze detected on: {gazed_element_id}")
+                            logger.debug("⚠️ Skipping gaze detection - ROS not connected")
+                            
                     except Exception as e:
                         logger.warning(f"⚠️ Failed to get gaze data: {e}")
                 
