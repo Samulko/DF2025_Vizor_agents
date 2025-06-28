@@ -224,13 +224,16 @@ class VoiceInputBridge:
             
             # Voice input parameters
             sample_rate = 16000
-            vad_sensitivity = float(os.environ.get("VAD_SENSITIVITY", "0.7"))
-            max_window_secs = 10  # Maximum recording time
+            vad_sensitivity = float(os.environ.get("VAD_SENSITIVITY", "0.4"))  # Lower = less sensitive
+            max_window_secs = 15  # Maximum recording time (increased)
+            min_recording_secs = 2  # Minimum recording time before VAD can stop
             window_size = sample_rate * max_window_secs
+            min_samples = sample_rate * min_recording_secs
             
             samples = deque(maxlen=(window_size * 6))
-            vad_samples = deque(maxlen=25)
+            vad_samples = deque(maxlen=50)  # Larger buffer for more stable VAD
             is_recording = False
+            recording_start_time = None
             
             self.recorder.start()
             
@@ -243,18 +246,31 @@ class VoiceInputBridge:
                     # Check for wake word
                     if self.porcupine.process(data) >= 0:
                         print("🔊 Wake word detected! Speak your command now...")
+                        print("📢 Keep speaking... (I'll wait for you to finish)")
                         is_recording = True
+                        recording_start_time = time.time()
                         samples.clear()
+                        vad_samples.clear()
                     
                     if is_recording:
                         samples.extend(data)
+                        current_time = time.time()
+                        recording_duration = current_time - recording_start_time
+                        
+                        # Show progress every second
+                        if int(recording_duration) != int(recording_duration - 0.5):
+                            print(f"🎙️ Recording... ({recording_duration:.1f}s)")
                         
                         # Check if we should stop recording
                         import numpy as np
-                        if (len(samples) >= window_size or 
-                            (len(samples) > sample_rate and  # At least 1 second
-                             len(vad_samples) == 25 and  # Full VAD buffer
-                             np.mean(vad_samples) < vad_sensitivity)):
+                        
+                        # More conservative stopping conditions
+                        max_time_reached = len(samples) >= window_size
+                        min_time_passed = len(samples) >= min_samples
+                        vad_buffer_full = len(vad_samples) >= 50
+                        silence_detected = vad_buffer_full and np.mean(vad_samples) < vad_sensitivity
+                        
+                        if max_time_reached or (min_time_passed and silence_detected):
                             
                             print("🔄 Processing your speech...")
                             text = self.transcriber.transcribe(samples)
