@@ -6,6 +6,7 @@ using Grasshopper.Kernel;
 using Rhino;
 using System.Linq;
 using System.Threading;
+using Grasshopper.Kernel.Special;
 
 namespace GrasshopperMCP.Commands
 {
@@ -209,6 +210,115 @@ namespace GrasshopperMCP.Commands
                 success = false,
                 message = "LoadDocument is temporarily disabled due to API compatibility issues. Please load the document manually."
             };
+        }
+        
+        /// <summary>
+        /// 獲取群組中的組件
+        /// </summary>
+        /// <param name="command">命令</param>
+        /// <returns>群組中的組件信息</returns>
+        public static object GetComponentsInGroup(Command command)
+        {
+            string groupName = command.GetParameter<string>("groupName");
+            
+            if (string.IsNullOrEmpty(groupName))
+            {
+                throw new ArgumentException("Group name is required");
+            }
+            
+            object result = null;
+            Exception exception = null;
+            
+            // 在 UI 線程上執行
+            RhinoApp.InvokeOnUiThread(new Action(() =>
+            {
+                try
+                {
+                    // 獲取 Grasshopper 文檔
+                    var doc = Grasshopper.Instances.ActiveCanvas?.Document;
+                    if (doc == null)
+                    {
+                        throw new InvalidOperationException("No active Grasshopper document");
+                    }
+                    
+                    // 查找匹配的群組
+                    var groups = doc.Objects.OfType<GH_Group>()
+                        .Where(g => g.NickName.Equals(groupName, StringComparison.OrdinalIgnoreCase))
+                        .ToList();
+                    
+                    if (!groups.Any())
+                    {
+                        // 返回結構與 GetDocumentInfo 一致，但表示沒有找到群組
+                        var emptyResult = new Dictionary<string, object>
+                        {
+                            { "groupName", groupName },
+                            { "found", false },
+                            { "componentCount", 0 },
+                            { "components", new List<object>() }
+                        };
+                        
+                        result = emptyResult;
+                        return;
+                    }
+                    
+                    // 收集所有匹配群組中的組件信息
+                    var components = new List<object>();
+                    var componentIds = new HashSet<Guid>(); // 避免重複
+                    
+                    foreach (var group in groups)
+                    {
+                        foreach (var objId in group.ObjectIDs)
+                        {
+                            if (!componentIds.Contains(objId))
+                            {
+                                var obj = doc.FindObject(objId, true);
+                                if (obj != null)
+                                {
+                                    var componentInfo = new Dictionary<string, object>
+                                    {
+                                        { "id", obj.InstanceGuid.ToString() },
+                                        { "type", obj.GetType().Name },
+                                        { "name", obj.NickName }
+                                    };
+                                    
+                                    components.Add(componentInfo);
+                                    componentIds.Add(objId);
+                                }
+                            }
+                        }
+                    }
+                    
+                    // 返回群組信息（結構與 GetDocumentInfo 一致）
+                    var groupInfo = new Dictionary<string, object>
+                    {
+                        { "groupName", groupName },
+                        { "found", true },
+                        { "componentCount", components.Count },
+                        { "components", components }
+                    };
+                    
+                    result = groupInfo;
+                }
+                catch (Exception ex)
+                {
+                    exception = ex;
+                    RhinoApp.WriteLine($"Error in GetComponentsInGroup: {ex.Message}");
+                }
+            }));
+            
+            // 等待 UI 線程操作完成
+            while (result == null && exception == null)
+            {
+                Thread.Sleep(10);
+            }
+            
+            // 如果有異常，拋出
+            if (exception != null)
+            {
+                throw exception;
+            }
+            
+            return result;
         }
     }
 }

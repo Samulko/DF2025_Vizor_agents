@@ -26,15 +26,15 @@ async def startup_event():
     """Initialize the monitoring system on server startup."""
     global status_tracker, websocket_manager
     status_tracker, websocket_manager = create_agent_monitor_system()
-    
+
     # Register the three agents we'll be monitoring
     status_tracker.register_agent("triage_agent", "CodeAgent")
-    status_tracker.register_agent("geometry_agent", "ToolCallingAgent") 
+    status_tracker.register_agent("geometry_agent", "ToolCallingAgent")
     status_tracker.register_agent("syslogic_agent", "CodeAgent")
-    
+
     # NEW AGENT TEMPLATE - UNCOMMENT AND MODIFY FOR NEW AGENTS
     # status_tracker.register_agent("material_agent", "ToolCallingAgent")
-    
+
     # AGENT TYPE REFERENCE:
     # - "CodeAgent" for agents that execute code (triage_agent, syslogic_agent)
     # - "ToolCallingAgent" for agents that use tools (geometry_agent)
@@ -44,10 +44,10 @@ async def startup_event():
     # 2. Replace "material_agent" with your agent name
     # 3. Choose appropriate agent type
     # 4. Update the count in the print statement below
-    
+
     # Start periodic cleanup task for stale WebSocket connections
     asyncio.create_task(periodic_cleanup())
-    
+
     print("📊 Agent monitoring system initialized with 3 agents")
     # NOTE: Update the agent count above when adding new agents
 
@@ -70,10 +70,10 @@ async def websocket_endpoint(websocket: WebSocket):
     if not websocket_manager:
         await websocket.close(code=1000, reason="Monitoring system not initialized")
         return
-    
+
     try:
         await websocket_manager.connect(websocket)
-        
+
         # Send initial status
         if status_tracker:
             initial_status = {
@@ -86,15 +86,12 @@ async def websocket_endpoint(websocket: WebSocket):
                     "error_message": agent.error_message,
                     "memory_size": agent.memory_size,
                     "tool_calls": agent.tool_calls,
-                    "timestamp": "initial"
+                    "timestamp": "initial",
                 }
                 for name, agent in status_tracker.agents.items()
             }
-            await websocket.send_json({
-                "type": "status_update",
-                "data": initial_status
-            })
-        
+            await websocket.send_json({"type": "status_update", "data": initial_status})
+
         # Keep connection alive and handle heartbeat
         while True:
             try:
@@ -102,9 +99,9 @@ async def websocket_endpoint(websocket: WebSocket):
                 # Handle heartbeat messages
                 try:
                     message = json.loads(data)
-                    if message.get('type') == 'ping':
+                    if message.get("type") == "ping":
                         await websocket.send_json({"type": "pong"})
-                    elif message.get('type') == 'pong':
+                    elif message.get("type") == "pong":
                         logger.debug("📡 Received pong from client")
                 except (json.JSONDecodeError, KeyError):
                     # Ignore invalid messages
@@ -112,7 +109,7 @@ async def websocket_endpoint(websocket: WebSocket):
             except Exception as e:
                 logger.debug(f"📡 WebSocket receive error: {e}")
                 break
-            
+
     except WebSocketDisconnect:
         logger.debug("📡 WebSocket client disconnected normally")
         websocket_manager.disconnect(websocket)
@@ -130,9 +127,10 @@ async def read_index():
     """Serve the enhanced status dashboard."""
     html_path = Path(__file__).parent / "status.html"
     if html_path.exists():
-        return HTMLResponse(content=html_path.read_text(encoding='utf-8'))
+        return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
     else:
-        return HTMLResponse(content="""
+        return HTMLResponse(
+            content="""
         <html>
             <head><title>Agent Status Monitor</title></head>
             <body>
@@ -141,7 +139,8 @@ async def read_index():
                 <p>The monitoring system should be running with real-time agent callbacks.</p>
             </body>
         </html>
-        """)
+        """
+        )
 
 
 @app.post("/api/status")
@@ -149,16 +148,16 @@ async def receive_status_update(request: Request):
     """Receive status updates from external processes (main CLI)."""
     try:
         data = await request.json()
-        
-        if status_tracker and 'agent_name' in data:
-            agent_name = data.pop('agent_name')
+
+        if status_tracker and "agent_name" in data:
+            agent_name = data.pop("agent_name")
             await status_tracker.update_status(agent_name, **data)
             logger.debug(f"📨 Received external status update for {agent_name}")
             return {"status": "success"}
         else:
             logger.warning("⚠️ Invalid status update received")
             return {"status": "error", "message": "Invalid data"}
-            
+
     except Exception as e:
         logger.error(f"❌ Error processing status update: {e}")
         return {"status": "error", "message": str(e)}
@@ -167,6 +166,7 @@ async def receive_status_update(request: Request):
 def start_status_monitor(host: str = "0.0.0.0", port: int = 5000):
     """Start the enhanced status monitor server with network access."""
     import uvicorn
+
     print(f"📊 Starting Enhanced Agent Status Monitor on http://{host}:{port}")
     print("🌐 Dashboard accessible from any device on local network")
     uvicorn.run(app, host=host, port=port, log_level="error")

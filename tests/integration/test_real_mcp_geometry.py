@@ -19,39 +19,43 @@ def test_real_mcp_geometry():
     print("=" * 60)
     print("TESTING REAL MCP GEOMETRY CREATION")
     print("=" * 60)
-    
+
     setup_logging()
-    
+
     try:
         # Create triage system
         print("\n1. Creating triage system with MCP wrapper tools...")
         registry = ComponentRegistry()
         triage = TriageSystemWrapper(component_registry=registry)
         print("✅ Triage system created")
-        
+
         # Check available tools
         print("\n2. Checking available tools in geometry agent...")
-        geometry_agent = triage.manager.managed_agents[0] if hasattr(triage.manager, 'managed_agents') and triage.manager.managed_agents else None
-        
+        geometry_agent = (
+            triage.manager.managed_agents[0]
+            if hasattr(triage.manager, "managed_agents") and triage.manager.managed_agents
+            else None
+        )
+
         if geometry_agent:
-            tool_names = [tool.name for tool in geometry_agent.tools if hasattr(tool, 'name')]
+            tool_names = [tool.name for tool in geometry_agent.tools if hasattr(tool, "name")]
             print(f"Geometry agent tools: {tool_names}")
-            
-            if 'create_geometry' in tool_names:
+
+            if "create_geometry" in tool_names:
                 print("✅ MCP wrapper tools found")
             else:
                 print("❌ MCP wrapper tools missing")
-        
+
         # Test real geometry creation
         print("\n3. Testing real geometry creation...")
         test_request = "Create two points for bridge start and end: Point 1 at (0,0,0) and Point 2 at (100,0,0). Make sure they appear on the Grasshopper canvas."
-        
+
         print(f"Request: {test_request}")
         response = triage.handle_design_request(test_request)
-        
+
         print(f"\nResponse Success: {response.success}")
         print(f"Response Message: {response.message[:500]}...")
-        
+
         # Look for signs of real geometry creation
         if "fallback" in response.message.lower():
             print("❌ Still in fallback mode")
@@ -62,10 +66,11 @@ def test_real_mcp_geometry():
         else:
             print("⚠️ Unclear if geometry was created")
             return False
-        
+
     except Exception as e:
         print(f"\n❌ ERROR: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 

@@ -12,6 +12,7 @@ from typing import Any, Dict
 if __name__ == "__main__":
     import pathlib
     import sys
+
     # Get the absolute path of the current file
     current_file = pathlib.Path(__file__).resolve()
     # Get the project root (three directories up from this file)
@@ -56,7 +57,6 @@ def add_vizor_component(component_name: str, x: float, y: float) -> Dict[str, An
         "robot": "afb86c19-713d-45b6-873c-27b22aab4f95",
         "wsconnection": "4dd685c6-885c-4d9f-a807-c25d526811a9",
         "ws connection": "4dd685c6-885c-4d9f-a807-c25d526811a9",
-
         # 2_Content category
         "constructcontent": "bd2ab8e4-9622-4ce4-bead-1570878b4532",
         "construct content": "bd2ab8e4-9622-4ce4-bead-1570878b4532",
@@ -72,7 +72,6 @@ def add_vizor_component(component_name: str, x: float, y: float) -> Dict[str, An
         "make work area": "3ec4d7c4-933a-49c2-aa15-dc3a23452db6",
         "scenemodel": "028cda0a-93ed-4954-90aa-de13be27da43",
         "scene model": "028cda0a-93ed-4954-90aa-de13be27da43",
-
         # 3_Task category
         "constructtask": "97128de9-5dbb-4b95-a3e7-e293506f6791",
         "construct task": "97128de9-5dbb-4b95-a3e7-e293506f6791",
@@ -86,7 +85,6 @@ def add_vizor_component(component_name: str, x: float, y: float) -> Dict[str, An
         "safety zone": "85baf117-c74a-4cbb-9d8a-723572eec403",
         "taskcontroller": "64507e61-dceb-41af-b34e-fdf823d4a111",
         "task controller": "64507e61-dceb-41af-b34e-fdf823d4a111",
-
         # 4_Utilities category
         "devicetracker": "d4d5cd1d-a9f7-438a-bce6-c83ebce3f3a2",
         "device tracker": "d4d5cd1d-a9f7-438a-bce6-c83ebce3f3a2",
@@ -103,7 +101,7 @@ def add_vizor_component(component_name: str, x: float, y: float) -> Dict[str, An
         "sensortracker": "58118ff7-fa58-4cc1-b080-ca617fb73ece",
         "sensor tracker": "58118ff7-fa58-4cc1-b080-ca617fb73ece",
         "simulatedevice": "1d5fcb9f-8af4-4cdc-b166-c15f958f4bde",
-        "simulate device": "1d5fcb9f-8af4-4cdc-b166-c15f958f4bde"
+        "simulate device": "1d5fcb9f-8af4-4cdc-b166-c15f958f4bde",
     }
 
     # Normalize the component name
@@ -112,14 +110,13 @@ def add_vizor_component(component_name: str, x: float, y: float) -> Dict[str, An
     # Check if the component exists in our mapping
     if normalized_name in vizor_component_mapping:
         component_guid = vizor_component_mapping[normalized_name]
-        print(f"Adding Vizor component with GUID: {component_guid} at position ({x}, {y})", file=sys.stderr)
+        print(
+            f"Adding Vizor component with GUID: {component_guid} at position ({x}, {y})",
+            file=sys.stderr,
+        )
 
         # Prepare parameters for the add_component command using the GUID
-        params = {
-            "type": component_guid,
-            "x": x,
-            "y": y
-        }
+        params = {"type": component_guid, "x": x, "y": y}
 
         # Send the command to Grasshopper
         return send_to_grasshopper("add_component", params)
@@ -130,18 +127,17 @@ def add_vizor_component(component_name: str, x: float, y: float) -> Dict[str, An
         print(f"Component not found in mapping, trying: {vizor_name}", file=sys.stderr)
 
         # Prepare parameters for the add_component command
-        params = {
-            "type": vizor_name,
-            "x": x,
-            "y": y
-        }
+        params = {"type": vizor_name, "x": x, "y": y}
 
         # Try to send the command to Grasshopper
         result = send_to_grasshopper("add_component", params)
 
         # If that fails, try with just the component name
         if not result.get("success", False):
-            print(f"Failed to add component as '{vizor_name}', trying with just '{component_name}'", file=sys.stderr)
+            print(
+                f"Failed to add component as '{vizor_name}', trying with just '{component_name}'",
+                file=sys.stderr,
+            )
             params["type"] = component_name
             result = send_to_grasshopper("add_component", params)
 

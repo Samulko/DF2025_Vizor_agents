@@ -23,18 +23,18 @@ from .components import (
 )
 
 __all__ = [
-    'add_vizor_component',
-    'vizor_tracked_object',
-    'vizor_ar_worker',
-    'vizor_robot',
-    'vizor_ws_connection',
-    'vizor_construct_content',
-    'vizor_make_mesh',
-    'vizor_device_tracker',
-    'vizor_make_text',
-    'vizor_make_trajectory',
-    'vizor_scene_model',
-    'vizor_construct_task',
-    'vizor_task_controller',
-    'vizor_robot_execution'
+    "add_vizor_component",
+    "vizor_tracked_object",
+    "vizor_ar_worker",
+    "vizor_robot",
+    "vizor_ws_connection",
+    "vizor_construct_content",
+    "vizor_make_mesh",
+    "vizor_device_tracker",
+    "vizor_make_text",
+    "vizor_make_trajectory",
+    "vizor_scene_model",
+    "vizor_construct_task",
+    "vizor_task_controller",
+    "vizor_robot_execution",
 ]

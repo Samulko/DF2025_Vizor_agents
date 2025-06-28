@@ -4,6 +4,7 @@ import traceback
 # Add the project root to the Python path when running as a script
 if __name__ == "__main__":
     import pathlib
+
     # Get the absolute path of the current file
     current_file = pathlib.Path(__file__).resolve()
     # Get the correct project root for our setup
@@ -24,18 +25,18 @@ server = FastMCP("Grasshopper Bridge")
 # 註冊 MCP 工具 - TEMPORARILY DISABLED
 # @server.tool("add_component")
 # def add_component(component_type: str, x: float, y: float):
-    # """
-    # Add a component to the Grasshopper canvas
+# """
+# Add a component to the Grasshopper canvas
 
-    # Args:
-    #     component_type: Component type (point, curve, circle, line, panel, slider)
-    #     x: X coordinate on the canvas
-    #     y: Y coordinate on the canvas
+# Args:
+#     component_type: Component type (point, curve, circle, line, panel, slider)
+#     x: X coordinate on the canvas
+#     y: Y coordinate on the canvas
 
-    # Returns:
-    #     Result of adding the component
-    # """
-    # pass
+# Returns:
+#     Result of adding the component
+# """
+# pass
 
 # Document operations are now provided by core.document module
 
@@ -112,6 +113,7 @@ server = FastMCP("Grasshopper Bridge")
 
 # Connection validation is now provided by core.connections module as validate_grasshopper_connection
 
+
 # 註冊 MCP 資源
 @server.resource("grasshopper://status")
 def get_grasshopper_status():
@@ -134,23 +136,23 @@ def get_grasshopper_status():
                 "description": "Single numeric value slider with adjustable range",
                 "common_usage": "Use for single numeric inputs like radius, height, count, etc.",
                 "parameters": ["min", "max", "value", "rounding", "type"],
-                "NOT_TO_BE_CONFUSED_WITH": "MD Slider (which is for multi-dimensional values)"
+                "NOT_TO_BE_CONFUSED_WITH": "MD Slider (which is for multi-dimensional values)",
             },
             "MD Slider": {
                 "description": "Multi-dimensional slider for vector input",
                 "common_usage": "Use for vector inputs, NOT for simple numeric values",
-                "NOT_TO_BE_CONFUSED_WITH": "Number Slider (which is for single numeric values)"
+                "NOT_TO_BE_CONFUSED_WITH": "Number Slider (which is for single numeric values)",
             },
             "Panel": {
                 "description": "Displays text or numeric data",
-                "common_usage": "Use for displaying outputs and debugging"
+                "common_usage": "Use for displaying outputs and debugging",
             },
             "Addition": {
                 "description": "Adds two or more numbers",
                 "common_usage": "Connect two Number Sliders to inputs A and B",
                 "parameters": ["A", "B"],
-                "connection_tip": "First slider should connect to input A, second to input B"
-            }
+                "connection_tip": "First slider should connect to input A, second to input B",
+            },
         }
 
         # 為每個組件添加當前參數值的摘要
@@ -159,10 +161,7 @@ def get_grasshopper_status():
             summary = {
                 "id": component.get("id", ""),
                 "type": component.get("type", ""),
-                "position": {
-                    "x": component.get("x", 0),
-                    "y": component.get("y", 0)
-                }
+                "position": {"x": component.get("x", 0), "y": component.get("y", 0)},
             }
 
             # 添加組件特定的參數信息
@@ -174,7 +173,7 @@ def get_grasshopper_status():
                     "min": component.get("min", 0),
                     "max": component.get("max", 10),
                     "value": component.get("value", 5),
-                    "rounding": component.get("rounding", 0.1)
+                    "rounding": component.get("rounding", 0.1),
                 }
 
             # 添加連接信息摘要
@@ -182,19 +181,23 @@ def get_grasshopper_status():
                 conn_summary = []
                 for conn in component["connections"]:
                     if conn.get("sourceId") == component.get("id"):
-                        conn_summary.append({
-                            "type": "output",
-                            "to": conn.get("targetId", ""),
-                            "sourceParam": conn.get("sourceParam", ""),
-                            "targetParam": conn.get("targetParam", "")
-                        })
+                        conn_summary.append(
+                            {
+                                "type": "output",
+                                "to": conn.get("targetId", ""),
+                                "sourceParam": conn.get("sourceParam", ""),
+                                "targetParam": conn.get("targetParam", ""),
+                            }
+                        )
                     else:
-                        conn_summary.append({
-                            "type": "input",
-                            "from": conn.get("sourceId", ""),
-                            "sourceParam": conn.get("sourceParam", ""),
-                            "targetParam": conn.get("targetParam", "")
-                        })
+                        conn_summary.append(
+                            {
+                                "type": "input",
+                                "from": conn.get("sourceId", ""),
+                                "sourceParam": conn.get("sourceParam", ""),
+                                "targetParam": conn.get("targetParam", ""),
+                            }
+                        )
 
                 if conn_summary:
                     summary["connections"] = conn_summary
@@ -211,19 +214,15 @@ def get_grasshopper_status():
                 "When needing a simple numeric input control, ALWAYS use 'Number Slider', not MD Slider",
                 "For vector inputs (like 3D points), use 'MD Slider' or 'Construct Point' with multiple Number Sliders",
                 "Use 'Panel' to display outputs and debug values",
-                "When connecting multiple sliders to Addition, first slider goes to input A, second to input B"
+                "When connecting multiple sliders to Addition, first slider goes to input A, second to input B",
             ],
-            "canvas_summary": f"Current canvas has {len(component_summaries)} components and {len(connections.get('result', []))} connections"
+            "canvas_summary": f"Current canvas has {len(component_summaries)} components and {len(connections.get('result', []))} connections",
         }
     except Exception as e:
         print(f"Error getting Grasshopper status: {str(e)}", file=sys.stderr)
         traceback.print_exc(file=sys.stderr)
-        return {
-            "status": f"Error: {str(e)}",
-            "document": {},
-            "components": [],
-            "connections": []
-        }
+        return {"status": f"Error: {str(e)}", "document": {}, "components": [], "connections": []}
+
 
 @server.resource("grasshopper://component_guide")
 def get_component_guide():
@@ -239,11 +238,9 @@ def get_component_guide():
                 "inputs": [
                     {"name": "X", "type": "Number"},
                     {"name": "Y", "type": "Number"},
-                    {"name": "Z", "type": "Number"}
+                    {"name": "Z", "type": "Number"},
                 ],
-                "outputs": [
-                    {"name": "Pt", "type": "Point"}
-                ]
+                "outputs": [{"name": "Pt", "type": "Point"}],
             },
             {
                 "name": "Circle",
@@ -251,22 +248,23 @@ def get_component_guide():
                 "description": "Creates a circle",
                 "inputs": [
                     {"name": "Plane", "type": "Plane", "description": "Base plane for the circle"},
-                    {"name": "Radius", "type": "Number", "description": "Circle radius"}
+                    {"name": "Radius", "type": "Number", "description": "Circle radius"},
                 ],
-                "outputs": [
-                    {"name": "C", "type": "Circle"}
-                ]
+                "outputs": [{"name": "C", "type": "Circle"}],
             },
             {
                 "name": "XY Plane",
                 "category": "Vector",
                 "description": "Creates an XY plane at the world origin or at a specified point",
                 "inputs": [
-                    {"name": "Origin", "type": "Point", "description": "Origin point", "optional": True}
+                    {
+                        "name": "Origin",
+                        "type": "Point",
+                        "description": "Origin point",
+                        "optional": True,
+                    }
                 ],
-                "outputs": [
-                    {"name": "Plane", "type": "Plane", "description": "XY plane"}
-                ]
+                "outputs": [{"name": "Plane", "type": "Plane", "description": "XY plane"}],
             },
             {
                 "name": "Addition",
@@ -274,81 +272,83 @@ def get_component_guide():
                 "description": "Adds two or more numbers",
                 "inputs": [
                     {"name": "A", "type": "Number", "description": "First input value"},
-                    {"name": "B", "type": "Number", "description": "Second input value"}
+                    {"name": "B", "type": "Number", "description": "Second input value"},
                 ],
-                "outputs": [
-                    {"name": "Result", "type": "Number", "description": "Sum of inputs"}
-                ],
+                "outputs": [{"name": "Result", "type": "Number", "description": "Sum of inputs"}],
                 "usage_examples": [
                     "Connect two Number Sliders to inputs A and B to add their values",
-                    "Connect multiple values to add them all together"
+                    "Connect multiple values to add them all together",
                 ],
                 "common_issues": [
                     "When connecting multiple sliders, ensure they connect to different inputs (A and B)",
-                    "The first slider should connect to input A, the second to input B"
-                ]
+                    "The first slider should connect to input A, the second to input B",
+                ],
             },
             {
                 "name": "Number Slider",
                 "fullName": "Number Slider",
                 "description": "Creates a slider for numeric input with adjustable range and precision",
                 "inputs": [],
-                "outputs": [
-                    {"name": "N", "type": "Number", "description": "Number output"}
-                ],
+                "outputs": [{"name": "N", "type": "Number", "description": "Number output"}],
                 "settings": {
                     "min": {"description": "Minimum value of the slider", "default": 0},
                     "max": {"description": "Maximum value of the slider", "default": 10},
                     "value": {"description": "Current value of the slider", "default": 5},
-                    "rounding": {"description": "Rounding precision (0.01, 0.1, 1, etc.)", "default": 0.1},
-                    "type": {"description": "Slider type (integer, floating point)", "default": "float"},
-                    "name": {"description": "Custom name for the slider", "default": ""}
+                    "rounding": {
+                        "description": "Rounding precision (0.01, 0.1, 1, etc.)",
+                        "default": 0.1,
+                    },
+                    "type": {
+                        "description": "Slider type (integer, floating point)",
+                        "default": "float",
+                    },
+                    "name": {"description": "Custom name for the slider", "default": ""},
                 },
                 "usage_examples": [
                     "Create a Number Slider with min=0, max=100, value=50",
-                    "Create a Number Slider for radius with min=0.1, max=10, value=2.5, rounding=0.1"
+                    "Create a Number Slider for radius with min=0.1, max=10, value=2.5, rounding=0.1",
                 ],
                 "common_issues": [
                     "Confusing with other slider types",
-                    "Not setting appropriate min/max values for the intended use"
+                    "Not setting appropriate min/max values for the intended use",
                 ],
                 "disambiguation": {
                     "similar_components": [
                         {
                             "name": "MD Slider",
                             "description": "Multi-dimensional slider for vector input, NOT for simple numeric values",
-                            "how_to_distinguish": "Use Number Slider for single numeric values; use MD Slider only when you need multi-dimensional control"
+                            "how_to_distinguish": "Use Number Slider for single numeric values; use MD Slider only when you need multi-dimensional control",
                         },
                         {
                             "name": "Graph Mapper",
                             "description": "Maps values through a graph function, NOT a simple slider",
-                            "how_to_distinguish": "Use Number Slider for direct numeric input; use Graph Mapper only for function-based mapping"
-                        }
+                            "how_to_distinguish": "Use Number Slider for direct numeric input; use Graph Mapper only for function-based mapping",
+                        },
                     ],
-                    "correct_usage": "When needing a simple numeric input control, ALWAYS use 'Number Slider', not MD Slider or other variants"
-                }
+                    "correct_usage": "When needing a simple numeric input control, ALWAYS use 'Number Slider', not MD Slider or other variants",
+                },
             },
             {
                 "name": "Panel",
                 "fullName": "Panel",
                 "description": "Displays text or numeric data",
-                "inputs": [
-                    {"name": "Input", "type": "Any"}
-                ],
-                "outputs": []
+                "inputs": [{"name": "Input", "type": "Any"}],
+                "outputs": [],
             },
             {
                 "name": "Math",
                 "fullName": "Mathematics",
                 "description": "Performs mathematical operations",
-                "inputs": [
-                    {"name": "A", "type": "Number"},
-                    {"name": "B", "type": "Number"}
+                "inputs": [{"name": "A", "type": "Number"}, {"name": "B", "type": "Number"}],
+                "outputs": [{"name": "Result", "type": "Number"}],
+                "operations": [
+                    "Addition",
+                    "Subtraction",
+                    "Multiplication",
+                    "Division",
+                    "Power",
+                    "Modulo",
                 ],
-                "outputs": [
-                    {"name": "Result", "type": "Number"}
-                ],
-                "operations": ["Addition", "Subtraction", "Multiplication", "Division", "Power", "Modulo"]
             },
             {
                 "name": "Construct Point",
@@ -357,23 +357,16 @@ def get_component_guide():
                 "inputs": [
                     {"name": "X", "type": "Number"},
                     {"name": "Y", "type": "Number"},
-                    {"name": "Z", "type": "Number"}
+                    {"name": "Z", "type": "Number"},
                 ],
-                "outputs": [
-                    {"name": "Pt", "type": "Point"}
-                ]
+                "outputs": [{"name": "Pt", "type": "Point"}],
             },
             {
                 "name": "Line",
                 "fullName": "Line",
                 "description": "Creates a line between two points",
-                "inputs": [
-                    {"name": "Start", "type": "Point"},
-                    {"name": "End", "type": "Point"}
-                ],
-                "outputs": [
-                    {"name": "L", "type": "Line"}
-                ]
+                "inputs": [{"name": "Start", "type": "Point"}, {"name": "End", "type": "Point"}],
+                "outputs": [{"name": "L", "type": "Line"}],
             },
             {
                 "name": "Extrude",
@@ -382,74 +375,72 @@ def get_component_guide():
                 "inputs": [
                     {"name": "Base", "type": "Curve"},
                     {"name": "Direction", "type": "Vector"},
-                    {"name": "Height", "type": "Number"}
+                    {"name": "Height", "type": "Number"},
                 ],
-                "outputs": [
-                    {"name": "Brep", "type": "Brep"}
-                ]
-            }
+                "outputs": [{"name": "Brep", "type": "Brep"}],
+            },
         ],
         "connectionRules": [
             {
                 "from": "Number",
                 "to": "Circle.Radius",
-                "description": "Connect a number to the radius input of a circle"
+                "description": "Connect a number to the radius input of a circle",
             },
             {
                 "from": "Point",
                 "to": "Circle.Plane",
-                "description": "Connect a point to the plane input of a circle (not recommended, use XY Plane instead)"
+                "description": "Connect a point to the plane input of a circle (not recommended, use XY Plane instead)",
             },
             {
                 "from": "XY Plane",
                 "to": "Circle.Plane",
-                "description": "Connect an XY Plane to the plane input of a circle (recommended)"
+                "description": "Connect an XY Plane to the plane input of a circle (recommended)",
             },
             {
                 "from": "Number",
                 "to": "Math.A",
-                "description": "Connect a number to the first input of a Math component"
+                "description": "Connect a number to the first input of a Math component",
             },
             {
                 "from": "Number",
                 "to": "Math.B",
-                "description": "Connect a number to the second input of a Math component"
+                "description": "Connect a number to the second input of a Math component",
             },
             {
                 "from": "Number",
                 "to": "Construct Point.X",
-                "description": "Connect a number to the X input of a Construct Point component"
+                "description": "Connect a number to the X input of a Construct Point component",
             },
             {
                 "from": "Number",
                 "to": "Construct Point.Y",
-                "description": "Connect a number to the Y input of a Construct Point component"
+                "description": "Connect a number to the Y input of a Construct Point component",
             },
             {
                 "from": "Number",
                 "to": "Construct Point.Z",
-                "description": "Connect a number to the Z input of a Construct Point component"
+                "description": "Connect a number to the Z input of a Construct Point component",
             },
             {
                 "from": "Point",
                 "to": "Line.Start",
-                "description": "Connect a point to the start input of a Line component"
+                "description": "Connect a point to the start input of a Line component",
             },
             {
                 "from": "Point",
                 "to": "Line.End",
-                "description": "Connect a point to the end input of a Line component"
+                "description": "Connect a point to the end input of a Line component",
             },
             {
                 "from": "Circle",
                 "to": "Extrude.Base",
-                "description": "Connect a circle to the base input of an Extrude component"
+                "description": "Connect a circle to the base input of an Extrude component",
             },
             {
                 "from": "Number",
                 "to": "Extrude.Height",
-                "description": "Connect a number to the height input of an Extrude component"
-            }
+                "description": "Connect a number to the height input of an Extrude component",
+            },
         ],
         "commonIssues": [
             "Using Point component instead of XY Plane for inputs that require planes",
@@ -458,7 +449,7 @@ def get_component_guide():
             "Trying to connect incompatible data types",
             "Not providing all required inputs for a component",
             "Using incorrect parameter names (e.g., 'A' and 'B' for Math component instead of the actual parameter names)",
-            "Not checking if a connection was successful before proceeding"
+            "Not checking if a connection was successful before proceeding",
         ],
         "tips": [
             "Always use XY Plane component for plane inputs",
@@ -469,9 +460,10 @@ def get_component_guide():
             "Use get_component_info to check the actual parameter names of a component",
             "Use get_connections to verify if connections were established correctly",
             "Use search_components to find the correct component name before adding it",
-            "Use validate_connection to check if a connection is possible before attempting it"
-        ]
+            "Use validate_connection to check if a connection is possible before attempting it",
+        ],
     }
+
 
 # Import Vizor components - TEMPORARILY DISABLED
 # from grasshopper_mcp.tools.vizor.components import (
@@ -511,6 +503,8 @@ def get_component_guide():
 from grasshopper_mcp.tools.core import (
     edit_python3_script,
     get_all_components_enhanced,
+    get_components_in_group,
+    get_geometry_agent_components,
     # TEMPORARILY DISABLED
     # add_number_slider,
     # add_panel,
@@ -552,7 +546,9 @@ server.tool("get_python3_script")(get_python3_script)
 server.tool("edit_python3_script")(edit_python3_script)
 server.tool("get_python3_script_errors")(get_python3_script_errors)
 server.tool("get_component_info_enhanced")(get_component_info_enhanced)
-server.tool("get_all_components_enhanced")(get_all_components_enhanced)
+# server.tool("get_all_components_enhanced")(get_all_components_enhanced)  # Replaced by get_geometry_agent_components for precision
+# server.tool("get_components_in_group")(get_components_in_group)  # Commented out - use get_geometry_agent_components instead
+server.tool("get_geometry_agent_components")(get_geometry_agent_components)
 
 # TEMPORARILY DISABLED TOOLS
 # server.tool("add_number_slider")(add_number_slider)
@@ -585,6 +581,7 @@ server.tool("get_all_components_enhanced")(get_all_components_enhanced)
 # server.tool("create_grasshopper_pattern")(create_grasshopper_pattern)
 # server.tool("get_pattern_list")(get_pattern_list)
 
+
 @server.resource("grasshopper://component_library")
 def get_component_library():
     """Get a comprehensive library of Grasshopper components"""
@@ -601,11 +598,9 @@ def get_component_library():
                         "inputs": [
                             {"name": "X", "type": "Number", "description": "X coordinate"},
                             {"name": "Y", "type": "Number", "description": "Y coordinate"},
-                            {"name": "Z", "type": "Number", "description": "Z coordinate"}
+                            {"name": "Z", "type": "Number", "description": "Z coordinate"},
                         ],
-                        "outputs": [
-                            {"name": "Pt", "type": "Point", "description": "Point output"}
-                        ]
+                        "outputs": [{"name": "Pt", "type": "Point", "description": "Point output"}],
                     },
                     {
                         "name": "Number Slider",
@@ -619,33 +614,39 @@ def get_component_library():
                             "min": {"description": "Minimum value of the slider", "default": 0},
                             "max": {"description": "Maximum value of the slider", "default": 10},
                             "value": {"description": "Current value of the slider", "default": 5},
-                            "rounding": {"description": "Rounding precision (0.01, 0.1, 1, etc.)", "default": 0.1},
-                            "type": {"description": "Slider type (integer, floating point)", "default": "float"},
-                            "name": {"description": "Custom name for the slider", "default": ""}
+                            "rounding": {
+                                "description": "Rounding precision (0.01, 0.1, 1, etc.)",
+                                "default": 0.1,
+                            },
+                            "type": {
+                                "description": "Slider type (integer, floating point)",
+                                "default": "float",
+                            },
+                            "name": {"description": "Custom name for the slider", "default": ""},
                         },
                         "usage_examples": [
                             "Create a Number Slider with min=0, max=100, value=50",
-                            "Create a Number Slider for radius with min=0.1, max=10, value=2.5, rounding=0.1"
+                            "Create a Number Slider for radius with min=0.1, max=10, value=2.5, rounding=0.1",
                         ],
                         "common_issues": [
                             "Confusing with other slider types",
-                            "Not setting appropriate min/max values for the intended use"
+                            "Not setting appropriate min/max values for the intended use",
                         ],
                         "disambiguation": {
                             "similar_components": [
                                 {
                                     "name": "MD Slider",
                                     "description": "Multi-dimensional slider for vector input, NOT for simple numeric values",
-                                    "how_to_distinguish": "Use Number Slider for single numeric values; use MD Slider only when you need multi-dimensional control"
+                                    "how_to_distinguish": "Use Number Slider for single numeric values; use MD Slider only when you need multi-dimensional control",
                                 },
                                 {
                                     "name": "Graph Mapper",
                                     "description": "Maps values through a graph function, NOT a simple slider",
-                                    "how_to_distinguish": "Use Number Slider for direct numeric input; use Graph Mapper only for function-based mapping"
-                                }
+                                    "how_to_distinguish": "Use Number Slider for direct numeric input; use Graph Mapper only for function-based mapping",
+                                },
                             ],
-                            "correct_usage": "When needing a simple numeric input control, ALWAYS use 'Number Slider', not MD Slider or other variants"
-                        }
+                            "correct_usage": "When needing a simple numeric input control, ALWAYS use 'Number Slider', not MD Slider or other variants",
+                        },
                     },
                     {
                         "name": "Panel",
@@ -654,9 +655,9 @@ def get_component_library():
                         "inputs": [
                             {"name": "Input", "type": "Any", "description": "Any input data"}
                         ],
-                        "outputs": []
-                    }
-                ]
+                        "outputs": [],
+                    },
+                ],
             },
             {
                 "name": "Maths",
@@ -667,14 +668,25 @@ def get_component_library():
                         "description": "Performs mathematical operations",
                         "inputs": [
                             {"name": "A", "type": "Number", "description": "First number"},
-                            {"name": "B", "type": "Number", "description": "Second number"}
+                            {"name": "B", "type": "Number", "description": "Second number"},
                         ],
                         "outputs": [
-                            {"name": "Result", "type": "Number", "description": "Result of the operation"}
+                            {
+                                "name": "Result",
+                                "type": "Number",
+                                "description": "Result of the operation",
+                            }
                         ],
-                        "operations": ["Addition", "Subtraction", "Multiplication", "Division", "Power", "Modulo"]
+                        "operations": [
+                            "Addition",
+                            "Subtraction",
+                            "Multiplication",
+                            "Division",
+                            "Power",
+                            "Modulo",
+                        ],
                     }
-                ]
+                ],
             },
             {
                 "name": "Vector",
@@ -684,11 +696,14 @@ def get_component_library():
                         "fullName": "XY Plane",
                         "description": "Creates an XY plane at the world origin or at a specified point",
                         "inputs": [
-                            {"name": "Origin", "type": "Point", "description": "Origin point", "optional": True}
+                            {
+                                "name": "Origin",
+                                "type": "Point",
+                                "description": "Origin point",
+                                "optional": True,
+                            }
                         ],
-                        "outputs": [
-                            {"name": "Plane", "type": "Plane", "description": "XY plane"}
-                        ]
+                        "outputs": [{"name": "Plane", "type": "Plane", "description": "XY plane"}],
                     },
                     {
                         "name": "Construct Point",
@@ -697,13 +712,13 @@ def get_component_library():
                         "inputs": [
                             {"name": "X", "type": "Number", "description": "X coordinate"},
                             {"name": "Y", "type": "Number", "description": "Y coordinate"},
-                            {"name": "Z", "type": "Number", "description": "Z coordinate"}
+                            {"name": "Z", "type": "Number", "description": "Z coordinate"},
                         ],
                         "outputs": [
                             {"name": "Pt", "type": "Point", "description": "Constructed point"}
-                        ]
-                    }
-                ]
+                        ],
+                    },
+                ],
             },
             {
                 "name": "Curve",
@@ -713,12 +728,16 @@ def get_component_library():
                         "fullName": "Circle",
                         "description": "Creates a circle",
                         "inputs": [
-                            {"name": "Plane", "type": "Plane", "description": "Base plane for the circle"},
-                            {"name": "Radius", "type": "Number", "description": "Circle radius"}
+                            {
+                                "name": "Plane",
+                                "type": "Plane",
+                                "description": "Base plane for the circle",
+                            },
+                            {"name": "Radius", "type": "Number", "description": "Circle radius"},
                         ],
                         "outputs": [
                             {"name": "C", "type": "Circle", "description": "Circle output"}
-                        ]
+                        ],
                     },
                     {
                         "name": "Line",
@@ -726,13 +745,11 @@ def get_component_library():
                         "description": "Creates a line between two points",
                         "inputs": [
                             {"name": "Start", "type": "Point", "description": "Start point"},
-                            {"name": "End", "type": "Point", "description": "End point"}
+                            {"name": "End", "type": "Point", "description": "End point"},
                         ],
-                        "outputs": [
-                            {"name": "L", "type": "Line", "description": "Line output"}
-                        ]
-                    }
-                ]
+                        "outputs": [{"name": "L", "type": "Line", "description": "Line output"}],
+                    },
+                ],
             },
             {
                 "name": "Surface",
@@ -742,60 +759,66 @@ def get_component_library():
                         "fullName": "Extrude",
                         "description": "Extrudes a curve to create a surface or a solid",
                         "inputs": [
-                            {"name": "Base", "type": "Curve", "description": "Base curve to extrude"},
-                            {"name": "Direction", "type": "Vector", "description": "Direction of extrusion", "optional": True},
-                            {"name": "Height", "type": "Number", "description": "Height of extrusion"}
+                            {
+                                "name": "Base",
+                                "type": "Curve",
+                                "description": "Base curve to extrude",
+                            },
+                            {
+                                "name": "Direction",
+                                "type": "Vector",
+                                "description": "Direction of extrusion",
+                                "optional": True,
+                            },
+                            {
+                                "name": "Height",
+                                "type": "Number",
+                                "description": "Height of extrusion",
+                            },
                         ],
                         "outputs": [
                             {"name": "Brep", "type": "Brep", "description": "Extruded brep"}
-                        ]
+                        ],
                     }
-                ]
-            }
+                ],
+            },
         ],
         "dataTypes": [
             {
                 "name": "Number",
                 "description": "A numeric value",
-                "compatibleWith": ["Number", "Integer", "Double"]
+                "compatibleWith": ["Number", "Integer", "Double"],
             },
             {
                 "name": "Point",
                 "description": "A 3D point in space",
-                "compatibleWith": ["Point3d", "Point"]
+                "compatibleWith": ["Point3d", "Point"],
             },
             {
                 "name": "Vector",
                 "description": "A 3D vector",
-                "compatibleWith": ["Vector3d", "Vector"]
+                "compatibleWith": ["Vector3d", "Vector"],
             },
-            {
-                "name": "Plane",
-                "description": "A plane in 3D space",
-                "compatibleWith": ["Plane"]
-            },
+            {"name": "Plane", "description": "A plane in 3D space", "compatibleWith": ["Plane"]},
             {
                 "name": "Circle",
                 "description": "A circle curve",
-                "compatibleWith": ["Circle", "Curve"]
+                "compatibleWith": ["Circle", "Curve"],
             },
-            {
-                "name": "Line",
-                "description": "A line segment",
-                "compatibleWith": ["Line", "Curve"]
-            },
+            {"name": "Line", "description": "A line segment", "compatibleWith": ["Line", "Curve"]},
             {
                 "name": "Curve",
                 "description": "A curve object",
-                "compatibleWith": ["Curve", "Circle", "Line", "Arc", "Polyline"]
+                "compatibleWith": ["Curve", "Circle", "Line", "Arc", "Polyline"],
             },
             {
                 "name": "Brep",
                 "description": "A boundary representation object",
-                "compatibleWith": ["Brep", "Surface", "Solid"]
-            }
-        ]
+                "compatibleWith": ["Brep", "Surface", "Solid"],
+            },
+        ],
     }
+
 
 def main():
     """Main entry point for the Grasshopper MCP Bridge Server"""
@@ -803,11 +826,12 @@ def main():
         # 啟動 MCP 服務器
         print("Starting Grasshopper MCP Bridge Server...", file=sys.stderr)
         print("Please add this MCP server to Claude Desktop", file=sys.stderr)
-        server.run(transport='stdio')
+        server.run(transport="stdio")
     except Exception as e:
         print(f"Error starting MCP server: {str(e)}", file=sys.stderr)
         traceback.print_exc(file=sys.stderr)
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

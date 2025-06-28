@@ -18,43 +18,43 @@ def test_mcp_lifecycle():
     print("=" * 60)
     print("TESTING MCP LIFECYCLE WITH NEW IMPLEMENTATION")
     print("=" * 60)
-    
+
     setup_logging()
-    
+
     try:
         # Create component registry
         registry = ComponentRegistry()
-        
+
         # Create geometry agent using new wrapper pattern
         print("\n1. Creating geometry agent wrapper...")
         geometry_agent = create_geometry_agent(component_registry=registry)
         print("✅ Geometry agent created successfully")
-        
+
         # Test task execution - this should properly manage MCP lifecycle
         print("\n2. Testing task execution with MCP lifecycle...")
         task = "Create two points to represent bridge start and end"
-        
+
         print(f"Executing task: {task}")
         result = geometry_agent.run(task)
-        
+
         print(f"\n3. Task completed!")
         print(f"Result type: {type(result)}")
         print(f"Result: {str(result)[:200]}...")
-        
+
         print("\n✅ SUCCESS: MCP lifecycle management working correctly!")
         print("The wrapper pattern properly handles MCPAdapt context management.")
-        
+
     except Exception as e:
         print(f"\n❌ ERROR: {e}")
         print("This indicates the MCP lifecycle issue may still exist.")
-        
+
         # Check if this is the specific error we fixed
         if "Event loop is closed" in str(e):
             print("🔍 This is the event loop error we're trying to fix.")
             print("The MCP connection is being closed before the agent can use it.")
         else:
             print(f"🔍 Different error: {type(e).__name__}")
-            
+
     print("\n" + "=" * 60)
 
 

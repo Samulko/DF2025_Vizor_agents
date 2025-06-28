@@ -26,6 +26,7 @@ import time
 # Optional ROS imports with graceful fallback
 try:
     import roslibpy
+
     # Note: geometry_msgs.msg.Pose is not available in roslibpy
     # We'll use dict representation for pose data instead
     ROS_AVAILABLE = True
@@ -48,9 +49,13 @@ class VizorListener:
 
     def __init__(self, update_queue=None):
         if self._initialized:
-            # Update the queue if a new one is provided
+            # Always update the queue reference if a new one is provided
             if update_queue is not None:
                 self.update_queue = update_queue
+                print(f"[DEBUG] VizorListener singleton: Updated queue reference to {id(update_queue)}")
+                print(f"[DEBUG] VizorListener queue object: {self.update_queue}")
+            else:
+                print(f"[DEBUG] VizorListener singleton: Keeping existing queue reference {id(self.update_queue)}")
             return
 
         self._initialized = True
@@ -58,7 +63,8 @@ class VizorListener:
         self.gaze_history: list = []  # Store (timestamp, element) tuples
         self.gaze_window_seconds = 3.0  # Time window for gaze retrieval
         self.transforms: Dict[str, Union[dict, "Pose"]] = {}
-        self.update_queue = update_queue or []  # Queue for Direct Parameter Updates
+        self.update_queue = update_queue if update_queue is not None else []  # Queue for Direct Parameter Updates
+        print(f"[DEBUG] VizorListener __init__: Queue reference set to ID {id(self.update_queue)}")
         self.ros_available = ROS_AVAILABLE
         self.client = None
         self.gaze_subscriber = None
@@ -126,10 +132,10 @@ class VizorListener:
             self.gaze_subscriber.subscribe(self._handle_gaze_message)
             print("📡 Subscribed to /HOLO1_GazePoint for gaze data")
 
-            # Subscribe to HOLO1_Model topic (optional - may not be available)
+            # Subscribe to HOLO1_Model topic (original implementation)
             try:
                 self.model_subscriber = roslibpy.Topic(
-                    self.client, "/HOLO1_Model", "std_msgs/String"  # Try std_msgs/String first
+                    self.client, "/HOLO1_Model", "vizor_package/Model"
                 )
                 self.model_subscriber.subscribe(self._handle_model_message)
                 print("📡 Subscribed to /HOLO1_Model for transform data")
@@ -164,19 +170,17 @@ class VizorListener:
         return self._attempt_ros_connection()
 
     def _handle_gaze_message(self, message):
-        import time
         timestamp = time.time()
         element = message["data"]
-        
+
         self.current_element = element
-        
+
         # Add to gaze history with timestamp
         self.gaze_history.append((timestamp, element))
-        
-        # Optimized cleanup: only clean every 10th message or when history gets too long
-        if len(self.gaze_history) % 10 == 0 or len(self.gaze_history) > 150:
-            cutoff_time = timestamp - 10.0
-            self.gaze_history = [(ts, elem) for ts, elem in self.gaze_history if ts > cutoff_time]
+
+        # Clean old entries (keep only last 10 seconds of history)
+        cutoff_time = timestamp - 10.0
+        self.gaze_history = [(ts, elem) for ts, elem in self.gaze_history if ts > cutoff_time]
 
     def _handle_model_message(self, message):
         """Handle incoming model transform messages from ROS."""
@@ -185,33 +189,47 @@ class VizorListener:
         poses = message["poses"]
 
         for name, pose in zip(names, poses):
-            # Check if the transform is non-zero
             position = pose["position"]
             orientation = pose["orientation"]
 
-            # Check if position or orientation has changed
+            is_identity_quat = (
+                (abs(orientation["w"] - 1.0) < 1e-6 or abs(orientation["w"] + 1.0) < 1e-6) and
+                abs(orientation["x"]) < 1e-6 and
+                abs(orientation["y"]) < 1e-6 and
+                abs(orientation["z"]) < 1e-6
+            )
+            
+            print(f"[DEBUG] Checking {name}: pos=({position['x']}, {position['y']}, {position['z']}), quat=({orientation['w']}, {orientation['x']}, {orientation['y']}, {orientation['z']})")
+            print(f"[DEBUG] is_identity_quat={is_identity_quat}")
+            
             if (
                 abs(position["x"]) > 1e-6
                 or abs(position["y"]) > 1e-6
                 or abs(position["z"]) > 1e-6
-                or abs(orientation["x"]) > 1e-6
-                or abs(orientation["y"]) > 1e-6
-                or abs(orientation["z"]) > 1e-6
-                or abs(orientation["w"] - 1.0) > 1e-6
+                or not is_identity_quat
             ):
 
-                # ROS to Rhino coordinate system transition
-                pos = [-position["y"], position["x"], position["z"]]
-                rot = [orientation["w"], -orientation["y"], orientation["x"], orientation["z"]]
+                # STEP 1: Transform the POSITION vector from ROS (y-right) to Rhino.
+                pos = [position["y"], position["x"], position["z"]]
 
-                # Store as dictionary for compatibility with both ROS and non-ROS modes
+                # STEP 2: Use the quaternion AS-IS. DO NOT transform its components.
+                rot = orientation
+
+                # Store the transformed position and the RAW quaternion.
                 transform = {"position": pos, "quaternion": rot}
                 self.transforms[name] = transform
+                print(f"[DEBUG] Including element {name} with non-zero transform")
+            else:
+                print(f"[DEBUG] Skipping element {name} - zero transform detected")
 
-        # Queue raw transform data for Direct Parameter Update processing
-        if self.transforms and hasattr(self, 'update_queue'):
+        if self.transforms and hasattr(self, "update_queue"):
             self.update_queue.append(self.transforms.copy())
-            print(f"\n[SYSTEM] Transform data for {len(self.transforms)} element(s) queued for update.")
+            print(
+                f"\n[SYSTEM] Transform data for {len(self.transforms)} element(s) queued for update."
+            )
+            print(f"[DEBUG] Queue reference ID in VizorListener: {id(self.update_queue)}")
+            print(f"[DEBUG] Queue length after append: {len(self.update_queue)}")
+            print(f"[DEBUG] Queue contents: {self.update_queue}")
 
     def get_transforms(self) -> Dict[str, Union[dict, "Pose"]]:
         """Return the current transforms dictionary."""
@@ -220,70 +238,79 @@ class VizorListener:
     def get_current_element(self) -> Optional[str]:
         """Return the current element being gazed at."""
         return self.current_element
-    
+
     def get_recent_gaze(self, window_seconds: Optional[float] = None) -> Optional[str]:
         """Get the most recent gaze within a time window.
-        
+
         Args:
             window_seconds: Time window in seconds (default: 3.0 seconds)
-            
+
         Returns:
             Most recent element gazed at within the time window, or None
         """
-        import time
-        
         if window_seconds is None:
             window_seconds = self.gaze_window_seconds
-            
+
         if not self.gaze_history:
             return None
-            
+
         current_time = time.time()
         cutoff_time = current_time - window_seconds
-        
+
         # Find the most recent gaze within the time window
         recent_gazes = [(ts, elem) for ts, elem in self.gaze_history if ts > cutoff_time]
-        
+
         if recent_gazes:
             # Return the most recent element
             return recent_gazes[-1][1]
-        
+
         return None
-    
+
     def get_gaze_history_summary(self, window_seconds: float = 10.0) -> dict:
         """Get a summary of recent gaze activity.
-        
+
         Args:
             window_seconds: Time window to analyze
-            
+
         Returns:
             Dictionary with gaze activity summary
         """
-        import time
         from collections import Counter
-        
+
         if not self.gaze_history:
-            return {"total_gazes": 0, "unique_elements": 0, "most_gazed": None, "recent_elements": []}
-        
+            return {
+                "total_gazes": 0,
+                "unique_elements": 0,
+                "most_gazed": None,
+                "recent_elements": [],
+            }
+
         current_time = time.time()
         cutoff_time = current_time - window_seconds
-        
+
         recent_gazes = [(ts, elem) for ts, elem in self.gaze_history if ts > cutoff_time]
-        
+
         if not recent_gazes:
-            return {"total_gazes": 0, "unique_elements": 0, "most_gazed": None, "recent_elements": []}
-        
+            return {
+                "total_gazes": 0,
+                "unique_elements": 0,
+                "most_gazed": None,
+                "recent_elements": [],
+            }
+
         elements = [elem for ts, elem in recent_gazes]
         element_counts = Counter(elements)
         most_gazed = element_counts.most_common(1)[0] if element_counts else None
-        
+
         return {
             "total_gazes": len(recent_gazes),
             "unique_elements": len(set(elements)),
             "most_gazed": most_gazed[0] if most_gazed else None,
             "most_gazed_count": most_gazed[1] if most_gazed else 0,
             "recent_elements": list(dict.fromkeys(elements)),  # Preserve order, remove duplicates
-            "time_span_seconds": recent_gazes[-1][0] - recent_gazes[0][0] if len(recent_gazes) > 1 else 0
+            "time_span_seconds": (
+                recent_gazes[-1][0] - recent_gazes[0][0] if len(recent_gazes) > 1 else 0
+            ),
         }
 
     def is_ros_connected(self) -> bool:

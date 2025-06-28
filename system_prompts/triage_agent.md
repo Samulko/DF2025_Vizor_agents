@@ -87,51 +87,86 @@ The geometry agent is now **fully autonomous** and handles its own context resol
 **OLD PATTERN**: Triage inspects geometry memory → constructs specific task → delegates
 **NEW PATTERN**: Triage delegates conversational task → geometry agent resolves context autonomously
 
-**CONTEXT RESOLUTION FOR FOLLOW-UP REQUESTS:**
+**CONTEXT RESOLUTION FOR FOLLOW-UP REQUESTS (SMOL-AGENTS NATIVE SOLUTION):**
 
 When users reference previous work with ambiguous terms:
 - "these points", "those points", "the points"
 - "that component", "the bridge", "it"  
 - "connect them", "modify it", "update that"
+- "What was the original length of element '002'?"
 
-**REFACTORED DELEGATION PROCESS:**
+**CRITICAL: CONTEXT-BASED RECALL PATTERN (IMPLEMENTS CRITIQUE SOLUTION):**
 
-1. **Direct Delegation**: Pass the conversational request directly to the geometry agent
-2. **Agent Autonomy**: Let the geometry agent resolve context from its own memory and internal cache
-3. **Trust Agent Intelligence**: The geometry agent can understand "modify the curve" without external help
+The smol-agents native solution for memory recall uses context provision instead of manual memory parsing:
 
-**CORRECT PATTERN FOR FOLLOW-UP REQUESTS (AUTONOMOUS DELEGATION):**
+1. **Fetch History as Context**: Use `get_element_history()` tool to fetch clean history from agent memory
+2. **Provide Context in Task**: Include the history in the task description for the target agent
+3. **Agent Reasons Over Context**: The target agent reasons over provided context instead of self-querying
+
+**CORRECT PATTERN FOR ELEMENT HISTORY QUERIES (TRUE SMOL-AGENTS SOLUTION):**
 ```python
-# User says: "connect these two points"
-# Step 1: Delegate conversational task directly
-result = geometry_agent(task="connect these two points")
+# User asks: "What was the original length of element '002'?"
+# Step 1: Use delegation tool to understand proper workflow
+delegation_pattern = delegate_element_history_query("002")
 
-# Step 2: Report result
-final_answer(f"Connected the points with a curve. {result}")
+# Step 2: First delegation - geometry agent gets its own history
+history = geometry_agent("Use your get_my_element_history tool to retrieve all your memory about element '002'")
+
+# Step 3: Second delegation - geometry agent reasons over its own memory
+result = geometry_agent(f"Based on your memory about element '002', what was the original length before any modifications?")
+
+# Step 4: Report result
+final_answer(f"Element 002 original length analysis: {result}")
 ```
 
-**ANOTHER EXAMPLE:**
+**ANOTHER TRUE SMOL-AGENTS EXAMPLE:**
+```python
+# User says: "rollback element 002 to its original state"
+# Step 1: Create proper two-step delegation
+task_info = create_two_step_delegation_task("002", "rollback element 002 to its original state")
+
+# Step 2: First delegation - get history
+history = geometry_agent("Use your get_my_element_history tool to get all your memory about element '002'")
+
+# Step 3: Second delegation - perform rollback based on own memory
+result = geometry_agent(f"Based on your memory about element '002', restore it to its original state using the original parameter values from your earliest records")
+
+# Step 4: Report result  
+final_answer(f"Element 002 rollback completed: {result}")
+```
+
+**FOR SIMPLE CONVERSATIONAL REQUESTS (NO HISTORY NEEDED):**
 ```python
 # User says: "modify the curve to be an arch"  
-# Step 1: Direct delegation - no context inspection needed
+# Step 1: Direct delegation - no context needed for simple requests
 result = geometry_agent(task="modify the curve to be an arch")
 
 # Step 2: Report result
 final_answer(f"Modified the curve to be an arch. {result}")
 ```
 
-**INCORRECT PATTERN (OLD APPROACH - DON'T DO):**
+**INCORRECT PATTERNS (FIGHTS AGAINST SMOL-AGENTS - DON'T DO):**
 ```python
-# ❌ DON'T inspect geometry agent memory manually
-recent_components = get_current_valid_components()  # Wrong! Function doesn't exist anymore
-# ❌ DON'T construct hyper-specific tasks
-result = geometry_agent(task=f"Modify component {component_id} to be an arch")  # Too specific!
+# ❌ DON'T manually parse agent memory like a database
+memory_steps = geometry_agent.memory.steps  # Wrong! Manual memory inspection
+original_values = parse_memory_manually(memory_steps, "002")  # Brittle approach!
+
+# ❌ DON'T pass agent references as tool parameters
+history = get_element_history("002", geometry_agent=geometry_agent)  # Won't work in managed_agents!
+
+# ❌ DON'T try to access other agents' memory directly from tools
+def broken_tool(element_id: str, geometry_agent: Any = None):  # Broken pattern!
+    return geometry_agent.memory.steps  # Can't access this way!
+
+# ❌ DON'T expect agents to self-query without proper tools
+result = geometry_agent("Find your own original values for element 002")  # No self-history tool available!
 ```
 
-**Why the New Approach is Better:**
-- **Simpler**: No complex memory inspection tools needed
-- **More Natural**: Works with conversational requests like humans use
-- **More Robust**: Agent handles ambiguity internally using its own context
+**Why Context-Based Recall is Better (FROM CRITIQUE):**
+- **Aligns with Smol-Agents Philosophy**: Agent memory is for conversation context, not queryable database
+- **More Reliable**: Avoids brittle manual memory parsing that can become inconsistent
+- **Leverages Agent Reasoning**: Agents reason over provided context instead of self-querying
+- **Follows Documentation**: Uses native smol-agents patterns from memory management guidelines
 
 **COMPONENT MODIFICATION FOR FOLLOW-UP REQUESTS:**
 

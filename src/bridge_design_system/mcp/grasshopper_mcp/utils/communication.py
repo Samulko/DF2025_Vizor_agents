@@ -17,25 +17,28 @@ from typing import Any, Dict, Optional
 
 def get_windows_host():
     """Get Windows host IP from WSL."""
-    if 'microsoft' in platform.uname().release.lower():
+    if "microsoft" in platform.uname().release.lower():
         # Running in WSL
         try:
             # Method 1: Try default route (more reliable for WSL2)
-            result = subprocess.run(['ip', 'route', 'show'], 
-                                  capture_output=True, text=True)
+            result = subprocess.run(["ip", "route", "show"], capture_output=True, text=True)
             if result.returncode == 0:
-                for line in result.stdout.split('\n'):
-                    if 'default' in line:
+                for line in result.stdout.split("\n"):
+                    if "default" in line:
                         # Extract IP address from: default via 172.28.192.1 dev eth0
                         parts = line.split()
-                        if len(parts) >= 3 and parts[1] == 'via':
+                        if len(parts) >= 3 and parts[1] == "via":
                             windows_ip = parts[2]
-                            print(f"WSL detected Windows host via default route: {windows_ip}", file=sys.stderr)
+                            print(
+                                f"WSL detected Windows host via default route: {windows_ip}",
+                                file=sys.stderr,
+                            )
                             return windows_ip
-            
+
             # Method 2: Fallback to /etc/resolv.conf
-            result = subprocess.run(['grep', 'nameserver', '/etc/resolv.conf'], 
-                                  capture_output=True, text=True)
+            result = subprocess.run(
+                ["grep", "nameserver", "/etc/resolv.conf"], capture_output=True, text=True
+            )
             if result.returncode == 0:
                 windows_ip = result.stdout.strip().split()[1]
                 print(f"WSL detected Windows host via resolv.conf: {windows_ip}", file=sys.stderr)
@@ -44,6 +47,7 @@ def get_windows_host():
             print(f"Error detecting Windows host: {e}", file=sys.stderr)
     return "localhost"
 
+
 GRASSHOPPER_HOST = get_windows_host()
 GRASSHOPPER_PORT = 8081  # TCP bridge port (GH_MCPComponent listens on 8081)
 
@@ -51,7 +55,9 @@ GRASSHOPPER_PORT = 8081  # TCP bridge port (GH_MCPComponent listens on 8081)
 print(f"Grasshopper TCP bridge target: {GRASSHOPPER_HOST}:{GRASSHOPPER_PORT}", file=sys.stderr)
 
 
-def send_to_grasshopper(command_type: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def send_to_grasshopper(
+    command_type: str, params: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
     """
     Send a command to the Grasshopper MCP server.
 
@@ -66,14 +72,13 @@ def send_to_grasshopper(command_type: str, params: Optional[Dict[str, Any]] = No
         params = {}
 
     # Create command
-    command = {
-        "type": command_type,
-        "parameters": params
-    }
+    command = {"type": command_type, "parameters": params}
 
     try:
-        print(f"Sending command to Grasshopper: {command_type} with params: {params}", file=sys.stderr)
-        
+        print(
+            f"Sending command to Grasshopper: {command_type} with params: {params}", file=sys.stderr
+        )
+
         # Log script parameter specifically for debugging
         if "script" in params:
             print(f"Script parameter found! Length: {len(params['script'])}", file=sys.stderr)
@@ -110,7 +115,4 @@ def send_to_grasshopper(command_type: str, params: Optional[Dict[str, Any]] = No
     except Exception as e:
         print(f"Error communicating with Grasshopper: {str(e)}", file=sys.stderr)
         traceback.print_exc(file=sys.stderr)
-        return {
-            "success": False,
-            "error": f"Error communicating with Grasshopper: {str(e)}"
-        }
+        return {"success": False, "error": f"Error communicating with Grasshopper: {str(e)}"}

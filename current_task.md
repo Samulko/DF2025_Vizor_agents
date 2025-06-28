@@ -20,7 +20,9 @@ Implement a reliable Direct Parameter Update workflow where HoloLens users can m
 
 6. **Agent Execution**: The GeometryAgent receives this task. Its job is now simple text replacement: find the correct lines in the script and overwrite the values in rg.Point3d(...) and rg.Vector3d(...).
 
-**This process makes the agent's job extremely reliable, as it's not performing any complex reasoning—it's just executing a precise "find and replace" operation.**
+7. **Memory Integration**: **BEFORE** text replacement, the agent automatically saves original values via step callbacks. **AFTER** replacement, the agent updates memory with change records for future queries.
+
+**This process makes the agent's job extremely reliable, as it's not performing any complex reasoning—it's just executing a precise "find and replace" operation. The integrated memory system ensures original values are never lost and can be queried at any time.**
 
 ## **🛠️ FINAL IMPLEMENTATION PLAN & TO-DO LIST**
 
@@ -176,10 +178,276 @@ When you receive a task to perform a "direct parameter update," you must follow 
 - [ ] Define 6-step Direct Parameter Update process
 - [ ] Remove complex reasoning requirements
 
+### **Phase 4: Native Smolagents Memory Integration**
+- [ ] Create `track_design_changes()` step callback function
+- [ ] Add step callbacks to geometry, triage, and syslogic agents
+- [ ] Implement memory query system (`get_original_element_state()`, `query_design_history()`)
+- [ ] Add manual step execution with memory control (`run_with_manual_steps()`)
+- [ ] Implement memory transfer between agents (`transfer_geometry_memory()`)
+- [ ] Create memory utilities module (`src/bridge_design_system/memory/`)
+
+### **Phase 5: Memory-Enhanced Error Handling**
+- [ ] Implement memory-based rollback system (`rollback_to_previous_state()`)
+- [ ] Add design consistency checking using memory queries
+- [ ] Integrate memory validation with Direct Parameter Update workflow
+- [ ] Test memory-based error recovery and rollback functionality
+
 ### **Phase 3: Testing**
 - [ ] Test quaternion conversion accuracy
 - [ ] Verify element ID parsing (dynamic_001 → 021)
 - [ ] Test queue processing with multiple elements
 - [ ] Validate script text replacement operations
 
-This final plan aligns perfectly with your specified workflow, resolves the technical challenges, and makes the agent's role maximally reliable.
+### **Phase 4: Native Smolagents Memory Integration**
+
+This phase implements the missing native smolagents memory methods to automatically track and remember original element values, solving the core issue where agents forget design history.
+
+#### **[ ] Step Callbacks for Design State Tracking:**
+Implement automatic memory tracking using smolagents native step callbacks.
+
+```python
+# Create memory callback function in src/bridge_design_system/memory/
+def track_design_changes(memory_step: ActionStep, agent: CodeAgent) -> None:
+    """
+    Native smolagents step callback to automatically save original element values.
+    
+    Called after each agent step to extract and store design state changes.
+    Follows smolagents best practices from official documentation.
+    """
+    from smolagents import ActionStep
+    import json
+    import re
+    
+    # Extract element modifications from step observations
+    if hasattr(memory_step, 'observations') and memory_step.observations:
+        # Parse for Direct Parameter Update tasks
+        if "direct parameter update" in memory_step.observations.lower():
+            element_match = re.search(r"element.*?'(\w+)'", memory_step.observations)
+            if element_match:
+                element_id = element_match.group(1)
+                
+                # Save original values BEFORE modification
+                original_state = {
+                    "element_id": element_id,
+                    "timestamp": memory_step.step_number,
+                    "action": "parameter_update",
+                    "step_type": "design_change"
+                }
+                
+                # Store in memory step observations with structured format
+                memory_step.observations += f"\n[MEMORY] Original state saved for element {element_id}"
+    
+    # Memory cleanup - remove old screenshots/data (smolagents best practice)
+    latest_step = memory_step.step_number
+    for previous_step in agent.memory.steps:
+        if isinstance(previous_step, ActionStep) and previous_step.step_number <= latest_step - 3:
+            # Keep only last 3 steps with full context to save memory
+            if hasattr(previous_step, 'observations_images'):
+                previous_step.observations_images = None
+```
+
+#### **[ ] Add Step Callbacks to All Agents:**
+Integrate the callback into geometry, triage, and syslogic agents.
+
+```python
+# Update geometry_agent_smolagents.py line ~66
+self.agent = ToolCallingAgent(
+    tools=all_tools,
+    model=self.model,
+    max_steps=12,
+    name="geometry_agent",
+    description="Creates 3D geometry in Rhino Grasshopper via MCP connection...",
+    step_callbacks=[monitoring_callback, track_design_changes] if monitoring_callback else [track_design_changes],
+)
+
+# Update triage_agent_smolagents.py line ~115  
+manager = CodeAgent(
+    tools=manager_tools,
+    model=model,
+    name="triage_agent", 
+    description="Coordinates bridge design tasks by delegating to specialized agents",
+    max_steps=max_steps,
+    step_callbacks=[*step_callbacks, track_design_changes],
+    managed_agents=[geometry_agent, syslogic_agent],
+    **kwargs,
+)
+```
+
+#### **[ ] Memory Query System:**
+Implement native smolagents memory queries for retrieving design history.
+
+```python
+# Create memory utilities in src/bridge_design_system/memory/memory_queries.py
+from smolagents import ActionStep, TaskStep
+from typing import Dict, List, Optional, Any
+
+def get_original_element_state(agent: Any, element_id: str) -> Optional[Dict]:
+    """
+    Query agent's native memory for original element state.
+    
+    Uses smolagents agent.memory.steps to find the earliest record of element.
+    Returns original values before any modifications.
+    """
+    for step in agent.memory.steps:
+        if isinstance(step, ActionStep) and hasattr(step, 'observations'):
+            if step.observations and f"element {element_id}" in step.observations:
+                # Found original state record
+                return {
+                    "element_id": element_id,
+                    "step_number": step.step_number,
+                    "original_observations": step.observations
+                }
+    return None
+
+def query_design_history(agent: Any, element_id: str) -> List[Dict]:
+    """
+    Get complete design history for an element from agent memory.
+    
+    Returns chronological list of all changes to the element.
+    """
+    history = []
+    for step in agent.memory.steps:
+        if isinstance(step, ActionStep) and hasattr(step, 'observations'):
+            if step.observations and element_id in step.observations:
+                history.append({
+                    "step_number": step.step_number,
+                    "observations": step.observations,
+                    "error": getattr(step, 'error', None)
+                })
+    return history
+
+def get_element_changes_count(agent: Any) -> Dict[str, int]:
+    """Count how many times each element has been modified."""
+    changes = {}
+    for step in agent.memory.steps:
+        if isinstance(step, ActionStep) and hasattr(step, 'observations'):
+            if step.observations and "parameter update" in step.observations.lower():
+                # Extract element ID from observations
+                import re
+                match = re.search(r"element.*?'(\w+)'", step.observations)
+                if match:
+                    element_id = match.group(1)
+                    changes[element_id] = changes.get(element_id, 0) + 1
+    return changes
+```
+
+#### **[ ] Manual Step Execution for Memory Control:**
+Add option for step-by-step execution with memory modification between steps.
+
+```python
+# Add to geometry_agent_smolagents.py
+def run_with_manual_steps(self, task: str, enable_memory_tracking: bool = True) -> Any:
+    """
+    Execute task with manual step control for enhanced memory management.
+    
+    Follows smolagents documentation pattern for manual execution.
+    Allows memory modification between steps for precise design state tracking.
+    """
+    from smolagents import ActionStep, TaskStep
+    
+    logger.info(f"🔧 Starting manual execution with memory tracking: {enable_memory_tracking}")
+    
+    # Add task to memory
+    self.agent.memory.steps.append(TaskStep(task=task, task_images=[]))
+    
+    final_answer = None
+    step_number = 1
+    max_steps = 10
+    
+    while final_answer is None and step_number <= max_steps:
+        memory_step = ActionStep(
+            step_number=step_number,
+            observations_images=[],
+        )
+        
+        # Run one step
+        final_answer = self.agent.step(memory_step)
+        self.agent.memory.steps.append(memory_step)
+        
+        # CRITICAL: Memory modification between steps (smolagents native pattern)
+        if enable_memory_tracking and "parameter update" in str(memory_step.observations):
+            # Save design state before next step
+            self.agent.memory.steps[-1].observations += "\n[MANUAL_MEMORY] Design state tracked"
+            
+        step_number += 1
+    
+    logger.info(f"✅ Manual execution completed with {len(self.agent.memory.steps)} memory steps")
+    return final_answer
+```
+
+#### **[ ] Memory Transfer Between Agents:**
+Enable sharing design history between geometry and triage agents.
+
+```python
+# Add to triage_agent_smolagents.py
+def transfer_geometry_memory(self, geometry_agent: Any) -> None:
+    """
+    Transfer design memory from geometry agent to triage agent.
+    
+    Uses smolagents native memory.steps transfer pattern from documentation.
+    """
+    if hasattr(geometry_agent, 'memory') and hasattr(geometry_agent.memory, 'steps'):
+        # Selective transfer of design-related steps only
+        design_steps = []
+        for step in geometry_agent.memory.steps:
+            if isinstance(step, ActionStep) and hasattr(step, 'observations'):
+                if step.observations and ("parameter update" in step.observations.lower() or 
+                                        "element" in step.observations.lower()):
+                    design_steps.append(step)
+        
+        # Add to triage agent memory (native smolagents pattern)
+        self.manager.memory.steps.extend(design_steps)
+        logger.info(f"🔄 Transferred {len(design_steps)} design memory steps from geometry agent")
+```
+
+### **Phase 5: Memory-Enhanced Error Handling**
+
+Implement memory-based rollback and error recovery using native smolagents memory.
+
+#### **[ ] Memory-Based Rollback System:**
+Use agent memory to restore previous states when parameter updates fail.
+
+```python
+# Add to geometry_agent_smolagents.py  
+def rollback_to_previous_state(self, element_id: str) -> bool:
+    """
+    Rollback element to previous known good state using agent memory.
+    
+    Uses native smolagents memory.steps to find and restore previous values.
+    """
+    from .memory.memory_queries import query_design_history
+    
+    history = query_design_history(self.agent, element_id)
+    if len(history) >= 2:  # Need at least 2 states to rollback
+        previous_state = history[-2]  # Second to last state
+        
+        # Create rollback task
+        rollback_task = f"Restore element '{element_id}' to previous state from step {previous_state['step_number']}"
+        
+        # Execute rollback using manual steps for memory control
+        return self.run_with_manual_steps(rollback_task, enable_memory_tracking=True)
+    
+    return False
+```
+
+#### **[ ] Design Consistency Checking:**
+Validate changes against design history stored in agent memory.
+
+```python
+# Add validation using memory queries
+def validate_design_consistency(self, element_id: str, new_values: Dict) -> bool:
+    """Validate proposed changes against design history in agent memory."""
+    from .memory.memory_queries import get_original_element_state, query_design_history
+    
+    original_state = get_original_element_state(self.agent, element_id)
+    history = query_design_history(self.agent, element_id)
+    
+    # Check for reasonable change magnitude
+    if original_state and len(history) > 0:
+        # Implement validation logic based on design history patterns
+        return True
+    
+    return False
+```
+
+This final plan integrates native smolagents memory methods with the Direct Parameter Update workflow, ensuring agents automatically track and can query original element values while maintaining maximum reliability.

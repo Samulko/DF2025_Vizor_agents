@@ -22,19 +22,42 @@ namespace GH_MCP.Commands
         /// </summary>
         public static void Initialize()
         {
-            // 註冊幾何命令
-            RegisterGeometryCommands();
-            
-            // 註冊組件命令
-            RegisterComponentCommands();
-            
-            // 註冊文檔命令
-            RegisterDocumentCommands();
-            
-            // 註冊意圖命令
-            RegisterIntentCommands();
-            
-            RhinoApp.WriteLine("GH_MCP: Command registry initialized.");
+            try
+            {
+                RhinoApp.WriteLine("GH_MCP: Starting command registry initialization...");
+                
+                // 清空现有的命令处理器
+                CommandHandlers.Clear();
+                RhinoApp.WriteLine("GH_MCP: Cleared existing command handlers.");
+                
+                // 註冊幾何命令
+                RhinoApp.WriteLine("GH_MCP: Registering geometry commands...");
+                RegisterGeometryCommands();
+                
+                // 註冊組件命令
+                RhinoApp.WriteLine("GH_MCP: Registering component commands...");
+                RegisterComponentCommands();
+                
+                // 註冊文檔命令
+                RhinoApp.WriteLine("GH_MCP: Registering document commands...");
+                RegisterDocumentCommands();
+                
+                // 註冊意圖命令
+                RhinoApp.WriteLine("GH_MCP: Registering intent commands...");
+                RegisterIntentCommands();
+                
+                // 显示所有已注册的命令
+                RhinoApp.WriteLine($"GH_MCP: Command registry initialized with {CommandHandlers.Count} commands:");
+                foreach (var command in CommandHandlers.Keys)
+                {
+                    RhinoApp.WriteLine($"  - {command}");
+                }
+            }
+            catch (Exception ex)
+            {
+                RhinoApp.WriteLine($"GH_MCP: ERROR during command registry initialization: {ex.Message}");
+                RhinoApp.WriteLine($"GH_MCP: Stack trace: {ex.StackTrace}");
+            }
         }
 
         /// <summary>
@@ -87,17 +110,32 @@ namespace GH_MCP.Commands
         /// </summary>
         private static void RegisterDocumentCommands()
         {
-            // 獲取文檔信息
-            RegisterCommand("get_document_info", DocumentCommandHandler.GetDocumentInfo);
-            
-            // 清空文檔
-            RegisterCommand("clear_document", DocumentCommandHandler.ClearDocument);
-            
-            // 保存文檔
-            RegisterCommand("save_document", DocumentCommandHandler.SaveDocument);
-            
-            // 加載文檔
-            RegisterCommand("load_document", DocumentCommandHandler.LoadDocument);
+            try
+            {
+                // 獲取文檔信息
+                RegisterCommand("get_document_info", DocumentCommandHandler.GetDocumentInfo);
+                
+                // 清空文檔
+                RegisterCommand("clear_document", DocumentCommandHandler.ClearDocument);
+                
+                // 保存文檔
+                RegisterCommand("save_document", DocumentCommandHandler.SaveDocument);
+                
+                // 加載文檔
+                RegisterCommand("load_document", DocumentCommandHandler.LoadDocument);
+                
+                // 獲取群組中的組件 - 添加详细日志
+                RhinoApp.WriteLine("GH_MCP: About to register get_components_in_group command...");
+                RegisterCommand("get_components_in_group", DocumentCommandHandler.GetComponentsInGroup);
+                RhinoApp.WriteLine("GH_MCP: Successfully registered get_components_in_group command.");
+                
+                RhinoApp.WriteLine("GH_MCP: Document commands registration completed.");
+            }
+            catch (Exception ex)
+            {
+                RhinoApp.WriteLine($"GH_MCP: ERROR during document commands registration: {ex.Message}");
+                RhinoApp.WriteLine($"GH_MCP: Stack trace: {ex.StackTrace}");
+            }
         }
 
         /// <summary>
@@ -148,11 +186,21 @@ namespace GH_MCP.Commands
                 return Response.CreateError("Command type is null or empty");
             }
             
+            // 添加调试信息
+            RhinoApp.WriteLine($"GH_MCP: Executing command '{command.Type}'");
+            RhinoApp.WriteLine($"GH_MCP: Registry contains {CommandHandlers.Count} commands:");
+            foreach (var registeredCommand in CommandHandlers.Keys)
+            {
+                RhinoApp.WriteLine($"  - '{registeredCommand}' (exact match: {registeredCommand == command.Type})");
+            }
+            
             if (CommandHandlers.TryGetValue(command.Type, out var handler))
             {
                 try
                 {
+                    RhinoApp.WriteLine($"GH_MCP: Found handler for '{command.Type}', executing...");
                     var result = handler(command);
+                    RhinoApp.WriteLine($"GH_MCP: Command '{command.Type}' executed successfully.");
                     return Response.Ok(result);
                 }
                 catch (Exception ex)
@@ -162,6 +210,7 @@ namespace GH_MCP.Commands
                 }
             }
             
+            RhinoApp.WriteLine($"GH_MCP: No handler found for command '{command.Type}'");
             return Response.CreateError($"No handler registered for command type '{command.Type}'");
         }
 

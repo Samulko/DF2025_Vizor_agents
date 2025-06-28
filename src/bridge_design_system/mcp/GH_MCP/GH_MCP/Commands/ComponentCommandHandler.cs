@@ -377,10 +377,10 @@ namespace GrasshopperMCP.Commands
                                         }
                                         
                                         // Schedule a new solution to ensure display updates
-                                        var doc = component.OnPingDocument();
-                                        if (doc != null)
+                                        var componentDoc = component.OnPingDocument();
+                                        if (componentDoc != null)
                                         {
-                                            doc.ScheduleSolution(10); // Schedule a new solution
+                                            componentDoc.ScheduleSolution(10); // Schedule a new solution
                                         }
                                         
                                         RhinoApp.WriteLine($"Component nickname set to: {scriptName} and display refreshed");

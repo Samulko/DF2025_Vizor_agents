@@ -1,4 +1,5 @@
 """Pytest configuration and shared fixtures."""
+
 import os
 import sys
 from pathlib import Path
@@ -10,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 # Disable logging during tests unless explicitly needed
 import logging
+
 logging.disable(logging.CRITICAL)
 
 
@@ -30,10 +32,10 @@ def test_env(monkeypatch):
         "TRIAGE_AGENT_PROVIDER": "openai",
         "TRIAGE_AGENT_MODEL": "gpt-4",
         "LOG_LEVEL": "ERROR",
-        "MAX_AGENT_STEPS": "5"
+        "MAX_AGENT_STEPS": "5",
     }
-    
+
     for key, value in test_vars.items():
         monkeypatch.setenv(key, value)
-    
+
     yield test_vars
