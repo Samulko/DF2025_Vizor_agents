@@ -250,10 +250,11 @@ class VoiceInputBridge:
                         samples.extend(data)
                         
                         # Check if we should stop recording
+                        import numpy as np
                         if (len(samples) >= window_size or 
                             (len(samples) > sample_rate and  # At least 1 second
                              len(vad_samples) == 25 and  # Full VAD buffer
-                             self.np.mean(vad_samples) < vad_sensitivity)):
+                             np.mean(vad_samples) < vad_sensitivity)):
                             
                             print("🔄 Processing your speech...")
                             text = self.transcriber.transcribe(samples)
