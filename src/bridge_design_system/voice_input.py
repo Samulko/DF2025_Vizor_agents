@@ -167,6 +167,23 @@ class VoiceInputBridge:
             wake_word_path = os.environ.get("WAKE_WORD_MODEL_PATH")
             whisper_model = os.environ.get("WHISPER_MODEL", "tiny.en")
             
+            # Auto-detect platform for wake word model if path contains platform-specific name
+            if wake_word_path and ("windows" in wake_word_path.lower() or "linux" in wake_word_path.lower()):
+                import platform
+                current_platform = platform.system().lower()
+                if current_platform == "linux" and "windows" in wake_word_path.lower():
+                    # Try to find Linux version
+                    linux_path = wake_word_path.replace("windows", "linux")
+                    if os.path.exists(linux_path):
+                        logger.info(f"🔄 Switching from Windows to Linux wake word model: {linux_path}")
+                        wake_word_path = linux_path
+                elif current_platform == "windows" and "linux" in wake_word_path.lower():
+                    # Try to find Windows version  
+                    windows_path = wake_word_path.replace("linux", "windows")
+                    if os.path.exists(windows_path):
+                        logger.info(f"🔄 Switching from Linux to Windows wake word model: {windows_path}")
+                        wake_word_path = windows_path
+            
             if not access_key:
                 logger.error("ACCESS_KEY not set in environment")
                 return False
