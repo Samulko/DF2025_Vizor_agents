@@ -39,6 +39,19 @@ dev = [
     "ruff>=0.1.0",
     "ipython>=8.0.0",
 ]
+voice = [
+    "pyaudio>=0.2.13",
+    "openai-whisper>=20231117",
+    "openai>=1.0.0",
+    "numpy>=1.24.1",
+    "pvporcupine>=3.0.0",
+    "pvrecorder>=1.2.0",
+    "scipy>=1.10.0",
+    "torch>=2.0.0",
+    "torchaudio>=2.0.0",
+    "pvcobra>=2.0.0",
+    "numba>=0.58.0",
+]
 
 [project.scripts]
 vizor-agents = "bridge_design_system.main:main"

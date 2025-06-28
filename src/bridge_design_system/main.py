@@ -16,6 +16,7 @@ from .config.model_config import ModelProvider
 from .config.settings import settings
 from .state.component_registry import initialize_registry
 from .tools.material_tools import MaterialInventoryManager
+from .voice_input import get_user_input, check_voice_dependencies
 
 logger = get_logger(__name__)
 
@@ -458,7 +459,7 @@ def test_system():
 
 
 def interactive_mode(
-    use_legacy=False, reset_memory=False, hard_reset=False, enable_monitoring=False
+    use_legacy=False, reset_memory=False, hard_reset=False, enable_monitoring=False, voice_input=False
 ):
     """Run the system in interactive mode.
 
@@ -467,12 +468,20 @@ def interactive_mode(
         reset_memory: If True, start with fresh agent memories
         hard_reset: If True, clear everything including log files
         enable_monitoring: If True, start monitoring dashboard (default False for clean CLI)
+        voice_input: If True, enable voice input via wake word detection and speech recognition
     """
     mode = "legacy" if use_legacy else "smolagents-native"
     logger.info(f"Starting Bridge Design System in interactive mode ({mode})...")
 
     if not validate_environment():
         return
+    
+    # Validate voice input if requested
+    if voice_input and not check_voice_dependencies():
+        logger.warning("⚠️ Voice input requested but dependencies not available")
+        logger.warning("Install voice dependencies with: uv sync --extra voice")
+        print("⚠️ Voice input dependencies not available - falling back to keyboard input")
+        voice_input = False
 
     try:
         # Don't start monitoring server - assume it's running separately
@@ -523,6 +532,13 @@ def interactive_mode(
         else:
             print("🚀 Using smolagents-native implementation (DEFAULT)")
             print("✨ 75% less code, 30% more efficient!")
+        
+        # Show input mode status
+        if voice_input:
+            print("🎤 Voice input enabled - use wake word for commands")
+        else:
+            print("⌨️ Keyboard input mode - type commands normally")
+            
         print("=" * 60)
 
         # Show monitoring information
@@ -598,7 +614,7 @@ def interactive_mode(
             vizor_listener = None
         while True:
             try:
-                user_input = input("\nDesigner> ").strip()
+                user_input = get_user_input("Designer> ", voice_enabled=voice_input)
 
                 # Handle exit immediately without processing queue
                 if user_input.lower() == "exit":
@@ -936,6 +952,11 @@ def main():
         type=str,
         help="Backup name for backup-based material operations (use with reset commands)",
     )
+    parser.add_argument(
+        "--voice-input",
+        action="store_true",
+        help="Enable voice input using wake word detection and speech recognition (requires voice dependencies)",
+    )
 
     args = parser.parse_args()
 
@@ -1021,6 +1042,7 @@ def main():
             reset_memory=args.reset,
             hard_reset=args.hard_reset,
             enable_monitoring=args.monitoring,
+            voice_input=args.voice_input,
         )
     else:
         # Default to smolagents interactive mode
@@ -1030,6 +1052,7 @@ def main():
             reset_memory=args.reset,
             hard_reset=args.hard_reset,
             enable_monitoring=args.monitoring,
+            voice_input=args.voice_input,
         )
 
 
