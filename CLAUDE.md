@@ -15,8 +15,11 @@ uv run python -m bridge_design_system.main --test
 # Start HTTP MCP server (separate terminal)
 uv run python -m bridge_design_system.mcp.http_mcp_server --port 8001
 
-# Run interactive mode
+# Run interactive mode (keyboard input)
 uv run python -m bridge_design_system.main --interactive
+
+# Run with voice input (requires voice dependencies)
+uv run --extra voice python -m bridge_design_system.main --voice-input
 ```
 
 ## Key Commands
@@ -67,8 +70,22 @@ Best for features with clear inputs/outputs:
 
 ## Environment Setup
 1. Copy `.env.example` to `.env`
-2. Set API keys (ANTHROPIC_API_KEY, etc.)
+2. Set API keys (ANTHROPIC_API_KEY, OPENAI_API_KEY, etc.)
 3. Default model: Gemini 2.5 Flash
+
+### Voice Input Setup (Optional)
+For voice commands instead of typing:
+1. **Install voice dependencies**: `uv sync --extra voice`
+2. **Get Picovoice access key**: Sign up at [Picovoice Console](https://console.picovoice.ai/)
+3. **Add to .env**:
+   ```
+   ACCESS_KEY=your_picovoice_key_here
+   WAKE_WORD_MODEL_PATH=src/bridge_design_system/whisper-voice-assistant/models/hello-mave_en_linux_v3_0_0.ppn
+   WHISPER_MODEL=tiny.en
+   VAD_SENSITIVITY=0.7
+   USE_OPENAI_API=true
+   ```
+4. **Run with voice**: `uv run --extra voice python -m bridge_design_system.main --voice-input`
 
 ## Common Issues
 - MCP server must be running before agents
@@ -79,6 +96,25 @@ Best for features with clear inputs/outputs:
 - USE context7 mcp and git-mcp to find relevant documentation and information about current tasks.
 - Make sure to ask yourself a question if a given task would benefit from more context or beter framework understanding if so you MUST use the mcp tools
 
+## Input Modes
+
+### Keyboard Input (Default)
+- Type commands normally in the CLI
+- Use for development and testing
+- No additional dependencies required
+
+### Voice Input
+- **Wake Word**: Say "Hello Mave" to start voice command
+- **Voice Activity Detection**: System automatically detects when you stop speaking
+- **Speech Recognition**: Uses OpenAI Whisper API for transcription
+- **Fallback**: Automatically falls back to keyboard if voice fails
+- **All Features**: Gaze tracking and transform processing work with voice commands
+
+**Voice Commands:**
+- Say wake word → speak command → system processes speech
+- Examples: "Hello Mave" → "Show me the current status"
+- System commands: "reset", "status", "exit", "gaze" all work via voice
+
 ## Project Structure
 ```
 src/bridge_design_system/
@@ -88,6 +124,11 @@ src/bridge_design_system/
 ├── mcp/              # MCP integration
 │   ├── http_mcp_server.py    # Main MCP server
 │   └── GH_MCP/               # C# Grasshopper component
+├── voice_input.py    # Voice input integration
+├── whisper-voice-assistant/  # Voice assistant components
+│   ├── voice_assistant.py   # Standalone voice assistant
+│   ├── models/              # Wake word models (.ppn files)
+│   └── .env                 # Voice configuration
 └── main.py           # Entry point
 ```
 

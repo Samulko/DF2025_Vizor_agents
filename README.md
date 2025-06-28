@@ -5,6 +5,8 @@ An AI-assisted bridge design system that uses intelligent agents to control Rhin
 ## Key Features
 
 * **Multi-Provider AI Support**: Works with Gemini, OpenAI, Anthropic, DeepSeek, and HuggingFace.
+* **Voice Input**: Hands-free design with wake word detection and speech recognition.
+* **AR Integration**: Gaze tracking and spatial interaction with HoloLens.
 * **Collaborative Design**: Supports iterative, conversational design workflows.
 * **AI-Generated Geometry**: Capable of creating spirals, bridges, and other complex structures.
 * **Stable Core Tools**: Optimized with 6 core MCP tools for reliable operation.
@@ -72,11 +74,39 @@ After setup, restart Grasshopper, add the "Grasshopper MCP" component to the can
 
 ### 4. Usage
 
-To start a design session, run:
+#### Standard Mode (Keyboard Input)
+To start a design session with keyboard input:
 ```bash
 uv run python -m bridge_design_system.main
 ```
-You can then use natural language to create designs (e.g., "create a spiral staircase").
+
+#### Voice Input Mode
+For hands-free operation with voice commands:
+```bash
+# Install voice dependencies
+uv sync --extra voice
+
+# Run with voice input
+uv run --extra voice python -m bridge_design_system.main --voice-input
+```
+
+**Voice Setup Requirements:**
+1. Get a [Picovoice access key](https://console.picovoice.ai/)
+2. Add voice configuration to your `.env` file:
+   ```
+   ACCESS_KEY=your_picovoice_key_here
+   OPENAI_API_KEY=your_openai_key_here
+   WAKE_WORD_MODEL_PATH=src/bridge_design_system/whisper-voice-assistant/models/hello-mave_en_linux_v3_0_0.ppn
+   USE_OPENAI_API=true
+   ```
+
+**Voice Commands:**
+- Say "Hello Mave" (wake word) to start voice input
+- Speak your design command naturally
+- Examples: "Hello Mave" → "Create a spiral staircase with 10 steps"
+- All system commands work: "status", "reset", "exit", etc.
+
+You can use natural language to create designs in both modes.
 
 #### LCARS Agent Monitoring Interface
 
