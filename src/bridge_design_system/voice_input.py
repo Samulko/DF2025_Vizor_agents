@@ -286,7 +286,8 @@ class VoiceInputBridge:
                                 
             except KeyboardInterrupt:
                 print("\n⏹️  Voice input cancelled")
-                return None
+                # Re-raise the KeyboardInterrupt to let the main loop handle it properly
+                raise
                 
             finally:
                 self.recorder.stop()
@@ -322,15 +323,20 @@ def get_user_input(prompt: str = "Designer> ", voice_enabled: bool = False) -> s
     if voice_enabled and check_voice_dependencies():
         # Try voice input first
         voice_bridge = VoiceInputBridge()
-        voice_input = voice_bridge.get_voice_input(prompt)
-        voice_bridge.cleanup()
-        
-        if voice_input:
-            return voice_input
-        else:
-            # Fallback to keyboard input
-            print(f"Falling back to keyboard input...")
-            return input(f"\n{prompt}").strip()
+        try:
+            voice_input = voice_bridge.get_voice_input(prompt)
+            voice_bridge.cleanup()
+            
+            if voice_input:
+                return voice_input
+            else:
+                # Fallback to keyboard input
+                print(f"Falling back to keyboard input...")
+                return input(f"\n{prompt}").strip()
+        except KeyboardInterrupt:
+            # Clean up voice resources before re-raising
+            voice_bridge.cleanup()
+            raise
     else:
         # Standard keyboard input
         if voice_enabled:

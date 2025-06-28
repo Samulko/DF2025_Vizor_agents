@@ -864,8 +864,25 @@ def interactive_mode(
                     pass
 
             except KeyboardInterrupt:
-                print("\n\nInterrupted. Type 'exit' to quit.")
-                continue
+                print("\n\n⏹️  Interrupted by Ctrl+C")
+                try:
+                    # Prompt for exit confirmation
+                    print("Exit the system? (y/n): ", end="", flush=True)
+                    confirm = input().strip().lower()
+                    if confirm in ['y', 'yes']:
+                        print("Exiting Bridge Design System...")
+                        break
+                    else:
+                        print("Continuing...")
+                        continue
+                except KeyboardInterrupt:
+                    # Second Ctrl+C - force exit
+                    print("\n\n🛑 Force quit requested. Exiting...")
+                    break
+                except:
+                    # Any other error during confirmation, just continue
+                    print("\nContinuing...")
+                    continue
             except Exception as e:
                 logger.error(f"Error processing request: {e}", exc_info=True)
                 print(f"\nError: {str(e)}")
