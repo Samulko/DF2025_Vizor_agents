@@ -1,0 +1,36 @@
+[project]
+name = "whisper-voice-assistant"
+version = "0.1.0"
+description = "AI voice assistant using OpenAI Whisper and Picovoice"
+authors = [
+    {name = "Andy Garbett", email = "atgarbett@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "pyaudio>=0.2.13",
+    "openai-whisper>=20231117",
+    "openai>=1.0.0",
+    "numpy>=1.24.1",
+    "pvporcupine>=3.0.0",
+    "pvrecorder>=1.2.0",
+    "scipy>=1.10.0",
+    "torch>=2.0.0",
+    "torchaudio>=2.0.0",
+    "pvcobra>=2.0.0",
+    "python-dotenv>=1.0.0",
+    "numba>=0.58.0",
+]
+
+[project.optional-dependencies]
+dev = ["black>=23.1.0"]
+
+[project.scripts]
+whisper-assistant = "voice_assistant:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["."]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
