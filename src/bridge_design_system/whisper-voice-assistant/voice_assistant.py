@@ -15,9 +15,16 @@ from openai import OpenAI
 
 load_dotenv()
 
+# Handle relative paths by making them relative to this script's directory
+import pathlib
+script_dir = pathlib.Path(__file__).parent
+wake_word_path = os.environ.get("WAKE_WORD_MODEL_PATH")
+if wake_word_path and not os.path.isabs(wake_word_path):
+    wake_word_path = str(script_dir / wake_word_path)
+
 porcupine = pvporcupine.create(
     access_key=os.environ.get("ACCESS_KEY"),
-    keyword_paths=[os.environ.get("WAKE_WORD_MODEL_PATH")],
+    keyword_paths=[wake_word_path],
 )
 
 cobra = pvcobra.create(
