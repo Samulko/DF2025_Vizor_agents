@@ -24,6 +24,9 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["black>=23.1.0"]
+voice = [
+    "pyaudio>=0.2.14",
+]
 
 [project.scripts]
 whisper-assistant = "voice_assistant:main"
