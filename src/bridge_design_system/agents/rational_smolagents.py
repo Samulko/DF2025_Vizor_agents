@@ -51,19 +51,9 @@ from ..config.settings import settings
 ```
 """
 
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+# TODO: Add imports here
 
-from mcp import StdioServerParameters
-from mcpadapt.core import MCPAdapt
-from mcpadapt.smolagents_adapter import SmolAgentsAdapter
-from smolagents import ToolCallingAgent, tool
-
-from ..config.logging_config import get_logger
-from ..config.model_config import ModelProvider
-from ..config.settings import settings
-
-logger = get_logger(__name__)
+# TODO: Add logger initialization
 
 
 class RationalSmolagent:
