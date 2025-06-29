@@ -41,12 +41,14 @@ self.agent = ToolCallingAgent(
 ### Available Tools
 
 **MCP Tools** (from Grasshopper integration):
+
 - `get_geometry_agent_components` - View available components
-- `get_python3_script` - Read component parameters  
+- `get_python3_script` - Read component parameters
 - `edit_python3_script` - Modify component code
 - `get_python3_script_errors` - Validate syntax
 
 **Custom Tool**:
+
 - `analyze_element_level` - Structured level analysis reporting
 
 ## Level System
@@ -54,7 +56,7 @@ self.agent = ToolCallingAgent(
 Bridge elements must be positioned at specific horizontal levels:
 
 - **Level 1**: Z = 0.025 meters (green/red elements)
-- **Level 2**: Z = 0.075 meters (blue elements)  
+- **Level 2**: Z = 0.075 meters (blue elements)
 - **Level 3**: Z = 0.125 meters (orange elements)
 
 ### Validation Rules
@@ -75,7 +77,7 @@ You are a Rational Agent specialized in validating and correcting element levels
 
 <levels>
 - Level 1: Z = 0.025 meters (green/red elements)
-- Level 2: Z = 0.075 meters (blue elements)  
+- Level 2: Z = 0.075 meters (blue elements)
 - Level 3: Z = 0.125 meters (orange elements)
 </levels>
 
@@ -90,7 +92,9 @@ You are a Rational Agent specialized in validating and correcting element levels
 ```
 
 ### Chain of Thought Examples
+
 The prompt includes three detailed examples showing:
+
 - Correct element analysis
 - Elements needing correction
 - Elements that are already correct
@@ -109,6 +113,7 @@ rational_agent_model: str = "gemini-2.5-flash-lite-preview-06-17"
 ```
 
 **Why Gemini 2.5 Flash Lite?**
+
 - Fastest and most cost-efficient Gemini model
 - Optimized for low-latency validation tasks
 - Excellent tool use capabilities for MCP integration
@@ -148,6 +153,7 @@ demo_level_checking()
 ## Workshop Demonstration
 
 ### 1. Component Discovery
+
 The agent first discovers available components:
 ```
 ╭─ Calling tool: 'get_geometry_agent_components' ╮
@@ -157,6 +163,7 @@ The agent first discovers available components:
 ```
 
 ### 2. Structured Analysis
+
 Uses custom tool for systematic evaluation:
 ```
 ╭─ Calling tool: 'analyze_element_level' ╮
@@ -167,6 +174,7 @@ Uses custom tool for systematic evaluation:
 ```
 
 ### 3. Parameter Extraction
+
 Reads current element parameters from Grasshopper:
 ```python
 # Example extracted parameters
@@ -175,6 +183,7 @@ direction1 = rg.Vector3d(-34.5, -20, 0)      # Horizontal ✓
 ```
 
 ### 4. Correction Application
+
 If issues found, applies precise corrections:
 ```python
 # Before: direction1 = rg.Vector3d(-34.5, -20, 0.5)  # Not horizontal
@@ -184,26 +193,31 @@ If issues found, applies precise corrections:
 ## Key Design Patterns
 
 ### 1. Focused Responsibility
+
 - Single purpose: level validation and correction
 - Clear scope boundaries
 - Specific domain expertise
 
 ### 2. MCP Integration
+
 - Leverages existing infrastructure
 - No duplication of functionality
 - Clean separation of concerns
 
 ### 3. Custom Tool Strategy
+
 - One custom tool for structured analysis
 - Builds on MCP foundation rather than replacing it
 - Demonstrates @tool decorator usage
 
 ### 4. Chain of Thought Prompting
+
 - Structured reasoning process
 - Multiple examples for different scenarios
 - XML tags for clear formatting
 
 ### 5. Model Optimization
+
 - Task-appropriate model selection
 - Cost and performance considerations
 - Dedicated agent configuration
@@ -225,6 +239,7 @@ except Exception as e:
 ## Integration with Bridge Design System
 
 ### Triage Agent Coordination
+
 The rational agent can be called by the triage agent for level validation:
 
 ```python
@@ -235,6 +250,7 @@ rational_result = rational_agent.run(
 ```
 
 ### Memory and State Management
+
 - Uses smolagents native memory system
 - Integrates with design change tracking
 - Maintains context across multiple validations
@@ -242,23 +258,27 @@ rational_result = rational_agent.run(
 ## Best Practices Demonstrated
 
 ### 1. Configuration Management
+
 - Centralized model configuration
 - Environment-based settings
 - Validation and fallback handling
 
 ### 2. System Prompt Engineering
+
 - Role-based instructions
 - Structured examples
 - Chain of thought reasoning
 - XML formatting for clarity
 
 ### 3. Tool Design
+
 - Single responsibility principle
 - Clear docstrings for LLM understanding
 - Structured output formats
 - Error handling and logging
 
 ### 4. Factory Pattern
+
 - Clean agent instantiation
 - Proper resource management
 - Flexible configuration options
@@ -277,6 +297,7 @@ all_tools.append(validate_structural_integrity)
 ```
 
 ### Custom System Prompts
+
 - Create new prompt files in `system_prompts/`
 - Use XML structure for clarity
 - Include multiple examples
@@ -294,21 +315,27 @@ RATIONAL_AGENT_MODEL=gemini-1.5-flash-001    # Maximum compatibility
 ### Common Issues
 
 **1. Model Not Found Error**
+
 ```
 Error: models/gemini-2.5-flash-lite is not found
 ```
+
 **Solution**: Use full versioned name: `gemini-2.5-flash-lite-preview-06-17`
 
 **2. MCP Connection Failure**
+
 ```
 Failed to establish persistent MCP connection
 ```
+
 **Solution**: Ensure MCP server is running on port 8001
 
 **3. Configuration Not Loading**
+
 ```
 Initializing rational agent with openai/gpt-4
 ```
+
 **Solution**: Check both `.env` and `settings.py` have rational agent fields
 
 ### Debug Commands
@@ -339,6 +366,126 @@ The Rational Agent demonstrates how to build focused, efficient smolagents that:
 - Provide clear demonstration value
 
 This pattern can be adapted for other specialized validation and correction tasks in the bridge design system.
+
+## Adding New Agents to the Triage System
+
+The rational agent integration demonstrates the standard pattern for adding new specialized agents. Here are the **specific locations** you need to modify:
+
+### 1. Agent Creation Block
+**Location**: `triage_agent_smolagents.py` lines 73-92
+
+Add your agent creation after the rational agent:
+```python
+# Create [your_agent_name] for [purpose]
+from .[your_agent_file] import create_[your_agent_name]
+
+[your_agent_name]_monitor = None
+if monitoring_callback:
+    if (callable(monitoring_callback) and hasattr(monitoring_callback, "__name__") 
+        and "create" in monitoring_callback.__name__):
+        [your_agent_name]_monitor = monitoring_callback("[your_agent_name]")
+    else:
+        from ..monitoring.agent_monitor import create_monitor_callback
+        [your_agent_name]_monitor = create_monitor_callback("[your_agent_name]", monitoring_callback)
+
+[your_agent_name] = create_[your_agent_name](monitoring_callback=[your_agent_name]_monitor)
+```
+
+### 2. Managed Agents List
+**Locations**: Lines 140 & 454
+
+Update both managed_agents lists:
+```python
+managed_agents=[geometry_agent, rational_agent, [your_agent_name]],
+```
+
+### 3. TriageSystemWrapper Monitoring
+**Location**: Lines 405-420
+
+Add monitoring variables:
+```python
+geometry_monitor = None
+rational_monitor = None
+[your_agent_name]_monitor = None  # ADD HERE
+
+# Add to both monitoring callback sections
+[your_agent_name]_monitor = monitoring_callback("[your_agent_name]")
+[your_agent_name]_monitor = create_monitor_callback("[your_agent_name]", monitoring_callback)
+```
+
+### 4. TriageSystemWrapper Agent Instantiation
+**Location**: After line 429
+
+Add agent creation:
+```python
+from .[your_agent_file] import create_[your_agent_name]
+self.[your_agent_name] = create_[your_agent_name](monitoring_callback=[your_agent_name]_monitor)
+```
+
+### 5. Status Reporting Updates
+**Locations**: Line 521 (count) & after line 543 (status block)
+
+Update agent count and add status block:
+```python
+"managed_agents": 3,  # Update count
+
+"[your_agent_name]": {
+    "initialized": hasattr(self, "[your_agent_name]") and self.[your_agent_name] is not None,
+    "type": type(self.[your_agent_name]).__name__ if hasattr(self, "[your_agent_name]") else "Unknown",
+    "name": "[your_agent_name]",
+    "[your_capability]": "enabled",
+},
+```
+
+### 6. Configuration Requirements
+
+**Settings Configuration** (`settings.py`):
+```python
+[your_agent_name]_provider: str = "gemini"
+[your_agent_name]_model: str = "gemini-2.5-flash-preview-05-20"
+```
+
+**Model Validation** (`model_config.py`):
+```python
+agents = ["triage", "geometry", "material", "structural", "syslogic", "rational", "[your_agent_name]"]
+```
+
+**System Prompt** (`system_prompts/triage_agent.md`):
+Add agent description following the rational agent pattern.
+
+### 7. Integration Checklist
+
+When adding a new agent, ensure you:
+
+- [ ] Create the agent implementation file
+- [ ] Add factory function (`create_[your_agent_name]`)
+- [ ] Update all 7 locations in `triage_agent_smolagents.py`
+- [ ] Add configuration to `settings.py`
+- [ ] Update validation list in `model_config.py`
+- [ ] Document in system prompt
+- [ ] Test with triage delegation
+
+### 8. Example: Material Agent Integration
+
+```python
+# 1. Agent creation (lines 73-92)
+from .material_smolagents import create_material_agent
+material_monitor = monitoring_callback("material_agent") if monitoring_callback else None
+material_agent = create_material_agent(monitoring_callback=material_monitor)
+
+# 2. Managed agents (lines 140 & 454)
+managed_agents=[geometry_agent, rational_agent, material_agent],
+
+# 3. Status updates
+"managed_agents": 3,
+"material_agent": {
+    "initialized": hasattr(self, "material_agent") and self.material_agent is not None,
+    "name": "material_agent",
+    "material_tracking": "enabled",
+},
+```
+
+This systematic approach ensures consistent integration patterns and maintainable agent architecture.
 
 ## Further Reading
 

@@ -74,3 +74,10 @@ design_state.json
 reference/GH_MCP/GH_MCP/obj/
 reference/GH_MCP/GH_MCP/bin/
 reference/GH_MCP/.vs/
+
+# Exclude documentation and archive directories
+docs/
+archive/
+
+# Exclude all hidden directories and files
+.*

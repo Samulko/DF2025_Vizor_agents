@@ -80,6 +80,12 @@ To start a design session with keyboard input:
 uv run python -m bridge_design_system.main
 ```
 
+#### ROS-Free Mode
+To run without ROS dependencies (disables gaze tracking):
+```bash
+uv run python -m bridge_design_system.main --disable-gaze
+```
+
 #### Voice Input Mode
 For hands-free operation with voice commands:
 ```bash

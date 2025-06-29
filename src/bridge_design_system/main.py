@@ -459,7 +459,7 @@ def test_system():
 
 
 def interactive_mode(
-    use_legacy=False, reset_memory=False, hard_reset=False, enable_monitoring=False, voice_input=False
+    use_legacy=False, reset_memory=False, hard_reset=False, enable_monitoring=False, voice_input=False, disable_gaze=False
 ):
     """Run the system in interactive mode.
 
@@ -469,6 +469,7 @@ def interactive_mode(
         hard_reset: If True, clear everything including log files
         enable_monitoring: If True, start monitoring dashboard (default False for clean CLI)
         voice_input: If True, enable voice input via wake word detection and speech recognition
+        disable_gaze: If True, skip VizorListener initialization (no ROS dependency)
     """
     mode = "legacy" if use_legacy else "smolagents-native"
     logger.info(f"Starting Bridge Design System in interactive mode ({mode})...")
@@ -565,53 +566,57 @@ def interactive_mode(
 
         # Initialize VizorListener for gaze-assisted spatial command grounding
         vizor_listener = None
-        try:
-            print("🔍 Initializing VizorListener...")
-            # Force singleton reset to ensure fresh queue reference
-            VizorListener.reset_singleton()
-            vizor_listener = VizorListener(update_queue=TRANSFORM_UPDATE_QUEUE)
+        if disable_gaze:
+            print("🚫 Gaze tracking disabled by --disable-gaze flag")
+            logger.info("VizorListener initialization skipped - gaze features disabled")
+        else:
+            try:
+                print("🔍 Initializing VizorListener...")
+                # Force singleton reset to ensure fresh queue reference
+                VizorListener.reset_singleton()
+                vizor_listener = VizorListener(update_queue=TRANSFORM_UPDATE_QUEUE)
 
-            # Debug singleton info
-            print(f"[Debug] VizorListener instance ID: {id(vizor_listener)}")
-            print(
-                f"[Debug] VizorListener._instance ID: {id(VizorListener._instance) if hasattr(VizorListener, '_instance') else 'None'}"
-            )
-            print(f"[Debug] TRANSFORM_UPDATE_QUEUE ID: {id(TRANSFORM_UPDATE_QUEUE)}")
-            print(f"[Debug] vizor_listener.update_queue ID: {id(vizor_listener.update_queue)}")
-            print(f"[Debug] Queue references same? {TRANSFORM_UPDATE_QUEUE is vizor_listener.update_queue}")
+                # Debug singleton info
+                print(f"[Debug] VizorListener instance ID: {id(vizor_listener)}")
+                print(
+                    f"[Debug] VizorListener._instance ID: {id(VizorListener._instance) if hasattr(VizorListener, '_instance') else 'None'}"
+                )
+                print(f"[Debug] TRANSFORM_UPDATE_QUEUE ID: {id(TRANSFORM_UPDATE_QUEUE)}")
+                print(f"[Debug] vizor_listener.update_queue ID: {id(vizor_listener.update_queue)}")
+                print(f"[Debug] Queue references same? {TRANSFORM_UPDATE_QUEUE is vizor_listener.update_queue}")
 
-            # Give ROS a moment to establish connection
-            print("⏳ Waiting for ROS connection to stabilize...")
-            time.sleep(1.0)
+                # Give ROS a moment to establish connection
+                print("⏳ Waiting for ROS connection to stabilize...")
+                time.sleep(1.0)
 
-            # Use the improved connection status checking
-            if vizor_listener.is_ros_connected():
-                logger.info("👁️ VizorListener for gaze context initialized successfully")
-                print("👁️ Gaze-assisted spatial grounding enabled (ROS connected)")
+                # Use the improved connection status checking
+                if vizor_listener.is_ros_connected():
+                    logger.info("👁️ VizorListener for gaze context initialized successfully")
+                    print("👁️ Gaze-assisted spatial grounding enabled (ROS connected)")
 
-                # Test immediate gaze reading
-                test_current = vizor_listener.get_current_element()
-                test_recent = vizor_listener.get_recent_gaze(10.0)  # Longer window
-                print(f"[Debug] Initial gaze test - Current: {test_current}, Recent: {test_recent}")
+                    # Test immediate gaze reading
+                    test_current = vizor_listener.get_current_element()
+                    test_recent = vizor_listener.get_recent_gaze(10.0)  # Longer window
+                    print(f"[Debug] Initial gaze test - Current: {test_current}, Recent: {test_recent}")
 
-            else:
-                # VizorListener created but ROS not connected - keep for potential reconnection
-                status = vizor_listener.get_connection_status()
-                print(f"[Debug] Connection status: {status}")
-                if status["ros_available"]:
-                    logger.warning("⚠️ VizorListener ROS connection failed - gaze features limited")
-                    print("⚠️ Gaze features limited (ROS not connected, but can reconnect later)")
                 else:
-                    logger.warning("⚠️ ROS dependencies not available - gaze features disabled")
-                    print("⚠️ Gaze features disabled (ROS dependencies not installed)")
+                    # VizorListener created but ROS not connected - keep for potential reconnection
+                    status = vizor_listener.get_connection_status()
+                    print(f"[Debug] Connection status: {status}")
+                    if status["ros_available"]:
+                        logger.warning("⚠️ VizorListener ROS connection failed - gaze features limited")
+                        print("⚠️ Gaze features limited (ROS not connected, but can reconnect later)")
+                    else:
+                        logger.warning("⚠️ ROS dependencies not available - gaze features disabled")
+                        print("⚠️ Gaze features disabled (ROS dependencies not installed)")
 
-        except Exception as e:
-            logger.error(f"❌ VizorListener initialization failed: {e}")
-            print(f"⚠️ Gaze features disabled (initialization failed: {str(e)})")
-            import traceback
+            except Exception as e:
+                logger.error(f"❌ VizorListener initialization failed: {e}")
+                print(f"⚠️ Gaze features disabled (initialization failed: {str(e)})")
+                import traceback
 
-            traceback.print_exc()
-            vizor_listener = None
+                traceback.print_exc()
+                vizor_listener = None
         while True:
             try:
                 user_input = get_user_input("Designer> ", voice_enabled=voice_input)
@@ -974,6 +979,11 @@ def main():
         action="store_true",
         help="Enable voice input using wake word detection and speech recognition (requires voice dependencies)",
     )
+    parser.add_argument(
+        "--disable-gaze",
+        action="store_true",
+        help="Disable VizorListener initialization - run without ROS dependency for gaze tracking",
+    )
 
     args = parser.parse_args()
 
@@ -1060,6 +1070,7 @@ def main():
             hard_reset=args.hard_reset,
             enable_monitoring=args.monitoring,
             voice_input=args.voice_input,
+            disable_gaze=args.disable_gaze,
         )
     else:
         # Default to smolagents interactive mode
@@ -1070,6 +1081,7 @@ def main():
             hard_reset=args.hard_reset,
             enable_monitoring=args.monitoring,
             voice_input=args.voice_input,
+            disable_gaze=args.disable_gaze,
         )
 
 
