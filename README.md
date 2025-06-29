@@ -16,105 +16,239 @@ An AI-assisted bridge design system that uses intelligent agents to control Rhin
 * **Dynamic Tool Discovery**: Can list available MCP tools upon request.
 * **Interactive CLI**: User-friendly command-line interface with real-time status updates.
 
-## Quick Start
+## Complete Workshop Setup Guide
 
-### Prerequisites
+This guide will walk you through setting up the complete development environment for the DF2025 Vizor Agents workshop on Windows.
 
-* Windows 10/11 (WSL2 optional)
-* Rhino 8 with Grasshopper
-* Python 3.10+
-* [UV package manager](https://docs.astral.sh/uv/install/)
+### 1. Prerequisites Check
 
-### 1. Installation
+Before we begin, let's check what you already have:
+- **API Keys**: How many of you already have OpenAI, Anthropic, or Google (Gemini) API keys?
+- **Development Tools**: Do you have Git, VS Code, or similar installed?
 
-Clone the repository and set up the environment.
+### 2. Core System Installation
 
-**PowerShell (Windows):**
+#### Step 1: Install Winget (if not present)
 ```powershell
-# Install UV if needed
-powershell -c "irm [https://astral.sh/uv/install.ps1](https://astral.sh/uv/install.ps1) | iex"
+# Check if winget is available
+winget --version
 
-# Clone and set up the project
-git clone <repository-url>
-cd vizor_agents
-uv venv
-.venv\Scripts\activate
-uv pip install -e .
+# If not available, install from Microsoft Store:
+# Search for "App Installer" and install it
 ```
 
-**Bash (WSL2/Linux):**
+#### Step 2: Install WSL2 (Linux Subsystem)
+```powershell
+# Run as Administrator
+wsl --install
+
+# Restart your computer when prompted
+# After restart, set up Ubuntu username and password
+```
+
+#### Step 3: Install Git
+```powershell
+# Install Git via winget
+winget install Git.Git
+
+# Restart terminal after installation
+```
+
+#### Step 4: Install VS Code or Cursor
+```powershell
+# Option A: VS Code (recommended)
+winget install Microsoft.VisualStudioCode
+
+# Option B: Cursor (AI-powered alternative)
+winget install Cursor.Cursor
+
+# Install WSL extension for VS Code
+code --install-extension ms-vscode-remote.remote-wsl
+```
+
+#### Step 5: Install UV Package Manager
+```powershell
+# Install UV for Python package management
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+
+# Restart terminal to use UV
+```
+
+### 3. GitHub Setup
+
+#### Create GitHub Account
+1. Go to [github.com](https://github.com) and create an account
+2. Configure Git with your credentials:
 ```bash
-git clone <repository-url>
-cd vizor_agents
+git config --global user.name "Your Name"
+git config --global user.email "your.email@example.com"
+```
+
+### 4. Project Installation
+
+#### Step 1: Clone the Repository
+```bash
+# In WSL2 or PowerShell
+git clone https://github.com/Samulko/DF2025_Vizor_agents.git
+cd DF2025_Vizor_agents
+```
+
+#### Step 2: Set Up Python Environment
+```bash
+# Create virtual environment
 uv venv
+
+# Activate environment (WSL2/Linux)
 source .venv/bin/activate
+
+# OR for PowerShell/Windows
+.venv\Scripts\activate
+
+# Install dependencies
 uv pip install -e .
 ```
 
-### 2. API Configuration
+### 5. API Keys Setup
 
-Copy the example environment file and add your API keys.
+You'll need at least one of these API keys for the workshop:
 
+#### Required APIs (choose at least one):
+- **Google Gemini** (Recommended - free tier available): [Get API Key](https://makersuite.google.com/app/apikey)
+- **OpenAI**: [Get API Key](https://platform.openai.com/api-keys)
+- **Anthropic Claude**: [Get API Key](https://console.anthropic.com/)
+
+#### Configure Environment
 ```bash
-# For Windows
-copy .env.example .env
-notepad .env
-
-# For WSL2/Linux
+# Copy example environment file
 cp .env.example .env
-nano .env
+
+# Edit with your API keys (use VS Code or nano)
+code .env  # or nano .env
 ```
 
-### 3. Grasshopper Setup
+Add your API keys:
+```env
+# Add your actual API keys here
+GEMINI_API_KEY=your_actual_gemini_key_here
+OPENAI_API_KEY=your_actual_openai_key_here
+ANTHROPIC_API_KEY=your_actual_anthropic_key_here
+```
 
-* **Pre-built**: Copy `GH_MCP.gha` to `%APPDATA%\Grasshopper\Libraries\`.
-* **For Developers**: Open the solution in Visual Studio 2022 and run in debug mode with the `.stp` file.
+### 6. Optional: Voice Input Setup
 
-After setup, restart Grasshopper, add the "Grasshopper MCP" component to the canvas, and configure it with **Enabled=True**, **Port=8081**, and **Address=0.0.0.0**.
+For advanced features, you can set up voice input:
 
-### 4. Usage
+#### Step 1: Get Picovoice Access Key
+1. Go to [Picovoice Console](https://console.picovoice.ai/)
+2. Create free account and get access key
 
-#### Standard Mode (Keyboard Input)
-To start a design session with keyboard input:
+#### Step 2: Install Voice Dependencies
+```bash
+uv sync --extra voice
+```
+
+#### Step 3: Configure Voice Settings
+Add to your `.env` file:
+```env
+ACCESS_KEY=your_picovoice_access_key_here
+USE_OPENAI_API=true
+```
+
+### 7. Rhino + Grasshopper Setup
+
+#### Install Rhino 8
+1. Download from [rhino3d.com](https://www.rhino3d.com/)
+2. Use trial or educational license
+
+#### Install MCP Component
+```bash
+# Copy the Grasshopper component
+cp src/bridge_design_system/mcp/GH_MCP/gha/GH_MCP.gha "%APPDATA%\Grasshopper\Libraries\"
+```
+
+### 8. Test Installation
+
+#### Test Basic System
+```bash
+uv run python -m bridge_design_system.main --test
+```
+
+#### Test with Rhino (if available)
+1. Open Rhino 8 + Grasshopper
+2. Add "Grasshopper MCP" component to canvas
+3. Set: Enabled=True, Port=8081, Address=0.0.0.0
+4. Run the main system:
 ```bash
 uv run python -m bridge_design_system.main
 ```
 
-#### ROS-Free Mode
+### 9. Workshop Verification Checklist
+
+✅ **System Requirements:**
+- [ ] Windows 10/11 with WSL2 installed
+- [ ] Git installed and configured
+- [ ] VS Code/Cursor with WSL extension
+- [ ] UV package manager installed
+
+✅ **Project Setup:**
+- [ ] Repository cloned successfully
+- [ ] Python virtual environment created
+- [ ] Dependencies installed without errors
+- [ ] At least one API key configured
+
+✅ **Optional Components:**
+- [ ] Rhino 8 installed (if available)
+- [ ] Voice input configured (advanced users)
+- [ ] Grasshopper MCP component installed
+
+### 10. Quick Start Commands
+
+Once everything is installed:
+
+#### Standard Mode (Keyboard Input)
+```bash
+uv run python -m bridge_design_system.main
+```
+
+#### Voice Input Mode
+```bash
+uv run --extra voice python -m bridge_design_system.main --voice-input
+```
+
+#### Test Mode
+```bash
+uv run python -m bridge_design_system.main --test
+```
+
+### Troubleshooting
+
+**Common Issues:**
+- **UV not found**: Restart terminal after installation
+- **WSL issues**: Run `wsl --update` and restart
+- **API errors**: Check your `.env` file has valid API keys
+- **Import errors**: Make sure virtual environment is activated
+
+**Need Help?**
+- Check the error logs in `logs/bridge_design_system.log`
+- Ask workshop facilitators
+- Check project documentation in `tutorials/` folder
+
+## Advanced Features
+
+### Voice Commands
+Once voice input is set up, you can use:
+- Say "Hello Mave" (wake word) to start voice input
+- Speak your design command naturally  
+- Examples: "Hello Mave" → "Create a spiral staircase with 10 steps"
+- All system commands work: "status", "reset", "exit", etc.
+
+### ROS-Free Mode
 To run without ROS dependencies (disables gaze tracking):
 ```bash
 uv run python -m bridge_design_system.main --disable-gaze
 ```
 
-#### Voice Input Mode
-For hands-free operation with voice commands:
-```bash
-# Install voice dependencies
-uv sync --extra voice
-
-# Run with voice input
-uv run --extra voice python -m bridge_design_system.main --voice-input
-```
-
-**Voice Setup Requirements:**
-1. Get a [Picovoice access key](https://console.picovoice.ai/)
-2. Add voice configuration to your `.env` file:
-   ```
-   ACCESS_KEY=your_picovoice_key_here
-   OPENAI_API_KEY=your_openai_key_here
-   WAKE_WORD_MODEL_PATH=src/bridge_design_system/whisper-voice-assistant/models/hello-mave_en_linux_v3_0_0.ppn
-   USE_OPENAI_API=true
-   ```
-
-**Voice Commands:**
-- Say "Hello Mave" (wake word) to start voice input
-- Speak your design command naturally
-- Examples: "Hello Mave" → "Create a spiral staircase with 10 steps"
-- All system commands work: "status", "reset", "exit", etc.
-
-You can use natural language to create designs in both modes.
-
-#### LCARS Agent Monitoring Interface
+### LCARS Agent Monitoring Interface
 
 The system includes a Star Trek LCARS-styled real-time monitoring interface to track agent status and activities.
 
