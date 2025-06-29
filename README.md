@@ -32,23 +32,20 @@ Clone the repository and set up the environment.
 **PowerShell (Windows):**
 ```powershell
 # Install UV if needed
-powershell -c "irm [https://astral.sh/uv/install.ps1](https://astral.sh/uv/install.ps1) | iex"
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
 
 # Clone and set up the project
-git clone <repository-url>
-cd vizor_agents
-uv venv
-.venv\Scripts\activate
-uv pip install -e .
+git clone https://github.com/Samulko/DF2025_Vizor_agents.git
+cd DF2025_Vizor_agents
+uv sync
 ```
 
 **Bash (WSL2/Linux):**
 ```bash
-git clone <repository-url>
-cd vizor_agents
-uv venv
-source .venv/bin/activate
-uv pip install -e .
+# Clone and set up the project
+git clone https://github.com/Samulko/DF2025_Vizor_agents.git
+cd DF2025_Vizor_agents
+uv sync
 ```
 
 ### 2. API Configuration
@@ -170,29 +167,30 @@ The limited toolset ensures reliable operation, with the Python script tool offe
 
 ### Project Structure
 ```
-vizor_agents/
+DF2025_Vizor_agents/
 ├── src/bridge_design_system/
-│   ├── agents/
-│   ├── config/
-│   ├── tools/
-│   └── mcp/
-│       └── GH_MCP/
-├── tests/
-└── main.py
+│   ├── agents/           # Agent implementations
+│   ├── config/           # Settings and configuration  
+│   ├── tools/            # Agent tools
+│   ├── mcp/              # MCP integration
+│   │   └── GH_MCP/       # C# Grasshopper component
+│   └── main.py           # Entry point
+├── system_prompts/       # Agent system prompts
+├── tutorials/            # Workshop tutorials
+└── pyproject.toml        # Project configuration
 ```
 
-### Contributing
+### Development Commands
 
-To format and test your code, run:
 ```bash
 # Format code
-black src/ tests/
+uv run black src/
 
-# Lint code
-ruff check src/ tests/
+# Lint code  
+uv run ruff check src/
 
-# Run tests
-pytest tests/
+# Run the system
+uv run python -m bridge_design_system.main
 ```
 
 ## License
