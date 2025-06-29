@@ -89,3 +89,7 @@ CLAUDE.md
 CLAUDE.local.md
 current_task.md
 PROBLEMS.md
+
+# Workshop files (not for version control)
+rational_agent_tutorial.md
+rational_smolagents_complete.py
