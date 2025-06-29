@@ -367,125 +367,251 @@ The Rational Agent demonstrates how to build focused, efficient smolagents that:
 
 This pattern can be adapted for other specialized validation and correction tasks in the bridge design system.
 
-## Adding New Agents to the Triage System
+## Making the Rational Agent a Managed Agent
 
-The rational agent integration demonstrates the standard pattern for adding new specialized agents. Here are the **specific locations** you need to modify:
+Once you have completed building your rational agent following the patterns above, the next step is integrating it into the triage system as a managed agent. This enables automatic delegation and coordination with other specialized agents.
 
-### 1. Agent Creation Block
-**Location**: `triage_agent_smolagents.py` lines 73-92
+### Why Managed Agents?
 
-Add your agent creation after the rational agent:
+The managed agent pattern in smolagents provides:
+
+- **Automatic Delegation**: Triage agent automatically routes tasks to appropriate specialists
+- **Context Sharing**: Agents can coordinate and share information seamlessly  
+- **Resource Management**: Centralized memory, monitoring, and cleanup
+- **Scalability**: Easy to add new specialized agents without modifying existing code
+
+### Integration Steps
+
+#### Step 1: Ensure Factory Function Pattern
+
+Your rational agent should already follow this pattern:
+
 ```python
-# Create [your_agent_name] for [purpose]
-from .[your_agent_file] import create_[your_agent_name]
+# File: src/bridge_design_system/agents/rational_smolagents.py
 
-[your_agent_name]_monitor = None
-if monitoring_callback:
-    if (callable(monitoring_callback) and hasattr(monitoring_callback, "__name__") 
-        and "create" in monitoring_callback.__name__):
-        [your_agent_name]_monitor = monitoring_callback("[your_agent_name]")
-    else:
-        from ..monitoring.agent_monitor import create_monitor_callback
-        [your_agent_name]_monitor = create_monitor_callback("[your_agent_name]", monitoring_callback)
-
-[your_agent_name] = create_[your_agent_name](monitoring_callback=[your_agent_name]_monitor)
+def create_rational_agent(model_name: str = "rational", **kwargs) -> ToolCallingAgent:
+    """Factory function returning a ToolCallingAgent ready for managed use."""
+    wrapper = RationalSmolagent(model_name=model_name, **kwargs)
+    internal_agent = wrapper.agent
+    
+    # Store wrapper reference for proper cleanup
+    internal_agent._wrapper = wrapper
+    return internal_agent
 ```
 
-### 2. Managed Agents List
-**Locations**: Lines 140 & 454
+**Key Requirements:**
+- Returns a `ToolCallingAgent` (not wrapper class)
+- Stores wrapper reference for resource cleanup
+- Accepts `monitoring_callback` parameter
+
+#### Step 2: Add to Triage System
+
+Modify `src/bridge_design_system/agents/triage_agent_smolagents.py` in these specific locations:
+
+**2.1 Agent Creation Block (Lines 73-92)**
+
+Add after the geometry agent creation:
+
+```python
+# Create rational agent for level validation
+from .rational_smolagents import create_rational_agent
+
+rational_monitor = None
+if monitoring_callback:
+    # Check if it's a remote callback factory or local callback
+    if (
+        callable(monitoring_callback)
+        and hasattr(monitoring_callback, "__name__")
+        and "create" in monitoring_callback.__name__
+    ):
+        # Remote monitoring factory - create callback for this agent
+        rational_monitor = monitoring_callback("rational_agent")
+    else:
+        # Local monitoring - use existing pattern
+        from ..monitoring.agent_monitor import create_monitor_callback
+        rational_monitor = create_monitor_callback("rational_agent", monitoring_callback)
+
+rational_agent = create_rational_agent(monitoring_callback=rational_monitor)
+```
+
+**2.2 Managed Agents Registration (Lines 140 & 454)**
 
 Update both managed_agents lists:
-```python
-managed_agents=[geometry_agent, rational_agent, [your_agent_name]],
-```
-
-### 3. TriageSystemWrapper Monitoring
-**Location**: Lines 405-420
-
-Add monitoring variables:
-```python
-geometry_monitor = None
-rational_monitor = None
-[your_agent_name]_monitor = None  # ADD HERE
-
-# Add to both monitoring callback sections
-[your_agent_name]_monitor = monitoring_callback("[your_agent_name]")
-[your_agent_name]_monitor = create_monitor_callback("[your_agent_name]", monitoring_callback)
-```
-
-### 4. TriageSystemWrapper Agent Instantiation
-**Location**: After line 429
-
-Add agent creation:
-```python
-from .[your_agent_file] import create_[your_agent_name]
-self.[your_agent_name] = create_[your_agent_name](monitoring_callback=[your_agent_name]_monitor)
-```
-
-### 5. Status Reporting Updates
-**Locations**: Line 521 (count) & after line 543 (status block)
-
-Update agent count and add status block:
-```python
-"managed_agents": 3,  # Update count
-
-"[your_agent_name]": {
-    "initialized": hasattr(self, "[your_agent_name]") and self.[your_agent_name] is not None,
-    "type": type(self.[your_agent_name]).__name__ if hasattr(self, "[your_agent_name]") else "Unknown",
-    "name": "[your_agent_name]",
-    "[your_capability]": "enabled",
-},
-```
-
-### 6. Configuration Requirements
-
-**Settings Configuration** (`settings.py`):
-```python
-[your_agent_name]_provider: str = "gemini"
-[your_agent_name]_model: str = "gemini-2.5-flash-preview-05-20"
-```
-
-**Model Validation** (`model_config.py`):
-```python
-agents = ["triage", "geometry", "material", "structural", "syslogic", "rational", "[your_agent_name]"]
-```
-
-**System Prompt** (`system_prompts/triage_agent.md`):
-Add agent description following the rational agent pattern.
-
-### 7. Integration Checklist
-
-When adding a new agent, ensure you:
-
-- [ ] Create the agent implementation file
-- [ ] Add factory function (`create_[your_agent_name]`)
-- [ ] Update all 7 locations in `triage_agent_smolagents.py`
-- [ ] Add configuration to `settings.py`
-- [ ] Update validation list in `model_config.py`
-- [ ] Document in system prompt
-- [ ] Test with triage delegation
-
-### 8. Example: Material Agent Integration
 
 ```python
-# 1. Agent creation (lines 73-92)
-from .material_smolagents import create_material_agent
-material_monitor = monitoring_callback("material_agent") if monitoring_callback else None
-material_agent = create_material_agent(monitoring_callback=material_monitor)
+# In create_triage_system() (line 140)
+managed_agents=[geometry_agent, rational_agent],
 
-# 2. Managed agents (lines 140 & 454)
-managed_agents=[geometry_agent, rational_agent, material_agent],
-
-# 3. Status updates
-"managed_agents": 3,
-"material_agent": {
-    "initialized": hasattr(self, "material_agent") and self.material_agent is not None,
-    "name": "material_agent",
-    "material_tracking": "enabled",
-},
+# In TriageSystemWrapper.__init__() (line 454)  
+managed_agents=[self.geometry_agent, self.rational_agent],
 ```
 
-This systematic approach ensures consistent integration patterns and maintainable agent architecture.
+**2.3 Wrapper Class Integration (Lines 422-429)**
+
+In `TriageSystemWrapper.__init__()`:
+
+```python
+# Create agents using the updated factory functions
+self.geometry_agent = _create_mcp_enabled_geometry_agent(
+    monitoring_callback=geometry_monitor,
+)
+
+self.rational_agent = create_rational_agent(monitoring_callback=rational_monitor)
+```
+
+**2.4 Status Reporting (Lines 515-544)**
+
+Add rational agent status block:
+
+```python
+def get_status(self) -> Dict[str, Any]:
+    return {
+        "triage": {
+            "initialized": True,
+            "type": "smolagents_managed_agents", 
+            "managed_agents": 2,  # Update count
+            "max_steps": self.manager.max_steps,
+        },
+        "geometry_agent": {
+            # existing geometry status...
+        },
+        "rational_agent": {  # ADD THIS BLOCK
+            "initialized": hasattr(self, "rational_agent") and self.rational_agent is not None,
+            "type": (
+                type(self.rational_agent).__name__
+                if hasattr(self, "rational_agent")
+                else "Unknown"
+            ),
+            "name": "rational_agent",
+            "level_validation": "enabled",
+        },
+    }
+```
+
+#### Step 3: Configuration Updates
+
+**3.1 Settings Configuration** (`src/bridge_design_system/config/settings.py`):
+
+```python
+class Settings(BaseSettings):
+    # Add rational agent configuration
+    rational_agent_provider: str = "gemini"
+    rational_agent_model: str = "gemini-2.5-flash-lite-preview-06-17"
+```
+
+**3.2 Model Validation** (`src/bridge_design_system/config/model_config.py`):
+
+```python
+def validate_all_models() -> Dict[str, bool]:
+    """Validate all configured agent models."""
+    agents = ["triage", "geometry", "material", "structural", "syslogic", "rational"]
+    # Add "rational" to the validation list
+```
+
+### Testing the Integration
+
+#### Verify Agent Status
+
+```python
+from src.bridge_design_system.agents import TriageAgent
+
+triage = TriageAgent()
+status = triage.get_status()
+print(status["rational_agent"])
+# Expected: {"initialized": True, "name": "rational_agent", "level_validation": "enabled"}
+```
+
+#### Test Direct Delegation
+
+```python
+# Test through triage system
+response = triage.handle_design_request(
+    "Check all bridge elements for proper horizontal alignment and fix any issues"
+)
+print(response.message)
+```
+
+The triage agent will automatically:
+1. Recognize "horizontal alignment" as rational agent capability
+2. Delegate the task to the rational agent
+3. Coordinate the results back to the user
+
+#### Test Memory Integration
+
+```python
+# Test memory reset includes rational agent
+triage.reset_all_agents()
+# Should clear rational agent memory along with others
+```
+
+### How Delegation Works
+
+Once integrated, the rational agent works seamlessly with the triage system:
+
+**Example User Request**: *"Validate that element 021 is properly horizontal and correct if needed"*
+
+**Automatic Delegation Flow**:
+1. **Triage Agent** receives the request
+2. **Analysis**: Identifies "horizontal validation" keywords → rational agent capability  
+3. **Delegation**: Routes task to rational agent with full context
+4. **Execution**: Rational agent uses MCP tools + custom analysis tools
+5. **Coordination**: Results integrated back through triage agent
+6. **Response**: User gets coordinated response from the system
+
+### Key Benefits of Managed Integration
+
+**1. Automatic Task Routing**
+- No manual agent selection required
+- Intelligent delegation based on request content
+- Multiple agents can collaborate on complex tasks
+
+**2. Context Preservation**
+- Shared memory across agents
+- Design history accessible to all agents
+- Coordinated decision making
+
+**3. Resource Management**
+- Centralized monitoring and logging
+- Unified memory reset and cleanup
+- Consistent error handling
+
+**4. Scalability**
+- Easy to add new specialized agents
+- No changes needed to existing agents
+- Consistent integration pattern
+
+### Troubleshooting Integration
+
+**Issue**: Rational agent not being delegated to
+```
+# Check if agent is properly registered
+status = triage.get_status()
+print("rational_agent" in status)  # Should be True
+```
+
+**Issue**: Monitoring not working
+```
+# Verify monitoring callback is passed
+print(hasattr(rational_agent, '_wrapper'))  # Should be True
+```
+
+**Issue**: Memory reset not working
+```
+# Check if agent has proper memory structure
+print(hasattr(rational_agent, 'memory'))  # Should be True
+print(hasattr(rational_agent.memory, 'steps'))  # Should be True
+```
+
+### Extending to Other Agents
+
+This same integration pattern can be applied to any specialized agent:
+
+1. **Follow Factory Pattern**: Return `ToolCallingAgent` from factory function
+2. **Add to Triage System**: Update all 4 locations in triage file
+3. **Configure Models**: Add to settings and validation
+4. **Test Integration**: Verify delegation and status reporting
+
+The rational agent integration serves as a template for adding any new specialized capability to the bridge design system while maintaining clean architecture and automatic coordination.
 
 ## Further Reading
 

@@ -424,8 +424,6 @@ class TriageSystemWrapper:
             monitoring_callback=geometry_monitor,
         )
 
-        from .rational_smolagents import create_rational_agent
-
         self.rational_agent = create_rational_agent(monitoring_callback=rational_monitor)
 
         # Create triage manager with managed_agents and memory tracking
