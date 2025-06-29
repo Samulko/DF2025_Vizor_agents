@@ -96,16 +96,8 @@ cd DF2025_Vizor_agents
 #### Step 2: Set Up Python Environment
 ```bash
 # Create virtual environment
-uv venv
+uv sync
 
-# Activate environment (WSL2/Linux)
-source .venv/bin/activate
-
-# OR for PowerShell/Windows
-.venv\Scripts\activate
-
-# Install dependencies
-uv pip install -e .
 ```
 
 ### 5. API Keys Setup
