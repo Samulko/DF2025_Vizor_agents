@@ -79,7 +79,6 @@ reference/GH_MCP/.vs/
 docs/
 archive/
 tests/
-examples/
 
 # Exclude all hidden directories and files
 .*
