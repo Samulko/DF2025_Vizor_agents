@@ -23,7 +23,7 @@ dependencies = [
     "starlette>=0.45.3",
     "anyio>=4.9.0",
     "aiohttp>=3.9.0",
-    "grasshopper-mcp",
+    # "grasshopper-mcp",  # Removed - causes local dependency issues
     "duckduckgo-search>=8.0.3",
     "mcpadapt[smolagents]>=0.1.9",
     "psutil>=5.9.0",
@@ -68,8 +68,8 @@ dev-dependencies = [
     "ruff",
 ]
 
-[tool.uv.sources]
-grasshopper-mcp = { path = "src/bridge_design_system/mcp", editable = true }
+# [tool.uv.sources]
+# grasshopper-mcp = { path = "src/bridge_design_system/mcp", editable = true }  # Removed
 
 [tool.black]
 line-length = 100
