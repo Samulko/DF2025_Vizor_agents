@@ -81,3 +81,8 @@ archive/
 
 # Exclude all hidden directories and files
 .*
+
+# Exclude specific markdown files
+CLAUDE.md
+current_task.md
+PROBLEMS.md
