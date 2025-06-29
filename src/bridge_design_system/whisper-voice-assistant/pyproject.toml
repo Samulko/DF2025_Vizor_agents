@@ -37,3 +37,10 @@ packages = ["."]
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+# UV mirror configuration for China firewall bypass
+# Uncomment and modify as needed for your workshop
+# [[tool.uv.index]]
+# name = "tsinghua"
+# url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+# default = true

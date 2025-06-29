@@ -82,3 +82,10 @@ ignore_missing_imports = true
 testpaths = ["tests"]
 python_files = "test_*.py"
 python_functions = "test_*"
+
+# UV mirror configuration for China firewall bypass
+# Uncomment and modify as needed for your workshop
+# [[tool.uv.index]]
+# name = "tsinghua"
+# url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+# default = true

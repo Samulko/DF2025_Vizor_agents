@@ -26,7 +26,7 @@ dependencies = [
     "grasshopper-mcp",
     "duckduckgo-search>=8.0.3",
     "mcpadapt[smolagents]>=0.1.9",
-    "psutil>=7.0.0",
+    "psutil>=5.9.0",
     "roslibpy>=1.6.0",
 ]
 
@@ -84,6 +84,24 @@ select = [
     "I",   # isort
     "N",   # pep8-naming
 ]
+
+# UV mirror configuration for China firewall bypass
+# Active configuration - change mirror if needed for your location
+[[tool.uv.index]]
+name = "aliyun"
+url = "https://mirrors.aliyun.com/pypi/simple/"
+default = true
+
+# Alternative mirrors (comment out active one above, uncomment one below):
+# [[tool.uv.index]]
+# name = "tsinghua"
+# url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+# default = true
+
+# [[tool.uv.index]]
+# name = "ustc"
+# url = "https://mirrors.ustc.edu.cn/pypi/simple"
+# default = true
 
 [build-system]
 requires = ["setuptools>=64", "wheel"]

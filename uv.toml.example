@@ -1,0 +1,49 @@
+# UV Configuration Template for China Mirrors
+# 
+# This file shows how to configure UV to use Chinese PyPI mirrors
+# to bypass firewall restrictions.
+#
+# Installation Instructions:
+# 1. Copy this file to ~/.config/uv/uv.toml (Linux/macOS) or %APPDATA%\uv\uv.toml (Windows)
+# 2. Create the directory if it doesn't exist
+# 3. Restart your terminal
+
+# Primary mirror configuration (choose one)
+# Option 1: Tsinghua University (Recommended - most reliable)
+[[index]]
+name = "tsinghua"
+url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+default = true
+
+# Option 2: Alibaba Cloud (Alternative)
+# [[index]]
+# name = "aliyun"
+# url = "https://mirrors.aliyun.com/pypi/simple/"
+# default = true
+
+# Option 3: USTC (Alternative)
+# [[index]]
+# name = "ustc"
+# url = "https://mirrors.ustc.edu.cn/pypi/simple"
+# default = true
+
+# Option 4: Douban (Alternative)
+# [[index]]
+# name = "douban"
+# url = "http://pypi.douban.com/simple/"
+# default = true
+
+# Multiple mirrors configuration (backup strategy)
+# Uncomment the following to use multiple mirrors with fallback
+# [[index]]
+# name = "tsinghua"
+# url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+# default = true
+# 
+# [[index]]
+# name = "aliyun"
+# url = "https://mirrors.aliyun.com/pypi/simple/"
+# 
+# [[index]]
+# name = "ustc"
+# url = "https://mirrors.ustc.edu.cn/pypi/simple"
