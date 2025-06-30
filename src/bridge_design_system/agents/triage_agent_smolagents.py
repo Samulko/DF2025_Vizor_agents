@@ -14,6 +14,7 @@ from smolagents import CodeAgent, tool
 from ..config.logging_config import get_logger
 from ..config.model_config import ModelProvider
 from ..memory import track_design_changes
+from .rational_smolagents import create_rational_agent
 
 # OLD FILE-BASED MEMORY TOOLS - COMMENTED OUT, USING NATIVE MEMORY INSTEAD
 # from ..tools.memory_tools import clear_memory, recall, remember, search_memory
