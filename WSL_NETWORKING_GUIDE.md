@@ -102,10 +102,68 @@ export GRASSHOPPER_HOST=YOUR_IP
 python test_connection.py
 ```
 
+## Windows Home Edition Fix
+
+If students don't see `vEthernet (WSL (Hyper-V firewall))` in ipconfig (common on Windows Home):
+
+### Method 1: Enable WSL2 Features
+1. **Run as Administrator in PowerShell:**
+   ```powershell
+   dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart
+   dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart
+   ```
+
+2. **Restart Windows**
+
+3. **Set WSL2 as default:**
+   ```powershell
+   wsl --set-default-version 2
+   ```
+
+4. **Update WSL kernel:**
+   ```powershell
+   wsl --update
+   ```
+
+### Method 2: Manual Network Bridge Setup
+If WSL2 networking still doesn't work:
+
+1. **In Windows PowerShell (as Admin):**
+   ```powershell
+   # Find your main network adapter
+   Get-NetAdapter | Where-Object {$_.Status -eq "Up"}
+   
+   # Note the InterfaceDescription of your main adapter
+   ```
+
+2. **Create network bridge (risky - may lose internet):**
+   ```powershell
+   # Only if you know what you're doing
+   New-NetBridge -Name "WSL-Bridge" -NetAdapterName "Ethernet", "vEthernet (WSL)"
+   ```
+
+### Method 3: Use Windows Main IP (Simplest)
+1. **Find Windows main IP:**
+   ```cmd
+   ipconfig | findstr IPv4
+   ```
+
+2. **In WSL, use that IP:**
+   ```bash
+   export GRASSHOPPER_HOST=192.168.1.100  # Your main Windows IP
+   ```
+
 ## Workshop Quick Fix
 
 For the workshop, instructors can have students run:
 
+### Automated Setup Script
+```bash
+# Run the automated setup script (recommended)
+./workshop_setup.sh
+```
+
+### Manual Commands
 ```bash
 # Find Windows IP
 WINDOWS_IP=$(ip route show | grep default | awk '{print $3}')
@@ -120,6 +178,14 @@ python -c "import socket; sock=socket.socket(); sock.settimeout(5); print('✅ S
 # Run the agent
 uv run python -m src.bridge_design_system.agents.rational_smolagents
 ```
+
+### Windows Home Students
+If students have Windows Home and missing the WSL virtual adapter:
+
+1. **Use the automated script:** `./workshop_setup.sh`
+2. **Or manually find Windows main IP:**
+   - Windows: `ipconfig` → look for main adapter IPv4
+   - WSL: `export GRASSHOPPER_HOST=192.168.1.XXX` (their actual IP)
 
 ## Troubleshooting
 
