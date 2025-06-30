@@ -1,228 +1,108 @@
-# China Workshop Setup Guide
-# Solving UV/PyPI Firewall Issues
+# Workshop Setup Guide for China 🇨🇳
 
-This guide helps workshop participants in China bypass firewall restrictions when installing Python packages with UV.
+## What You Need to Do
 
-## Problem
-The Great Firewall of China can block or severely slow down access to PyPI (Python Package Index), causing `uv sync` and package installations to fail or timeout.
-
-## Solution
-Use Chinese mirror sites that replicate PyPI packages locally within China.
-
----
-
-## Quick Setup (Recommended)
-
-### Step 1: Create UV Configuration Directory
+Just run these two commands after setup:
 ```bash
-# Linux/macOS
-mkdir -p ~/.config/uv
-
-# Windows (PowerShell)
-New-Item -ItemType Directory -Force -Path "$env:APPDATA\uv"
-```
-
-### Step 2: Create UV Configuration File
-
-**Linux/macOS:**
-```bash
-cat > ~/.config/uv/uv.toml << 'EOF'
-[[index]]
-name = "tsinghua"
-url = "https://pypi.tuna.tsinghua.edu.cn/simple"
-default = true
-EOF
-```
-
-**Windows (PowerShell):**
-```powershell
-@"
-[[index]]
-name = "tsinghua"
-url = "https://pypi.tuna.tsinghua.edu.cn/simple"
-default = true
-"@ | Out-File -FilePath "$env:APPDATA\uv\uv.toml" -Encoding UTF8
-```
-
-### Step 3: Test Configuration
-```bash
-cd /path/to/your/project
-# IMPORTANT: Delete existing lock file first
-rm uv.lock
+git pull origin master
 uv sync
 ```
 
-## Quick Fix: Environment Variable Method
+That's it! The project is already configured to work in China.
 
-If you need a quick solution without changing config files:
+---
 
+## Step 1: Install UV (Python Package Manager)
+
+### On Linux:
 ```bash
-# Linux/macOS
-export UV_INDEX_URL="https://mirrors.aliyun.com/pypi/simple/"
-uv sync
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Windows (PowerShell)
-$env:UV_INDEX_URL="https://mirrors.aliyun.com/pypi/simple/"
-uv sync
+or 
+
+pip install -i https://pypi.tuna.tsinghua.edu.cn/simple uv
+
+```
+
+### On macOS:
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+or
+
+pip install -i https://pypi.tuna.tsinghua.edu.cn/simple uv
+```
+
+
+After installation, restart your terminal.
+
+Then run:
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+
+After, restart thr terminal.
+
+---
+
+## Step 2: Switch to Ubuntu (If Using Docker/WSL) - if the text in the terminal appears green and blue you should be good. If its white, follow this step.
+
+If you're using Docker Desktop or WSL with a different Linux distribution, switch to Ubuntu:
+
+### For WSL Users:
+```bash
+# Install Ubuntu (if not already installed)
+wsl --install -d Ubuntu
+
+# Set Ubuntu as default
+wsl --set-default Ubuntu
+
+# Switch to Ubuntu
+wsl -d Ubuntu
 ```
 
 ---
 
-## Alternative Mirror Sources
+## Step 3: Update Ubuntu (Recommended)
 
-If Tsinghua University mirror is slow, try these alternatives:
+```bash
+# Update package list
+sudo apt update
 
-### Alibaba Cloud (Aliyun)
-```toml
-[[index]]
-name = "aliyun"
-url = "https://mirrors.aliyun.com/pypi/simple/"
-default = true
-```
+# Upgrade all packages
+sudo apt upgrade -y
 
-### University of Science and Technology of China (USTC)
-```toml
-[[index]]
-name = "ustc"
-url = "https://mirrors.ustc.edu.cn/pypi/simple"
-default = true
-```
-
-### Douban
-```toml
-[[index]]
-name = "douban"
-url = "http://pypi.douban.com/simple/"
-default = true
+# Check Ubuntu version
+lsb_release -a
 ```
 
 ---
 
-## Fallback Method: Using pip
+## Step 4: Run the Workshop Project
 
-If UV continues to have issues, use pip as a fallback:
-
-### Step 1: Create pip configuration
 ```bash
-# Linux/macOS
-mkdir -p ~/.pip
-cat > ~/.pip/pip.conf << 'EOF'
-[global]
-index-url = https://pypi.tuna.tsinghua.edu.cn/simple
-trusted-host = pypi.tuna.tsinghua.edu.cn
-EOF
+# Navigate to your project folder
+cd path/to/your/project
 
-# Windows
-mkdir %APPDATA%\pip
-echo [global] > %APPDATA%\pip\pip.ini
-echo index-url = https://pypi.tuna.tsinghua.edu.cn/simple >> %APPDATA%\pip\pip.ini
-echo trusted-host = pypi.tuna.tsinghua.edu.cn >> %APPDATA%\pip\pip.ini
-```
+# Get latest changes
+git pull origin master
 
-### Step 2: Install using pip
-```bash
-# Instead of uv sync, use:
-pip install -r requirements.txt
-
-# Or if you have a pyproject.toml:
-pip install -e .
-```
-
----
-
-## Troubleshooting
-
-### Issue: Mirror Changes Not Taking Effect
-**Solution:** Delete the lock file and resync:
-```bash
-rm uv.lock
+# Install all dependencies (works in China!)
 uv sync
 ```
-This is **crucial** - UV caches package sources in the lock file!
-
-### Issue: SSL Certificate Errors
-**Solution:** Add `trusted-host` configuration:
-```bash
-pip install --trusted-host pypi.tuna.tsinghua.edu.cn -i https://pypi.tuna.tsinghua.edu.cn/simple package_name
-```
-
-### Issue: UV Not Respecting Mirror Configuration
-**Solution:** Use command-line flags:
-```bash
-uv pip install --index-url https://pypi.tuna.tsinghua.edu.cn/simple package_name
-```
-
-### Issue: Some Packages Still Download from PyPI
-**Explanation:** This is a known UV limitation. Some dependency resolution may still use PyPI.
-**Solution:** Use the global configuration method above, which forces ALL requests through the mirror.
-
-### Issue: Mirror is Slow or Unresponsive
-**Solution:** Try a different mirror from the alternatives list above.
 
 ---
 
-## Project-Specific Configuration
+## If Something Goes Wrong
 
-For this workshop project, you can also uncomment the mirror configuration in `pyproject.toml`:
+### UV command not found?
+Restart your terminal and try again.
 
-```toml
-# Uncomment these lines in pyproject.toml:
-[[tool.uv.index]]
-name = "tsinghua"
-url = "https://pypi.tuna.tsinghua.edu.cn/simple"
-default = true
-```
+### Internet connection issues?
+The project is pre-configured to use Chinese mirrors, so `uv sync` should work automatically.
 
----
-
-## Verification
-
-To verify your setup is working:
-
-1. Check that your configuration file exists:
-   ```bash
-   # Linux/macOS
-   cat ~/.config/uv/uv.toml
-   
-   # Windows
-   type %APPDATA%\uv\uv.toml
-   ```
-
-2. Test with a simple package install:
-   ```bash
-   uv pip install requests
-   ```
-
-3. Check the download URL in the output - it should show your chosen mirror.
+### Still having problems?
+Ask a workshop facilitator for help!
 
 ---
 
-## Workshop Support
-
-If you encounter issues during the workshop:
-
-1. Try a different mirror from the alternatives list
-2. Use the pip fallback method
-3. Ask for help from workshop facilitators
-4. Check your internet connection
-
-## Mirror Speed Comparison
-
-You can test which mirror is fastest for you:
-
-```bash
-# Test Tsinghua
-time uv pip install --dry-run --index-url https://pypi.tuna.tsinghua.edu.cn/simple requests
-
-# Test Aliyun  
-time uv pip install --dry-run --index-url https://mirrors.aliyun.com/pypi/simple/ requests
-
-# Test USTC
-time uv pip install --dry-run --index-url https://mirrors.ustc.edu.cn/pypi/simple requests
-```
-
-Use the fastest one for your configuration.
-
----
-
-**Happy coding! 🐍🚀**
+**You're ready for the workshop! 🚀**
