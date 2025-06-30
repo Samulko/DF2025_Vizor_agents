@@ -6,7 +6,7 @@ __pycache__/
 .Python
 build/
 develop-eggs/
-dist/
+# dist/  # Commented out - we want to include dist for workshop
 downloads/
 eggs/
 .eggs/
@@ -80,8 +80,16 @@ docs/
 archive/
 tests/
 
-# Exclude all hidden directories and files
-.*
+# Exclude specific hidden directories and files
+.env*
+.vscode/
+.idea/
+.DS_Store
+.coverage*
+.cache
+.hypothesis/
+.pytest_cache/
+.chromadb/
 
 # Exclude specific markdown files
 CLAUDE.md
