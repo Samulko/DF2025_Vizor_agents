@@ -5,6 +5,7 @@ This module contains functions for communicating with the Grasshopper MCP server
 """
 
 import json
+import os
 
 # Grasshopper MCP connection parameters
 import platform
@@ -48,8 +49,8 @@ def get_windows_host():
     return "localhost"
 
 
-GRASSHOPPER_HOST = get_windows_host()
-GRASSHOPPER_PORT = 8081  # TCP bridge port (GH_MCPComponent listens on 8081)
+GRASSHOPPER_HOST = os.environ.get("GRASSHOPPER_HOST", get_windows_host())
+GRASSHOPPER_PORT = int(os.environ.get("GRASSHOPPER_PORT", "8081"))
 
 # Log the connection target
 print(f"Grasshopper TCP bridge target: {GRASSHOPPER_HOST}:{GRASSHOPPER_PORT}", file=sys.stderr)
