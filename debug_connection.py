@@ -36,24 +36,38 @@ def test_connection_verbose(host: str, port: int, timeout: float = 2.0) -> dict:
         
         if connect_result == 0:
             result["connected"] = True
-            # Try to send a quick test to see if it's actually Grasshopper
+            # Try to send a valid Grasshopper command to test if it's actually Grasshopper
             try:
-                test_msg = '{"type":"ping","parameters":{}}\n'
+                test_msg = '{"type":"get_components_in_group","parameters":{"groupName":"test"}}\n'
                 sock.sendall(test_msg.encode('utf-8'))
-                sock.settimeout(1.0)  # Quick response check
-                response = sock.recv(1024)
-                if response:
+                sock.settimeout(3.0)  # Give Grasshopper time to respond
+                
+                response_data = b""
+                while len(response_data) < 10240:  # Read up to 10KB
+                    chunk = sock.recv(1024)
+                    if not chunk:
+                        break
+                    response_data += chunk
+                    if response_data.endswith(b"\n"):
+                        break
+                
+                if response_data:
+                    response_str = response_data.decode('utf-8-sig').strip()
                     result["grasshopper_response"] = True
                     try:
-                        parsed = json.loads(response.decode('utf-8-sig').strip())
-                        result["response_preview"] = str(parsed)[:100]
-                    except:
-                        result["response_preview"] = response.decode('utf-8-sig', errors='ignore')[:100]
+                        parsed = json.loads(response_str)
+                        if parsed.get("success") is not None:  # Valid Grasshopper response format
+                            result["response_preview"] = f"Valid Grasshopper: {str(parsed)[:100]}"
+                        else:
+                            result["response_preview"] = f"Unknown response: {str(parsed)[:100]}"
+                    except json.JSONDecodeError:
+                        result["response_preview"] = f"Non-JSON response: {response_str[:100]}"
                 else:
                     result["grasshopper_response"] = False
+                    result["error"] = "No response to valid command"
             except socket.timeout:
                 result["grasshopper_response"] = False
-                result["error"] = "No response to ping"
+                result["error"] = "No response to valid command (timeout)"
             except Exception as e:
                 result["grasshopper_response"] = False
                 result["error"] = f"Response test failed: {e}"
@@ -81,8 +95,8 @@ def test_connection_verbose(host: str, port: int, timeout: float = 2.0) -> dict:
     return result
 
 def test_specific_host():
-    # Test the host that was detected in the error log
-    host = "172.19.144.1"
+    # Test the host that was detected as working
+    host = "172.28.192.1"
     port = 8081
     
     print(f"🔍 Testing specific host: {host}:{port}")

@@ -26,9 +26,9 @@ def test_host(host, port):
             
             # Test if it's actually Grasshopper
             try:
-                test_msg = '{"type":"get_document_info","parameters":{}}\n'
+                test_msg = '{"type":"get_components_in_group","parameters":{"groupName":"test"}}\n'
                 sock.sendall(test_msg.encode('utf-8'))
-                sock.settimeout(2.0)
+                sock.settimeout(3.0)
                 
                 response_data = b""
                 while len(response_data) < 10240:
