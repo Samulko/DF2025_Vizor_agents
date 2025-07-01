@@ -29,6 +29,76 @@ def test_connection(host: str, port: int, timeout: float = 1.0) -> bool:
         return False
 
 
+def test_connection_verbose(host: str, port: int, timeout: float = 2.0) -> dict:
+    """Test connection with detailed error information."""
+    result = {
+        "host": host,
+        "port": port,
+        "connected": False,
+        "error": None,
+        "error_code": None,
+        "response_time_ms": None
+    }
+    
+    import time
+    start_time = time.time()
+    
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(timeout)
+        
+        connect_result = sock.connect_ex((host, port))
+        response_time = (time.time() - start_time) * 1000
+        result["response_time_ms"] = round(response_time, 2)
+        
+        if connect_result == 0:
+            result["connected"] = True
+            # Try to send a quick test to see if it's actually Grasshopper
+            try:
+                test_msg = '{"type":"ping","parameters":{}}\n'
+                sock.sendall(test_msg.encode('utf-8'))
+                sock.settimeout(1.0)  # Quick response check
+                response = sock.recv(1024)
+                if response:
+                    result["grasshopper_response"] = True
+                    try:
+                        import json
+                        parsed = json.loads(response.decode('utf-8-sig').strip())
+                        result["response_preview"] = str(parsed)[:100]
+                    except:
+                        result["response_preview"] = response.decode('utf-8-sig', errors='ignore')[:100]
+                else:
+                    result["grasshopper_response"] = False
+            except socket.timeout:
+                result["grasshopper_response"] = False
+                result["error"] = "No response to ping"
+            except Exception as e:
+                result["grasshopper_response"] = False
+                result["error"] = f"Response test failed: {e}"
+        else:
+            result["connected"] = False
+            result["error_code"] = connect_result
+            # Common error codes
+            error_messages = {
+                10061: "Connection refused (service not running)",
+                10060: "Connection timeout",
+                10065: "Host unreachable",
+                111: "Connection refused (Linux)",
+                110: "Connection timeout (Linux)"
+            }
+            result["error"] = error_messages.get(connect_result, f"Connection failed (code {connect_result})")
+        
+        sock.close()
+        
+    except socket.timeout:
+        result["error"] = "Socket timeout"
+        result["response_time_ms"] = timeout * 1000
+    except Exception as e:
+        result["error"] = str(e)
+    
+    return result
+
+
 def get_windows_host():
     """Get Windows host IP from WSL with lazy detection."""
     # Priority 1: Environment variable (fastest)
@@ -125,25 +195,31 @@ def get_windows_host_enhanced():
         except Exception:
             pass
         
-        # Method 5: Common WSL2 gateways
+        # Method 5: Common WSL2 and network gateways
         common_gateways = [
-            "172.17.0.1",    # Docker default
-            "172.18.0.1",    # Docker alternate
-            "172.19.0.1",    # Docker alternate
-            "172.20.0.1",    # Docker alternate
-            "172.21.0.1",    # Docker alternate
-            "172.22.0.1",    # Docker alternate
-            "172.23.0.1",    # Docker alternate
-            "172.24.0.1",    # Docker alternate
-            "172.25.0.1",    # Docker alternate
-            "172.26.0.1",    # Docker alternate
-            "172.27.0.1",    # Docker alternate
-            "172.28.0.1",    # Docker alternate
-            "172.29.0.1",    # Docker alternate
-            "172.30.0.1",    # Docker alternate
-            "172.31.0.1",    # Docker alternate
-            "192.168.65.2",  # Docker Desktop
+            # Standard Docker ranges (.1 is typically the gateway)
+            "172.17.0.1", "172.18.0.1", "172.19.0.1", "172.20.0.1", "172.21.0.1",
+            "172.22.0.1", "172.23.0.1", "172.24.0.1", "172.25.0.1", "172.26.0.1", 
+            "172.27.0.1", "172.28.0.1", "172.29.0.1", "172.30.0.1", "172.31.0.1",
+            # Docker Desktop and common VM ranges
+            "192.168.65.2",  # Docker Desktop Mac
+            "192.168.1.1",   # Common home router
+            "192.168.0.1",   # Common home router  
+            "10.0.0.1",      # Common corporate
+            "172.16.0.1",    # Private range
+            # Add ranges that might be detected via other methods
         ]
+        
+        # Also add .1 gateway for any detected subnets
+        detected_subnets = set()
+        for candidate in candidates:
+            if "." in candidate:
+                parts = candidate.split(".")
+                if len(parts) == 4:
+                    subnet_gateway = f"{parts[0]}.{parts[1]}.{parts[2]}.1"
+                    detected_subnets.add(subnet_gateway)
+        
+        candidates.extend(detected_subnets)
         candidates.extend(common_gateways)
         
         # Remove duplicates while preserving order
@@ -157,17 +233,32 @@ def get_windows_host_enhanced():
         # Test each candidate
         print(f"Testing {len(unique_candidates)} candidate IPs for Grasshopper on port {port}...", file=sys.stderr)
         for ip in unique_candidates:
+            print(f"  Testing {ip}:{port}...", end="", file=sys.stderr)
             if test_connection(ip, port):
+                print(" ✓ CONNECTED", file=sys.stderr)
                 print(f"Found working Windows host: {ip}", file=sys.stderr)
                 return ip
+            else:
+                print(" ✗ Failed", file=sys.stderr)
         
         # Fallback: localhost (might work with port forwarding)
+        print(f"  Testing localhost:{port}...", end="", file=sys.stderr)
         if test_connection("localhost", port):
+            print(" ✓ CONNECTED", file=sys.stderr)
             print("Using localhost (port forwarding detected)", file=sys.stderr)
             return "localhost"
+        else:
+            print(" ✗ Failed", file=sys.stderr)
             
-        print("WARNING: Could not find Windows host. Set GRASSHOPPER_HOST environment variable.", file=sys.stderr)
-        print("Tried IPs:", ", ".join(unique_candidates[:10]), "...", file=sys.stderr)
+        print("❌ ERROR: No Grasshopper server found on any host!", file=sys.stderr)
+        print("📋 Troubleshooting steps:", file=sys.stderr)
+        print("  1. Ensure Rhino Grasshopper is running", file=sys.stderr)
+        print("  2. Load the TCP bridge component in Grasshopper", file=sys.stderr)
+        print("  3. Verify the component is listening on port 8081", file=sys.stderr)
+        print("  4. Check Windows Firewall allows WSL connections", file=sys.stderr)
+        print("  5. Try setting GRASSHOPPER_HOST manually:", file=sys.stderr)
+        print("     export GRASSHOPPER_HOST=<your_windows_ip>", file=sys.stderr)
+        print(f"Tested IPs: {', '.join(unique_candidates[:10])}", file=sys.stderr)
     
     return "localhost"
 
@@ -284,13 +375,36 @@ def send_to_grasshopper(
                 traceback.print_exc(file=sys.stderr)
             continue
     
-    # All retries failed
-    return {
+    # All retries failed - provide detailed error response
+    error_details = {
         "success": False, 
         "error": f"Failed after {retry_count} attempts: {str(last_error)}",
         "host_tried": GRASSHOPPER_HOST,
-        "port_tried": GRASSHOPPER_PORT
+        "port_tried": GRASSHOPPER_PORT,
+        "troubleshooting": {
+            "common_causes": [
+                "Rhino Grasshopper not running",
+                "TCP bridge component not loaded in Grasshopper",
+                "Windows Firewall blocking WSL connections",
+                "Incorrect port (should be 8081)",
+                "WSL network configuration issue"
+            ],
+            "quick_fixes": [
+                "1. Start Rhino and open Grasshopper",
+                "2. Load the TCP bridge component",
+                "3. Check component shows 'Listening on 0.0.0.0:8081'",
+                "4. Allow WSL through Windows Firewall",
+                f"5. Try: export GRASSHOPPER_HOST=<windows_ip>"
+            ],
+            "diagnostic_command": "python -c \"from bridge_design_system.mcp.grasshopper_mcp.utils.communication import diagnose_connection; diagnose_connection()\""
+        }
     }
+    
+    print("❌ CONNECTION FAILED - All retry attempts exhausted", file=sys.stderr)
+    print("💡 Run diagnostics with:", file=sys.stderr)
+    print("   python -c \"from bridge_design_system.mcp.grasshopper_mcp.utils.communication import diagnose_connection; diagnose_connection()\"", file=sys.stderr)
+    
+    return error_details
 
 
 def diagnose_connection() -> Dict[str, Any]:
