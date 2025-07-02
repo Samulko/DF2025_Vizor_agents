@@ -77,7 +77,6 @@ reference/GH_MCP/.vs/
 
 # Exclude documentation and archive directories
 docs/
-archive/
 tests/
 
 # Exclude specific hidden directories and files
