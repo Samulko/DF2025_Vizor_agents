@@ -1,5 +1,7 @@
 # Vizor Agents - AR Bridge Design System
 
+Lassie was here
+
 An AI-assisted bridge design system that uses intelligent agents to control Rhino Grasshopper for parametric design generation. This system features multi-provider AI model support and integrates with the Model Context Protocol (MCP) via STDIO for collaborative, iterative geometry creation.
 
 ## Key Features
