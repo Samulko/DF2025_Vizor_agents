@@ -127,3 +127,32 @@ class ModelProvider:
             "model": model,
             "has_api_key": bool(settings.get_api_key(provider)),
         }
+
+def test_model_api_connectivity() -> dict[str, bool]:
+    """
+    Test connectivity to all model API base URLs used in supported providers.
+    Returns:
+        Dictionary mapping provider names to connectivity status (True/False)
+    """
+    import requests
+    providers = {
+        "openai": "https://api.openai.com/v1",
+        "anthropic": "https://api.anthropic.com/v1",
+        "deepseek": "https://api.deepseek.com/v1",
+        "gemini": "https://generativelanguage.googleapis.com/v1beta/openai/",
+        "together": "https://api.together.xyz/v1",
+        # HuggingFace is inference API, but we can check the endpoint
+        "hf": "https://api-inference.huggingface.co/models",
+    }
+    results = {}
+    for provider, url in providers.items():
+        try:
+            # Use HEAD for minimal request, fallback to GET if not allowed
+            resp = requests.head(url, timeout=5)
+            if resp.status_code >= 400:
+                # Some APIs may not support HEAD, try GET
+                resp = requests.get(url, timeout=5)
+            results[provider] = resp.status_code < 500
+        except Exception:
+            results[provider] = False
+    return results

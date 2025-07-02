@@ -33,14 +33,13 @@ class Settings(BaseSettings):
 
     # MCP Configuration
     mcp_transport_mode: str = "http"  # "http" or "stdio"
-    mcp_http_url: str = "http://localhost:8001/mcp"
+    mcp_http_url: str = "http://127.0.0.1:8081/mcp"  # Use 127.0.0.1 for WSL-to-Windows communication
     mcp_http_timeout: int = 30
     mcp_stdio_command: str = "uv"
     mcp_stdio_args: str = "run,python,-m,grasshopper_mcp.bridge"
 
     # Paths
     grasshopper_mcp_path: str = ""
-    grasshopper_mcp_url: str = "http://localhost:8001/mcp"  # Legacy - use mcp_http_url
     material_db_path: str = "materials.db"
 
     # Logging Configuration
@@ -54,7 +53,6 @@ class Settings(BaseSettings):
     # MCP Server Configuration
     mcp_server_host: str = "127.0.0.1"
     mcp_server_port: int = 8001
-    mcp_grasshopper_url: str = "http://localhost:8080"
 
     # Development Settings
     debug: bool = False

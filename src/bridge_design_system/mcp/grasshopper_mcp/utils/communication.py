@@ -5,6 +5,7 @@ This module contains functions for communicating with the Grasshopper MCP server
 """
 
 import json
+import os
 
 # Grasshopper MCP connection parameters
 import platform
@@ -43,13 +44,42 @@ def get_windows_host():
                 windows_ip = result.stdout.strip().split()[1]
                 print(f"WSL detected Windows host via resolv.conf: {windows_ip}", file=sys.stderr)
                 return windows_ip
+                
+            # Method 3: Common WSL2 default IPs (Windows Home fallback)
+            common_wsl_ips = ["172.28.192.1", "172.16.0.1", "192.168.0.1"]
+            print("WSL auto-detection failed, trying common Windows Home IPs...", file=sys.stderr)
+            
+            for test_ip in common_wsl_ips:
+                try:
+                    # Test if IP is reachable
+                    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    sock.settimeout(2)
+                    result = sock.connect_ex((test_ip, 8081))
+                    sock.close()
+                    
+                    if result == 0:
+                        print(f"WSL found reachable Windows host: {test_ip}", file=sys.stderr)
+                        return test_ip
+                except Exception:
+                    continue
+            
+            print("WSL could not find Windows host. Set GRASSHOPPER_HOST manually.", file=sys.stderr)
+            
         except Exception as e:
             print(f"Error detecting Windows host: {e}", file=sys.stderr)
     return "localhost"
 
 
-GRASSHOPPER_HOST = get_windows_host()
-GRASSHOPPER_PORT = 8081  # TCP bridge port (GH_MCPComponent listens on 8081)
+GRASSHOPPER_HOST = os.environ.get("GRASSHOPPER_HOST", get_windows_host())
+GRASSHOPPER_PORT = int(os.environ.get("GRASSHOPPER_PORT", "8081"))
+
+print(GRASSHOPPER_HOST)
+print(GRASSHOPPER_PORT)
+# print(f"xxxxxxxxx rasshopper TCP bridge target: {GRASSHOPPER_HOST}:{GRASSHOPPER_PORT}", file=sys.stderr)
+
+#To-do unhardwire ip address
+GRASSHOPPER_HOST = "127.0.0.1"
+GRASSHOPPER_PORT=8081
 
 # Log the connection target
 print(f"Grasshopper TCP bridge target: {GRASSHOPPER_HOST}:{GRASSHOPPER_PORT}", file=sys.stderr)
@@ -86,6 +116,7 @@ def send_to_grasshopper(
 
         # Connect to Grasshopper MCP
         client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        
         client.connect((GRASSHOPPER_HOST, GRASSHOPPER_PORT))
 
         # Send command
