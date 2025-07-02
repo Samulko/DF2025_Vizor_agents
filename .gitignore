@@ -100,3 +100,6 @@ PROBLEMS.md
 
 # Workshop files (not for version control)
 uv.lock
+
+# MCP communication utilities
+src/bridge_design_system/mcp/grasshopper_mcp/utils/communication.py
