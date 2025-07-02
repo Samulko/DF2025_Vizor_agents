@@ -4,6 +4,7 @@ import math
 import argparse
 from pathlib import Path
 from typing import Dict, List, Any
+import re
 
 from smolagents import CodeAgent, tool
 from bridge_design_system.config.logging_config import get_logger
@@ -83,6 +84,22 @@ def save_categorized_data(data: Dict[str, Any], filename: str) -> str:
     return f"✅ Data written to {out_path}"
 
 
+@tool
+def generate_tags_from_description(description: str) -> list:
+    """
+    Generate prompt tags from a description (keyword-based fallback).
+
+    Args:
+        description: The descriptive text for the object.
+
+    Returns:
+        A list of tags extracted from the description.
+    """
+    import re
+    words = re.findall(r'\b\w+\b', description.lower())
+    return list(set(words))
+
+
 # ─── STEP 2: AGENT FACTORY ────────────────────────────────────────────────────
 
 def create_category_agent(model_name: str = None) -> CodeAgent:
@@ -93,7 +110,7 @@ def create_category_agent(model_name: str = None) -> CodeAgent:
     if model_name is None:
         model_name = getattr(settings, 'category_agent_model', 'gemini-2.5-flash-preview-05-20')
     model = ModelProvider.get_model(agent_name, temperature=None)
-    tools = [calculate_distance, calculate_angles, save_categorized_data]
+    tools = [calculate_distance, calculate_angles, save_categorized_data, generate_tags_from_description]
     agent = CodeAgent(
         tools=tools,
         model=model,
@@ -144,10 +161,11 @@ def analyze_shape(vertices: List[List[float]]) -> str:
         return f"polygon_{n}"
 
 
-def categorize(catalog: Dict[str, Any]) -> Dict[str, Any]:
+def categorize(catalog: Dict[str, Any], agent=None) -> Dict[str, Any]:
     """
     Categorize shapes into triangles, squares, hexagons, octagons, and general polygons.
     Polygons with 8 or more sides are grouped as 'polygon_8plus'.
+    Extract tags from description if present. Always include a 'description' field in output.
     """
     stats = {"total": 0, "types": {}}
     categorized = {
@@ -161,6 +179,23 @@ def categorize(catalog: Dict[str, Any]) -> Dict[str, Any]:
     for obj in catalog.get("catalog", []):
         stats["total"] += 1
         verts = obj.get("vertices", [])
+        description = obj.get("description", "")
+        tags = []
+        if description:
+            if agent:
+                prompt = f"Extract 3-5 meaningful, comma-separated tags from this description: '{description}'"
+                tags_str = agent.run(prompt)
+                if isinstance(tags_str, str):
+                    tags = [tag.strip() for tag in tags_str.split(',') if tag.strip()]
+                elif isinstance(tags_str, list):
+                    tags = tags_str
+                else:
+                    tags = [str(tags_str)]
+            else:
+                tags = generate_tags_from_description(description)
+        # Always include description in output
+        obj["description"] = description
+        obj["tags"] = tags
         shape = analyze_shape(verts)
         if shape == "triangle":
             categorized["triangle"].append(obj)
@@ -196,7 +231,7 @@ def demo(catalog_file: Path, out_file: str):
     catalog = load_catalog(catalog_file)
     agent = create_category_agent()
     logger.info("Categorizing locally...")
-    result = categorize(catalog)
+    result = categorize(catalog, agent)
     logger.info(f"Total objects: {result['stats']['total']}")
     # Save each category to its own file
     for shape in ["triangle", "square", "hexagon", "octagon", "polygon_8plus", "other_polygons"]:
