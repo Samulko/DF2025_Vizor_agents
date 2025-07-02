@@ -1,0 +1,61 @@
+@startuml Material Agent System Architecture
+
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam componentStyle rectangle
+
+package "Material Agent System" {
+    
+    component "Material Agent" as MA {
+        component "Shape Analyzer" as SA
+        component "Data Processor" as DP
+        component "Statistics Engine" as SE
+    }
+    
+    component "Mathematical Tools" as MT {
+        component "Distance Calculator" as DC
+        component "Angle Calculator" as AC
+        component "Geometry Analyzer" as GA
+    }
+    
+    component "Data Management" as DM {
+        component "Catalog Loader" as CL
+        component "Results Saver" as RS
+        component "File Handler" as FH
+    }
+    
+    component "AI Integration" as AI {
+        component "Model Provider" as MP
+        component "Code Agent" as CA
+        component "Tool Registry" as TR
+    }
+    
+    database "Material Catalog" as MC {
+        [found_material_catalog.json]
+    }
+    
+    database "Results Storage" as RS {
+        [material_categories.json]
+    }
+    
+    interface "Shape Analysis API" as API
+    
+}
+
+' Relationships
+MA --> MT : uses
+MA --> DM : manages
+MA --> AI : integrates
+DM --> MC : reads
+DM --> RS : writes
+API --> MA : exposes
+
+note right of MA : Core analysis engine\n- Triangle classification\n- Shape categorization\n- Statistical analysis
+
+note right of MT : Mathematical utilities\n- Euclidean distance\n- Angle calculations\n- Geometric properties
+
+note right of DM : Data operations\n- JSON file handling\n- Catalog loading\n- Results persistence
+
+note right of AI : AI model integration\n- SmolAgents framework\n- Tool registration\n- Model management
+
+@enduml 

@@ -19,11 +19,11 @@ logger = get_logger(__name__)
 
 @dataclass
 class MaterialCut:
-    """Represents a single cut made on a beam."""
+    """Represents a single cut made on a material piece."""
 
     element_id: str
     length_mm: int
-    position_mm: int  # Position where cut starts on the beam
+    position_mm: int  # Position where cut starts on the material
     kerf_loss_mm: int = 3
     timestamp: str = None
 
@@ -33,53 +33,29 @@ class MaterialCut:
 
 
 @dataclass
-class BeamUtilization:
-    """Represents utilization status of a single beam."""
+class MaterialEntry:
+    """Represents a general material entry (not beam-specific)."""
 
-    beam_id: str
-    original_length_mm: int
-    remaining_length_mm: int
-    cuts: List[MaterialCut]
-    waste_mm: int
-    utilization_percent: float
+    material_id: str
+    dimensions_mm: dict  # e.g., {"length": 1200, "width": 200, "height": 30}
+    weight_kg: float = 0.0
+    density_kg_m3: float = 0.0
+    cuts: list = None
+    waste_mm: int = 0
+    utilization_percent: float = 0.0
+    stiffness: str = ""
+    texture: str = ""
+    humidity: str = ""
+    description: str = ""
+    source: str = ""
 
-    def can_accommodate(self, length_mm: int, kerf_loss_mm: int = 3) -> bool:
-        """Check if beam can accommodate a cut of given length."""
-        required_space = length_mm + kerf_loss_mm
-        return self.remaining_length_mm >= required_space
-
-    def add_cut(self, element_id: str, length_mm: int, kerf_loss_mm: int = 3) -> bool:
-        """Add a cut to this beam if possible."""
-        if not self.can_accommodate(length_mm, kerf_loss_mm):
-            return False
-
-        # Calculate position for new cut
-        position_mm = self.original_length_mm - self.remaining_length_mm
-
-        # Create the cut
-        cut = MaterialCut(
-            element_id=element_id,
-            length_mm=length_mm,
-            position_mm=position_mm,
-            kerf_loss_mm=kerf_loss_mm,
-        )
-
-        # Update beam state
-        self.cuts.append(cut)
-        self.remaining_length_mm -= length_mm + kerf_loss_mm
-        self.utilization_percent = (
-            (self.original_length_mm - self.remaining_length_mm) / self.original_length_mm
-        ) * 100
-
-        # Update waste (remaining unusable material)
-        if self.remaining_length_mm < 50:  # Unusable if less than 50mm
-            self.waste_mm = self.remaining_length_mm
-
-        return True
+    def __post_init__(self):
+        if self.cuts is None:
+            self.cuts = []
 
 
 class MaterialInventoryManager:
-    """Manages material inventory operations with persistent JSON storage."""
+    """Manages material inventory operations with persistent JSON storage (generalized)."""
 
     def __init__(self, inventory_path: Optional[str] = None):
         """Initialize material inventory manager."""
@@ -99,7 +75,7 @@ class MaterialInventoryManager:
             if self.inventory_path.exists():
                 with open(self.inventory_path, "r") as f:
                     data = json.load(f)
-                logger.info(f"Loaded existing inventory with {len(data['available_beams'])} beams")
+                logger.info(f"Loaded existing inventory with {len(data['materials'])} materials")
                 return data
             else:
                 logger.warning(f"Inventory file not found: {self.inventory_path}")
@@ -112,20 +88,14 @@ class MaterialInventoryManager:
         """Create default inventory structure."""
         logger.info("Creating default material inventory")
         return {
-            "total_stock_mm": 13000,
-            "beam_length_mm": 1980,
-            "kerf_loss_mm": 3,
-            "available_beams": [],
-            "used_elements": [],
+            "materials": [],
             "total_waste_mm": 0,
             "total_utilization_percent": 0.0,
             "cutting_sessions": [],
             "last_updated": datetime.now().isoformat(),
             "metadata": {
-                "cross_section": "5x5cm",
-                "material_type": "timber",
                 "project": "bridge_design",
-                "version": "1.0",
+                "version": "2.0",
                 "units": "millimeters",
             },
         }
@@ -156,11 +126,10 @@ class MaterialInventoryManager:
             logger.error(f"Failed to save inventory: {e}")
             return False
 
-    def get_beams(self) -> List[BeamUtilization]:
-        """Get list of beam utilization objects."""
-        beams = []
-        for beam_data in self.inventory_data["available_beams"]:
-            # Convert cuts data to MaterialCut objects
+    def get_materials(self) -> List[MaterialEntry]:
+        """Get list of material entries."""
+        materials = []
+        for mat_data in self.inventory_data["materials"]:
             cuts = [
                 MaterialCut(
                     element_id=cut_data["element_id"],
@@ -169,31 +138,32 @@ class MaterialInventoryManager:
                     kerf_loss_mm=cut_data.get("kerf_loss_mm", 3),
                     timestamp=cut_data.get("timestamp", ""),
                 )
-                for cut_data in beam_data.get("cuts", [])
+                for cut_data in mat_data.get("cuts", [])
             ]
-
-            beam = BeamUtilization(
-                beam_id=beam_data["id"],
-                original_length_mm=beam_data["original_length_mm"],
-                remaining_length_mm=beam_data["remaining_length_mm"],
+            material = MaterialEntry(
+                material_id=mat_data["material_id"],
+                dimensions_mm=mat_data.get("dimensions_mm", {}),
+                weight_kg=mat_data.get("weight_kg", 0.0),
+                density_kg_m3=mat_data.get("density_kg_m3", 0.0),
                 cuts=cuts,
-                waste_mm=beam_data.get("waste_mm", 0),
-                utilization_percent=beam_data.get("utilization_percent", 0.0),
+                waste_mm=mat_data.get("waste_mm", 0),
+                utilization_percent=mat_data.get("utilization_percent", 0.0),
+                stiffness=mat_data.get("stiffness", ""),
+                texture=mat_data.get("texture", ""),
+                humidity=mat_data.get("humidity", ""),
+                description=mat_data.get("description", ""),
+                source=mat_data.get("source", ""),
             )
-            beams.append(beam)
+            materials.append(material)
+        return materials
 
-        return beams
-
-    def update_beams(self, beams: List[BeamUtilization]) -> bool:
-        """Update inventory with modified beam utilization data."""
+    def update_materials(self, materials: List[MaterialEntry]) -> bool:
+        """Update inventory with modified material data."""
         try:
-            # Convert beam objects back to JSON format
-            beam_data = []
+            mat_data = []
             total_waste = 0
             total_utilization = 0
-
-            for beam in beams:
-                # Convert cuts to dict format
+            for material in materials:
                 cuts_data = [
                     {
                         "element_id": cut.element_id,
@@ -202,47 +172,46 @@ class MaterialInventoryManager:
                         "kerf_loss_mm": cut.kerf_loss_mm,
                         "timestamp": cut.timestamp,
                     }
-                    for cut in beam.cuts
+                    for cut in material.cuts
                 ]
-
-                beam_dict = {
-                    "id": beam.beam_id,
-                    "original_length_mm": beam.original_length_mm,
-                    "remaining_length_mm": beam.remaining_length_mm,
+                material_dict = {
+                    "material_id": material.material_id,
+                    "dimensions_mm": material.dimensions_mm,
+                    "weight_kg": material.weight_kg,
+                    "density_kg_m3": material.density_kg_m3,
                     "cuts": cuts_data,
-                    "waste_mm": beam.waste_mm,
-                    "utilization_percent": beam.utilization_percent,
+                    "waste_mm": material.waste_mm,
+                    "utilization_percent": material.utilization_percent,
+                    "stiffness": material.stiffness,
+                    "texture": material.texture,
+                    "humidity": material.humidity,
+                    "description": material.description,
+                    "source": material.source,
                 }
-
-                beam_data.append(beam_dict)
-                total_waste += beam.waste_mm
-                total_utilization += beam.utilization_percent
-
-            # Update inventory data
-            self.inventory_data["available_beams"] = beam_data
+                mat_data.append(material_dict)
+                total_waste += material.waste_mm
+                total_utilization += material.utilization_percent
+            self.inventory_data["materials"] = mat_data
             self.inventory_data["total_waste_mm"] = total_waste
             self.inventory_data["total_utilization_percent"] = (
-                total_utilization / len(beams) if beams else 0
+                total_utilization / len(materials) if materials else 0
             )
-
-            # Save to file
             return self._save_inventory()
-
         except Exception as e:
-            logger.error(f"Failed to update beams: {e}")
+            logger.error(f"Failed to update materials: {e}")
             return False
 
     def get_status(self, detailed: bool = False) -> Dict[str, Any]:
         """Get current inventory status."""
-        beams = self.get_beams()
+        materials = self.get_materials()
 
-        total_original = sum(beam.original_length_mm for beam in beams)
-        total_remaining = sum(beam.remaining_length_mm for beam in beams)
+        total_original = sum(material.dimensions_mm.get("length", 0) for material in materials)
+        total_remaining = sum(material.dimensions_mm.get("length", 0) for material in materials)
         total_used = total_original - total_remaining
-        total_waste = sum(beam.waste_mm for beam in beams)
+        total_waste = sum(material.waste_mm for material in materials)
 
         status = {
-            "total_beams": len(beams),
+            "total_materials": len(materials),
             "total_original_mm": total_original,
             "total_remaining_mm": total_remaining,
             "total_used_mm": total_used,
@@ -251,19 +220,19 @@ class MaterialInventoryManager:
                 (total_used / total_original * 100) if total_original > 0 else 0
             ),
             "waste_percentage": (total_waste / total_original * 100) if total_original > 0 else 0,
-            "beams_available": len([beam for beam in beams if beam.remaining_length_mm > 50]),
+            "materials_available": len([material for material in materials if material.dimensions_mm.get("length", 0) > 0]),
         }
 
         if detailed:
-            status["beam_details"] = [
+            status["material_details"] = [
                 {
-                    "id": beam.beam_id,
-                    "remaining_mm": beam.remaining_length_mm,
-                    "utilization_percent": beam.utilization_percent,
-                    "cuts_count": len(beam.cuts),
-                    "waste_mm": beam.waste_mm,
+                    "material_id": material.material_id,
+                    "remaining_mm": material.dimensions_mm.get("length", 0),
+                    "utilization_percent": material.utilization_percent,
+                    "cuts_count": len(material.cuts),
+                    "waste_mm": material.waste_mm,
                 }
-                for beam in beams
+                for material in materials
             ]
 
         return status
@@ -394,14 +363,14 @@ class CuttingOptimizer:
         logger.info(f"Cutting optimizer initialized with {kerf_loss_mm}mm kerf loss")
 
     def first_fit_decreasing(
-        self, required_lengths: List[int], beams: List[BeamUtilization]
+        self, required_lengths: List[int], materials: List[MaterialEntry]
     ) -> Dict[str, Any]:
         """
         Implement First Fit Decreasing algorithm for optimal cutting sequence.
 
         Args:
             required_lengths: List of required element lengths in mm
-            beams: List of available beams
+            materials: List of available materials
 
         Returns:
             Dict with cutting plan, assignments, and waste analysis
@@ -411,39 +380,53 @@ class CuttingOptimizer:
         # Sort required lengths in decreasing order
         sorted_lengths = sorted(required_lengths, reverse=True)
 
-        # Create working copies of beams
-        working_beams = [
-            BeamUtilization(
-                beam_id=beam.beam_id,
-                original_length_mm=beam.original_length_mm,
-                remaining_length_mm=beam.remaining_length_mm,
-                cuts=beam.cuts.copy(),
-                waste_mm=beam.waste_mm,
-                utilization_percent=beam.utilization_percent,
+        # Create working copies of materials
+        working_materials = [
+            MaterialEntry(
+                material_id=material.material_id,
+                dimensions_mm=material.dimensions_mm.copy(),
+                weight_kg=material.weight_kg,
+                density_kg_m3=material.density_kg_m3,
+                cuts=material.cuts.copy(),
+                waste_mm=material.waste_mm,
+                utilization_percent=material.utilization_percent,
+                stiffness=material.stiffness,
+                texture=material.texture,
+                humidity=material.humidity,
+                description=material.description,
+                source=material.source,
             )
-            for beam in beams
+            for material in materials
         ]
 
         cutting_plan = []
         unassigned = []
 
-        # Try to assign each element to the first beam that can accommodate it
+        # Try to assign each element to the first material that can accommodate it
         for i, length in enumerate(sorted_lengths):
             assigned = False
             element_id = f"element_{i+1:03d}"
 
-            for beam in working_beams:
-                if beam.can_accommodate(length, self.kerf_loss_mm):
-                    if beam.add_cut(element_id, length, self.kerf_loss_mm):
+            for material in working_materials:
+                if material.dimensions_mm.get("length", 0) >= length:
+                    if material.cuts.append(
+                        MaterialCut(
+                            element_id=element_id,
+                            length_mm=length,
+                            position_mm=material.dimensions_mm["length"] - length,
+                            kerf_loss_mm=self.kerf_loss_mm,
+                        )
+                    ):
                         cutting_plan.append(
                             {
                                 "element_id": element_id,
                                 "length_mm": length,
-                                "beam_id": beam.beam_id,
-                                "position_mm": beam.cuts[-1].position_mm,
+                                "material_id": material.material_id,
+                                "position_mm": material.cuts[-1].position_mm,
                                 "kerf_loss_mm": self.kerf_loss_mm,
                             }
                         )
+                        material.dimensions_mm["length"] -= length
                         assigned = True
                         break
 
@@ -452,29 +435,35 @@ class CuttingOptimizer:
                     {
                         "element_id": element_id,
                         "length_mm": length,
-                        "reason": "No beam available with sufficient remaining length",
+                        "reason": "No material available with sufficient remaining length",
                     }
                 )
 
         # Calculate waste and efficiency
-        total_waste = sum(beam.waste_mm for beam in working_beams)
-        total_original = sum(beam.original_length_mm for beam in working_beams)
+        total_waste = sum(material.waste_mm for material in working_materials)
+        total_original = sum(material.dimensions_mm.get("length", 0) for material in working_materials)
         total_used = sum(cut["length_mm"] + cut["kerf_loss_mm"] for cut in cutting_plan)
 
         efficiency = ((total_used / total_original) * 100) if total_original > 0 else 0
 
         return {
             "cutting_plan": cutting_plan,
-            "beam_assignments": [
+            "material_assignments": [
                 {
-                    "beam_id": beam.beam_id,
-                    "original_length_mm": beam.original_length_mm,
-                    "remaining_length_mm": beam.remaining_length_mm,
-                    "cuts": [asdict(cut) for cut in beam.cuts],
-                    "utilization_percent": beam.utilization_percent,
-                    "waste_mm": beam.waste_mm,
+                    "material_id": material.material_id,
+                    "dimensions_mm": material.dimensions_mm,
+                    "weight_kg": material.weight_kg,
+                    "density_kg_m3": material.density_kg_m3,
+                    "cuts": [asdict(cut) for cut in material.cuts],
+                    "utilization_percent": material.utilization_percent,
+                    "waste_mm": material.waste_mm,
+                    "stiffness": material.stiffness,
+                    "texture": material.texture,
+                    "humidity": material.humidity,
+                    "description": material.description,
+                    "source": material.source,
                 }
-                for beam in working_beams
+                for material in working_materials
             ],
             "unassigned_elements": unassigned,
             "summary": {
@@ -488,14 +477,14 @@ class CuttingOptimizer:
         }
 
     def validate_feasibility(
-        self, required_lengths: List[int], beams: List[BeamUtilization]
+        self, required_lengths: List[int], materials: List[MaterialEntry]
     ) -> Dict[str, Any]:
         """
         Validate if required cuts are feasible with available material.
 
         Args:
             required_lengths: List of required element lengths in mm
-            beams: List of available beams
+            materials: List of available materials
 
         Returns:
             Dict with feasibility analysis and suggestions
@@ -503,7 +492,7 @@ class CuttingOptimizer:
         logger.info(f"Validating feasibility for {len(required_lengths)} elements")
 
         total_required = sum(required_lengths) + (len(required_lengths) * self.kerf_loss_mm)
-        total_available = sum(beam.remaining_length_mm for beam in beams)
+        total_available = sum(material.dimensions_mm.get("length", 0) for material in materials)
 
         # Basic capacity check
         if total_required > total_available:
@@ -520,25 +509,25 @@ class CuttingOptimizer:
                 ],
             }
 
-        # Check if largest element can fit in any beam
+        # Check if largest element can fit in any material
         max_length = max(required_lengths) if required_lengths else 0
-        max_beam_space = max(beam.remaining_length_mm for beam in beams) if beams else 0
+        max_material_space = max(material.dimensions_mm.get("length", 0) for material in materials) if materials else 0
 
-        if max_length + self.kerf_loss_mm > max_beam_space:
+        if max_length + self.kerf_loss_mm > max_material_space:
             return {
                 "feasible": False,
-                "reason": "Largest element exceeds maximum beam capacity",
+                "reason": "Largest element exceeds maximum material capacity",
                 "largest_element_mm": max_length,
-                "max_beam_space_mm": max_beam_space,
+                "max_material_space_mm": max_material_space,
                 "suggestions": [
-                    f"Reduce largest element from {max_length}mm to {max_beam_space - self.kerf_loss_mm}mm",
+                    f"Reduce largest element from {max_length}mm to {max_material_space - self.kerf_loss_mm}mm",
                     "Split large elements into smaller segments",
-                    "Use beam joining techniques for large elements",
+                    "Use material joining techniques for large elements",
                 ],
             }
 
         # Run cutting optimization to check detailed feasibility
-        cutting_result = self.first_fit_decreasing(required_lengths, beams)
+        cutting_result = self.first_fit_decreasing(required_lengths, materials)
 
         return {
             "feasible": cutting_result["summary"]["feasible"],
