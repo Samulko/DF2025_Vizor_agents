@@ -9,6 +9,7 @@ from typing import Any, Callable, Dict, List, Optional, Set
 from smolagents import ActionStep
 
 from ..config.logging_config import get_logger
+from .trace_logger import log_agent_interaction
 
 logger = get_logger(__name__)
 
@@ -148,6 +149,9 @@ class MonitorCallback:
 
             # Check if this is a completion step
             is_completion = step_data.get("status") == "completed"
+
+            # Log to trace logger for workshop analysis
+            self._log_to_trace_logger(step_data, memory_step, agent, current_time)
 
             # Simple sync update using thread-safe queue
             self._queue_status_update(step_data)
@@ -338,14 +342,13 @@ class MonitorCallback:
 
                 # Handle different agent response formats
                 if self.agent_name == "triage_agent":
-                    # For triage agent, extract from "Final answer:" format
-                    final_answer_match = action_output.split("Final answer: ")
-                    if len(final_answer_match) > 1:
-                        clean_answer = final_answer_match[-1].strip()
-                        # Remove trailing metadata like [Step X: Duration...]
-                        clean_answer = clean_answer.split("[Step")[0].strip()
-                        if clean_answer:
-                            return clean_answer
+                    # For triage agent, extract just the clean final answer
+                    # Truncate if too long to keep it readable
+                    if len(action_output) > 500:
+                        truncated = action_output[:500] + "..."
+                        return f"Response: {truncated}"
+                    else:
+                        return f"Response: {action_output}"
                 elif "geometry_agent" in self.agent_name or "syslogic_agent" in self.agent_name:
                     # For geometry and syslogic agents, look for structured responses
                     if "### 1. Task outcome" in action_output:
@@ -441,6 +444,44 @@ class MonitorCallback:
             logger.debug(f"Error extracting response content: {e}")
 
         return None
+
+    def _log_to_trace_logger(self, step_data: Dict[str, Any], memory_step: ActionStep, agent: Any, current_time: float):
+        """Log interaction to trace logger for workshop analysis."""
+        try:
+            # Extract duration if available
+            duration = None
+            if hasattr(memory_step, "timing") and memory_step.timing:
+                if hasattr(memory_step.timing, "duration"):
+                    duration = memory_step.timing.duration
+
+            # Extract token usage if available
+            token_usage = None
+            if hasattr(memory_step, "token_usage") and memory_step.token_usage:
+                token_usage = {
+                    "input_tokens": getattr(memory_step.token_usage, "input_tokens", 0),
+                    "output_tokens": getattr(memory_step.token_usage, "output_tokens", 0),
+                    "total_tokens": getattr(memory_step.token_usage, "total_tokens", 0)
+                }
+
+            # Extract task description
+            task_description = None
+            if hasattr(memory_step, "task") and memory_step.task:
+                task_description = str(memory_step.task)[:200]  # Truncate for logs
+
+            log_agent_interaction(
+                agent_name=self.agent_name,
+                step_number=step_data.get("step_number", 0),
+                task_description=task_description,
+                status=step_data.get("status", "unknown"),
+                tool_calls=step_data.get("tool_calls", []),
+                response_content=step_data.get("last_response"),
+                error_message=step_data.get("error_message"),
+                duration_seconds=duration,
+                token_usage=token_usage,
+                memory_size=step_data.get("memory_size", 0)
+            )
+        except Exception as e:
+            logger.debug(f"📊 Failed to log trace: {e}")
 
     def _queue_status_update(self, step_data: Dict[str, Any]) -> None:
         """Queue a simple status update (no complex threading)."""
@@ -789,14 +830,13 @@ class RemoteMonitorCallback:
 
                 # Handle different agent response formats
                 if self.agent_name == "triage_agent":
-                    # For triage agent, extract from "Final answer:" format
-                    final_answer_match = action_output.split("Final answer: ")
-                    if len(final_answer_match) > 1:
-                        clean_answer = final_answer_match[-1].strip()
-                        # Remove trailing metadata like [Step X: Duration...]
-                        clean_answer = clean_answer.split("[Step")[0].strip()
-                        if clean_answer:
-                            return clean_answer
+                    # For triage agent, extract just the clean final answer
+                    # Truncate if too long to keep it readable for remote monitoring
+                    if len(action_output) > 500:
+                        truncated = action_output[:500] + "..."
+                        return f"Response: {truncated}"
+                    else:
+                        return f"Response: {action_output}"
                 elif "geometry_agent" in self.agent_name or "syslogic_agent" in self.agent_name:
                     # For geometry and syslogic agents, look for structured responses
                     if "### 1. Task outcome" in action_output:

@@ -61,17 +61,28 @@ class OpenTelemetryConfig:
             logger.error(f"❌ Failed to configure Langfuse: {e}")
             return False
         
-    def configure_phoenix(self) -> bool:
-        """Configure Arize Phoenix as OpenTelemetry backend."""
+    def configure_phoenix(self, lcars_exporter=None) -> bool:
+        """Configure Arize Phoenix as OpenTelemetry backend with optional LCARS integration."""
         try:
-            # Try to import and configure Phoenix
-            from phoenix.otel import register
+            # Import required OTLP exporter
+            from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
             
             phoenix_url = f"{settings.phoenix_host}:{settings.phoenix_port}"
-            os.environ["PHOENIX_COLLECTOR_ENDPOINT"] = f"{phoenix_url}/v1/traces"
             
-            register()  # Uses environment variables for configuration
+            # Configure OTLP gRPC exporter for Phoenix
+            phoenix_exporter = OTLPSpanExporter(
+                endpoint="http://localhost:4317",
+                insecure=True  # For local development
+            )
+            
+            self.trace_provider.add_span_processor(SimpleSpanProcessor(phoenix_exporter))
             logger.info(f"✅ Configured Phoenix OpenTelemetry backend at {phoenix_url}")
+            
+            # Add LCARS exporter if provided for combined monitoring
+            if lcars_exporter:
+                self.trace_provider.add_span_processor(SimpleSpanProcessor(lcars_exporter))
+                logger.info("✅ Added LCARS exporter to Phoenix configuration")
+            
             return True
             
         except ImportError:
@@ -138,7 +149,7 @@ class OpenTelemetryConfig:
             if self.backend == "langfuse":
                 success = self.configure_langfuse()
             elif self.backend == "phoenix":
-                success = self.configure_phoenix()
+                success = self.configure_phoenix(lcars_exporter)  # Pass LCARS exporter to Phoenix
             elif self.backend == "console":
                 success = self.configure_console()
             elif self.backend == "hybrid":

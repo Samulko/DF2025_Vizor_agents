@@ -17,6 +17,7 @@ from .config.settings import settings
 from .state.component_registry import initialize_registry
 from .tools.material_tools import MaterialInventoryManager
 from .voice_input import get_user_input, check_voice_dependencies
+from .monitoring.trace_logger import finalize_workshop_session, get_trace_logger
 
 logger = get_logger(__name__)
 
@@ -605,6 +606,8 @@ def interactive_mode(
         )
         print("Type 'status' to see agent status, 'gaze' to see detailed gaze information")
         print("Type 'gazetest' to start continuous gaze monitoring for debugging")
+        print("Type 'workshop-finalize' to save workshop session with participant info")
+        print("Type 'workshop-report' to generate workshop analysis report")
         if hard_reset:
             print("✅ Started completely fresh (--hard-reset flag used)")
         elif reset_memory:
@@ -814,6 +817,33 @@ def interactive_mode(
                     else:
                         print("\n👁️ VizorListener not available")
                     continue
+                elif user_input.lower() == "workshop-finalize":
+                    # Finalize workshop session with participant info
+                    print("\n📊 Workshop Session Finalization")
+                    print("=" * 50)
+                    participant_id = input("Participant ID (optional): ").strip() or None
+                    workshop_group = input("Workshop Group (optional): ").strip() or None
+                    session_notes = input("Session Notes (optional): ").strip() or None
+                    
+                    finalize_workshop_session(
+                        participant_id=participant_id,
+                        workshop_group=workshop_group,
+                        session_notes=session_notes
+                    )
+                    print("✅ Workshop session finalized and saved!")
+                    continue
+                    
+                elif user_input.lower() == "workshop-report":
+                    # Generate workshop analysis report
+                    print("\n📋 Generating workshop analysis report...")
+                    trace_logger = get_trace_logger()
+                    report_file = trace_logger.generate_workshop_report()
+                    if report_file:
+                        print(f"✅ Workshop report generated: {report_file}")
+                    else:
+                        print("❌ Failed to generate workshop report")
+                    continue
+                    
                 elif user_input.lower() == "gazetest":
                     # Continuous gaze monitoring for debugging
                     if vizor_listener and vizor_listener.is_ros_connected():
@@ -962,11 +992,6 @@ def main():
         help="Run in interactive mode (uses smolagents-native by default)",
     )
     parser.add_argument(
-        "--legacy",
-        action="store_true",
-        help="Use legacy triage agent implementation (instead of default smolagents)",
-    )
-    parser.add_argument(
         "--reset",
         action="store_true",
         help="Start with fresh agent memories (clears previous conversation history)",
@@ -975,11 +1000,6 @@ def main():
         "--hard-reset",
         action="store_true",
         help="Start completely fresh (clears agent memories, component registry, AND log files)",
-    )
-    parser.add_argument(
-        "--enhanced-cli",
-        action="store_true",
-        help="Run enhanced CLI with Rich formatting and real-time status",
     )
     parser.add_argument(
         "--monitoring",
@@ -1124,13 +1144,9 @@ def main():
         # Override sys.argv to pass the port argument
         sys.argv = ["mcp-server", "--port", str(args.mcp_port)]
         start_mcp_server()
-    elif args.enhanced_cli:
-        from .cli.enhanced_interface import run_enhanced_cli
-
-        run_enhanced_cli(simple_mode=False)
     elif args.interactive:
         interactive_mode(
-            use_legacy=args.legacy,
+            use_legacy=False,
             reset_memory=args.reset,
             hard_reset=args.hard_reset,
             enable_monitoring=args.monitoring,
