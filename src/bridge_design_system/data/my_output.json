@@ -1,0 +1,78 @@
+{
+  "triangles": [
+    {
+      "id": "object_001",
+      "type": "obtuse_triangle",
+      "description": "",
+      "tags": []
+    },
+    {
+      "id": "object_002",
+      "type": "obtuse_triangle",
+      "description": "",
+      "tags": []
+    },
+    {
+      "id": "object_003",
+      "type": "obtuse_triangle",
+      "description": "",
+      "tags": []
+    },
+    {
+      "id": "object_004",
+      "type": "obtuse_triangle",
+      "description": "",
+      "tags": []
+    },
+    {
+      "id": "object_005",
+      "type": "obtuse_triangle",
+      "description": "",
+      "tags": []
+    },
+    {
+      "id": "object_006",
+      "type": "obtuse_triangle",
+      "description": "",
+      "tags": []
+    },
+    {
+      "id": "object_007",
+      "type": "obtuse_triangle",
+      "description": "",
+      "tags": []
+    },
+    {
+      "id": "object_008",
+      "type": "obtuse_triangle",
+      "description": "",
+      "tags": []
+    },
+    {
+      "id": "object_009",
+      "type": "obtuse_triangle",
+      "description": "",
+      "tags": []
+    },
+    {
+      "id": "object_010",
+      "type": "obtuse_triangle",
+      "description": "",
+      "tags": []
+    },
+    {
+      "id": "object_011",
+      "type": "obtuse_triangle",
+      "description": "",
+      "tags": []
+    }
+  ],
+  "others": [],
+  "stats": {
+    "total": 11,
+    "triangles": 11,
+    "types": {
+      "obtuse_triangle": 11
+    }
+  }
+}
