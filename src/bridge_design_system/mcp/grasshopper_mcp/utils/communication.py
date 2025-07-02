@@ -198,7 +198,7 @@ def get_windows_host_enhanced():
         # Method 5: Common WSL2 and network gateways
         common_gateways = [
             # Standard Docker ranges (.1 is typically the gateway)
-            "172.17.0.1", "172.18.0.1", "172.19.0.1", "172.20.0.1", "172.21.0.1",
+            "172.17.0.1", "127.0.0.1","172.18.0.1", "172.19.0.1", "172.20.0.1", "172.21.0.1",
             "172.22.0.1", "172.23.0.1", "172.24.0.1", "172.25.0.1", "172.26.0.1", 
             "172.27.0.1", "172.28.0.1", "172.29.0.1", "172.30.0.1", "172.31.0.1",
             # Docker Desktop and common VM ranges

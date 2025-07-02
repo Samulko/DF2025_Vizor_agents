@@ -6,6 +6,7 @@ This will test the exact host that was detected and provide detailed error info.
 
 import sys
 import os
+<<<<<<< HEAD
 import socket
 import json
 import time
@@ -97,6 +98,15 @@ def test_connection_verbose(host: str, port: int, timeout: float = 2.0) -> dict:
 def test_specific_host():
     # Test the host that was detected as working
     host = "172.28.192.1"
+=======
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
+def test_specific_host():
+    from bridge_design_system.mcp.grasshopper_mcp.utils.communication import test_connection_verbose
+    
+    # Test the host that was detected in the error log
+    host = "172.19.144.1"
+>>>>>>> ICD_dev
     port = 8081
     
     print(f"🔍 Testing specific host: {host}:{port}")

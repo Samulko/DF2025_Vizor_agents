@@ -17,6 +17,7 @@ from .config.settings import settings
 from .state.component_registry import initialize_registry
 from .tools.material_tools import MaterialInventoryManager
 from .voice_input import get_user_input, check_voice_dependencies
+from .monitoring.trace_logger import finalize_workshop_session, get_trace_logger
 
 logger = get_logger(__name__)
 
@@ -459,7 +460,15 @@ def test_system():
 
 
 def interactive_mode(
-    use_legacy=False, reset_memory=False, hard_reset=False, enable_monitoring=False, voice_input=False, disable_gaze=False
+    use_legacy=False, 
+    reset_memory=False, 
+    hard_reset=False, 
+    enable_monitoring=False, 
+    voice_input=False, 
+    disable_gaze=False,
+    otel_backend=None,
+    disable_otel=False,
+    disable_custom_monitoring=False,
 ):
     """Run the system in interactive mode.
 
@@ -470,6 +479,9 @@ def interactive_mode(
         enable_monitoring: If True, start monitoring dashboard (default False for clean CLI)
         voice_input: If True, enable voice input via wake word detection and speech recognition
         disable_gaze: If True, skip VizorListener initialization (no ROS dependency)
+        otel_backend: OpenTelemetry backend to use (none, console, langfuse, phoenix, hybrid)
+        disable_otel: If True, disable OpenTelemetry instrumentation completely
+        disable_custom_monitoring: If True, disable custom LCARS monitoring
     """
     mode = "legacy" if use_legacy else "smolagents-native"
     logger.info(f"Starting Bridge Design System in interactive mode ({mode})...")
@@ -490,6 +502,45 @@ def interactive_mode(
 
         # Always use remote monitoring callback
         monitoring_callback = get_monitoring_callback(enable_embedded_monitoring=False)
+
+        # Initialize OpenTelemetry instrumentation
+        otel_configured = False
+        if not disable_otel:
+            try:
+                from .monitoring.otel_config import OpenTelemetryConfig
+                from .monitoring.lcars_otel_bridge import create_lcars_exporter
+                from .monitoring.server import get_status_tracker
+                
+                # Determine backend
+                backend = otel_backend or settings.otel_backend
+                
+                # Create OpenTelemetry configuration
+                otel_config = OpenTelemetryConfig(backend=backend)
+                
+                # Set up LCARS integration for hybrid mode
+                lcars_exporter = None
+                if backend == "hybrid" and not disable_custom_monitoring:
+                    status_tracker = get_status_tracker()
+                    if status_tracker:
+                        lcars_exporter = create_lcars_exporter(status_tracker)
+                        logger.info("🔗 LCARS-OpenTelemetry bridge configured")
+                    else:
+                        logger.warning("⚠️ LCARS status tracker not available - hybrid mode will use other backends only")
+                
+                # Initialize instrumentation
+                otel_configured = otel_config.instrument(lcars_exporter)
+                
+                if otel_configured:
+                    logger.info(f"🚀 OpenTelemetry active with {backend} backend")
+                else:
+                    logger.warning("⚠️ OpenTelemetry configuration failed - continuing without instrumentation")
+                    
+            except ImportError as e:
+                logger.warning(f"⚠️ OpenTelemetry dependencies not available: {e}")
+            except Exception as e:
+                logger.error(f"❌ OpenTelemetry initialization failed: {e}")
+        else:
+            logger.info("📊 OpenTelemetry disabled by CLI flag")
 
         # Initialize component registry
         registry = initialize_registry()
@@ -555,6 +606,8 @@ def interactive_mode(
         )
         print("Type 'status' to see agent status, 'gaze' to see detailed gaze information")
         print("Type 'gazetest' to start continuous gaze monitoring for debugging")
+        print("Type 'workshop-finalize' to save workshop session with participant info")
+        print("Type 'workshop-report' to generate workshop analysis report")
         if hard_reset:
             print("✅ Started completely fresh (--hard-reset flag used)")
         elif reset_memory:
@@ -764,6 +817,33 @@ def interactive_mode(
                     else:
                         print("\n👁️ VizorListener not available")
                     continue
+                elif user_input.lower() == "workshop-finalize":
+                    # Finalize workshop session with participant info
+                    print("\n📊 Workshop Session Finalization")
+                    print("=" * 50)
+                    participant_id = input("Participant ID (optional): ").strip() or None
+                    workshop_group = input("Workshop Group (optional): ").strip() or None
+                    session_notes = input("Session Notes (optional): ").strip() or None
+                    
+                    finalize_workshop_session(
+                        participant_id=participant_id,
+                        workshop_group=workshop_group,
+                        session_notes=session_notes
+                    )
+                    print("✅ Workshop session finalized and saved!")
+                    continue
+                    
+                elif user_input.lower() == "workshop-report":
+                    # Generate workshop analysis report
+                    print("\n📋 Generating workshop analysis report...")
+                    trace_logger = get_trace_logger()
+                    report_file = trace_logger.generate_workshop_report()
+                    if report_file:
+                        print(f"✅ Workshop report generated: {report_file}")
+                    else:
+                        print("❌ Failed to generate workshop report")
+                    continue
+                    
                 elif user_input.lower() == "gazetest":
                     # Continuous gaze monitoring for debugging
                     if vizor_listener and vizor_listener.is_ros_connected():
@@ -912,11 +992,6 @@ def main():
         help="Run in interactive mode (uses smolagents-native by default)",
     )
     parser.add_argument(
-        "--legacy",
-        action="store_true",
-        help="Use legacy triage agent implementation (instead of default smolagents)",
-    )
-    parser.add_argument(
         "--reset",
         action="store_true",
         help="Start with fresh agent memories (clears previous conversation history)",
@@ -925,11 +1000,6 @@ def main():
         "--hard-reset",
         action="store_true",
         help="Start completely fresh (clears agent memories, component registry, AND log files)",
-    )
-    parser.add_argument(
-        "--enhanced-cli",
-        action="store_true",
-        help="Run enhanced CLI with Rich formatting and real-time status",
     )
     parser.add_argument(
         "--monitoring",
@@ -983,6 +1053,21 @@ def main():
         "--disable-gaze",
         action="store_true",
         help="Disable VizorListener initialization - run without ROS dependency for gaze tracking",
+    )
+    parser.add_argument(
+        "--otel-backend",
+        choices=["none", "console", "langfuse", "phoenix", "hybrid"],
+        help="OpenTelemetry backend for observability (default: from settings)",
+    )
+    parser.add_argument(
+        "--disable-otel",
+        action="store_true",
+        help="Disable OpenTelemetry instrumentation completely",
+    )
+    parser.add_argument(
+        "--disable-custom-monitoring",
+        action="store_true",
+        help="Disable custom LCARS monitoring (use only OpenTelemetry)",
     )
 
     args = parser.parse_args()
@@ -1059,18 +1144,17 @@ def main():
         # Override sys.argv to pass the port argument
         sys.argv = ["mcp-server", "--port", str(args.mcp_port)]
         start_mcp_server()
-    elif args.enhanced_cli:
-        from .cli.enhanced_interface import run_enhanced_cli
-
-        run_enhanced_cli(simple_mode=False)
     elif args.interactive:
         interactive_mode(
-            use_legacy=args.legacy,
+            use_legacy=False,
             reset_memory=args.reset,
             hard_reset=args.hard_reset,
             enable_monitoring=args.monitoring,
             voice_input=args.voice_input,
             disable_gaze=args.disable_gaze,
+            otel_backend=args.otel_backend,
+            disable_otel=args.disable_otel,
+            disable_custom_monitoring=args.disable_custom_monitoring,
         )
     else:
         # Default to smolagents interactive mode
@@ -1082,6 +1166,9 @@ def main():
             enable_monitoring=args.monitoring,
             voice_input=args.voice_input,
             disable_gaze=args.disable_gaze,
+            otel_backend=args.otel_backend,
+            disable_otel=args.disable_otel,
+            disable_custom_monitoring=args.disable_custom_monitoring,
         )
 
 

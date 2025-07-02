@@ -28,6 +28,11 @@ dependencies = [
     "mcpadapt[smolagents]>=0.1.9",
     "psutil>=5.9.0",
     "roslibpy>=1.6.0",
+    # OpenTelemetry dependencies for monitoring and tracing
+    "opentelemetry-sdk>=1.20.0",
+    "opentelemetry-exporter-otlp>=1.20.0",
+    "openinference-instrumentation-smolagents>=0.1.0",
+    "arize-phoenix>=5.0.0",
 ]
 
 [project.optional-dependencies]
@@ -38,6 +43,9 @@ dev = [
     "black>=23.0.0",
     "ruff>=0.1.0",
     "ipython>=8.0.0",
+]
+telemetry = [
+    # Telemetry dependencies now included in main dependencies
 ]
 voice = [
     "pyaudio>=0.2.13",
