@@ -1,4 +1,3 @@
-
 # File: src/bridge_design_system/agents/category_smolagent.py
 import json
 import math
@@ -7,8 +6,10 @@ from pathlib import Path
 from typing import Dict, List, Any
 
 from smolagents import CodeAgent, tool
-from src.bridge_design_system.config.logging_config import get_logger
-from src.bridge_design_system.config.model_config import ModelProvider
+from bridge_design_system.config.logging_config import get_logger
+from bridge_design_system.config.model_config import ModelProvider
+from bridge_design_system.config.settings import settings
+
 
 logger = get_logger(__name__)
 
@@ -23,19 +24,14 @@ BASE_DIR = Path(__file__).resolve().parents[1] / "data"
 @tool
 def calculate_distance(point1: List[float], point2: List[float]) -> float:
     """
-    Calculate Euclidean distance between two 2D points.
+    Compute the Euclidean distance between two 2D points.
 
-    Parameters
-    ----------
-    point1 : List[float]
-        The [x, y] coordinates of the first point.
-    point2 : List[float]
-        The [x, y] coordinates of the second point.
+    Args:
+        point1: Coordinates of the first point as [x, y].
+        point2: Coordinates of the second point as [x, y].
 
-    Returns
-    -------
-    float
-        The Euclidean distance between the two points.
+    Returns:
+        The Euclidean distance between point1 and point2.
     """
     return math.hypot(point2[0] - point1[0], point2[1] - point1[1])
 
@@ -43,13 +39,13 @@ def calculate_distance(point1: List[float], point2: List[float]) -> float:
 @tool
 def calculate_angles(vertices: List[List[float]]) -> List[float]:
     """
-    Calculate the angles between consecutive edges in a polygon.
+    Calculate the angles between consecutive edges in a 2D polygon.
 
     Args:
-        vertices: A list of points (each a list of two floats [x, y]) representing the polygon's vertices.
+        vertices: List of vertex coordinates [[x1, y1], [x2, y2], ...].
 
     Returns:
-        A list of angles (in degrees) between each pair of consecutive edges.
+        List of angles (in degrees) between each pair of consecutive edges.
     """
     if len(vertices) < 3:
         return []
@@ -61,20 +57,21 @@ def calculate_angles(vertices: List[List[float]]) -> List[float]:
         v2 = (nxt[0] - curr[0], nxt[1] - curr[1])
         mag1, mag2 = math.hypot(*v1), math.hypot(*v2)
         if mag1 and mag2:
-            cos_a = max(-1.0, min(1.0, (v1[0]*v2[0]+v1[1]*v2[1])/(mag1*mag2)))
+            cos_a = max(-1.0, min(1.0, (v1[0]*v2[0] + v1[1]*v2[1])/(mag1*mag2)))
             angles.append(math.degrees(math.acos(cos_a)))
         else:
             angles.append(0.0)
     return angles
 
+
 @tool
 def save_categorized_data(data: Dict[str, Any], filename: str) -> str:
     """
-    Save categorized material data to a JSON file.
+    Save categorized material data to a JSON file, ensuring directory exists.
 
     Args:
-        data: The categorized data to save.
-        filename: The name of the output JSON file.
+        data: The categorized material data to write out.
+        filename: Name of the output JSON file.
 
     Returns:
         A string message indicating where the data was saved.
@@ -83,19 +80,26 @@ def save_categorized_data(data: Dict[str, Any], filename: str) -> str:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with open(out_path, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
-    return f"Data written to {out_path}"
+    return f"✅ Data written to {out_path}"
+
 
 # ─── STEP 2: AGENT FACTORY ────────────────────────────────────────────────────
 
-def create_material_agent(model_name: str = "default") -> CodeAgent:
-    model = ModelProvider.get_model(model_name)
+def create_category_agent(model_name: str = None) -> CodeAgent:
+    """
+    Create a category agent for shape analysis.
+    """
+    agent_name = 'category'
+    if model_name is None:
+        model_name = getattr(settings, 'category_agent_model', 'gemini-2.5-flash-preview-05-20')
+    model = ModelProvider.get_model(agent_name, temperature=None)
     tools = [calculate_distance, calculate_angles, save_categorized_data]
     agent = CodeAgent(
         tools=tools,
         model=model,
         max_steps=10,
         additional_authorized_imports=["math", "json", "pathlib", "typing"],
-        name="category_material_agent",
+        name="category_agent",
         description="Classifies geometry shapes and manages material categories",
     )
     return agent
@@ -109,32 +113,80 @@ def load_catalog(path: Path) -> Dict[str, Any]:
     with open(path, 'r', encoding='utf-8') as f:
         return json.load(f)
 
-def analyze_triangle_shape(verts: List[List[float]]) -> str:
-    if len(verts) != 3:
-        return "invalid_triangle"
-    sides = [calculate_distance(verts[i], verts[(i+1)%3]) for i in range(3)]
-    angles = calculate_angles(verts)
-    if any(a > 90 for a in angles):
-        return "obtuse_triangle"
-    if any(abs(a-90)<1 for a in angles):
-        return "right_triangle"
-    uniq = len(set(round(s,3) for s in sides))
-    return {1:"equilateral_triangle",2:"isosceles_triangle"}.get(uniq, "scalene_triangle")
+def analyze_shape(vertices: List[List[float]]) -> str:
+    """
+    Analyze and classify a shape based on its vertices.
+
+    Args:
+        vertices: List of vertex coordinates [[x1, y1], [x2, y2], ...].
+
+    Returns:
+        The shape type as a string (e.g., 'triangle', 'square', 'hexagon', 'octagon', 'polygon_N').
+    """
+    n = len(vertices)
+    if n == 3:
+        return "triangle"
+    elif n == 4:
+        # Check if it's a square (all sides equal, all angles ~90)
+        sides = [calculate_distance(vertices[i], vertices[(i+1)%4]) for i in range(4)]
+        angles = calculate_angles(vertices)
+        if len(set(round(s, 3) for s in sides)) == 1 and all(abs(a - 90) < 5 for a in angles):
+            return "square"
+        else:
+            return "quadrilateral"
+    elif n == 6:
+        return "hexagon"
+    elif n == 8:
+        return "octagon"
+    elif n > 8:
+        return f"polygon_{n}"
+    else:
+        return f"polygon_{n}"
+
 
 def categorize(catalog: Dict[str, Any]) -> Dict[str, Any]:
-    stats = {"total":0, "triangles":0, "types":{}}
-    tris, others = [], []
-    for obj in catalog.get("catalog",[]):
+    """
+    Categorize shapes into triangles, squares, hexagons, octagons, and general polygons.
+    Polygons with 8 or more sides are grouped as 'polygon_8plus'.
+    """
+    stats = {"total": 0, "types": {}}
+    categorized = {
+        "triangle": [],
+        "square": [],
+        "hexagon": [],
+        "octagon": [],
+        "polygon_8plus": [],
+        "other_polygons": []
+    }
+    for obj in catalog.get("catalog", []):
         stats["total"] += 1
-        verts = obj.get("vertices",[])
-        if len(verts)==3:
-            t = analyze_triangle_shape(verts)
-            tris.append({"id":obj["id"],"type":t})
-            stats["triangles"] += 1
-            stats["types"][t] = stats["types"].get(t,0) + 1
+        verts = obj.get("vertices", [])
+        shape = analyze_shape(verts)
+        if shape == "triangle":
+            categorized["triangle"].append(obj)
+            stats["types"]["triangle"] = stats["types"].get("triangle", 0) + 1
+        elif shape == "square":
+            categorized["square"].append(obj)
+            stats["types"]["square"] = stats["types"].get("square", 0) + 1
+        elif shape == "hexagon":
+            categorized["hexagon"].append(obj)
+            stats["types"]["hexagon"] = stats["types"].get("hexagon", 0) + 1
+        elif shape == "octagon":
+            categorized["octagon"].append(obj)
+            stats["types"]["octagon"] = stats["types"].get("octagon", 0) + 1
+        elif shape.startswith("polygon_"):
+            n = int(shape.split("_")[1])
+            if n >= 8:
+                categorized["polygon_8plus"].append(obj)
+                stats["types"]["polygon_8plus"] = stats["types"].get("polygon_8plus", 0) + 1
+            else:
+                categorized["other_polygons"].append(obj)
+                stats["types"]["other_polygons"] = stats["types"].get("other_polygons", 0) + 1
         else:
-            others.append({"id":obj["id"],"verts":len(verts)})
-    return {"triangles":tris, "others":others, "stats":stats}
+            categorized["other_polygons"].append(obj)
+            stats["types"]["other_polygons"] = stats["types"].get("other_polygons", 0) + 1
+    categorized["stats"] = stats
+    return categorized
 
 
 # ─── STEP 4: DEMO & CLI ────────────────────────────────────────────────────────
@@ -142,18 +194,37 @@ def categorize(catalog: Dict[str, Any]) -> Dict[str, Any]:
 def demo(catalog_file: Path, out_file: str):
     logger.info("Loading catalog...")
     catalog = load_catalog(catalog_file)
-    agent = create_material_agent()
+    agent = create_category_agent()
     logger.info("Categorizing locally...")
     result = categorize(catalog)
-    logger.info(f"Found {result['stats']['triangles']} triangles out of {result['stats']['total']}")
-    # 1) 保存
-    msg = agent.run_tool("save_categorized_data", result, out_file)
-    logger.info(msg)
-    # 2) 详细分析示例（三角形前三个）
-    sample = result["triangles"][:3]
-    prompt = f"Please analyze these triangles: {sample}"
-    analysis = agent.run(prompt)
-    logger.info("Agent analysis:\n" + analysis)
+    logger.info(f"Total objects: {result['stats']['total']}")
+    # Save each category to its own file
+    for shape in ["triangle", "square", "hexagon", "octagon", "polygon_8plus", "other_polygons"]:
+        if result[shape]:
+            fname = f"{shape}_categories.json"
+            msg = save_categorized_data(result[shape], fname)
+            logger.info(f"{shape.capitalize()}s: {msg}")
+    # Save a general file with all categories
+    general_categories = {shape: result[shape] for shape in ["triangle", "square", "hexagon", "octagon", "polygon_8plus", "other_polygons"]}
+    msg = save_categorized_data(general_categories, "all_categories.json")
+    logger.info(f"All categories: {msg}")
+    # Optionally, run analysis for each shape type
+    for shape in ["triangle", "square", "hexagon", "octagon", "polygon_8plus", "other_polygons"]:
+        sample = result[shape][:3] if result[shape] else []
+        if sample:
+            prompt = (
+                f"The variable `{shape}` is a list of objects to analyze.\n"
+                f"{shape} = {sample}\n"
+                f"Please analyze the list `{shape}`."
+            )
+            analysis = agent.run(prompt)
+            if isinstance(analysis, (dict, list)):
+                analysis_str = json.dumps(analysis, ensure_ascii=False, indent=2)
+            else:
+                analysis_str = str(analysis)
+            logger.info(f"Agent analysis for {shape}s:\n{analysis_str}")
+
+
 
 if __name__=="__main__":
     p = argparse.ArgumentParser()
