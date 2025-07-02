@@ -462,9 +462,113 @@ namespace GrasshopperMCP.Commands
                                         activeObj.ExpireSolution(true);
                                     }
                                     
+                                    // Method 3: Legacy GH1 ScriptContext fallback
                                     if (!scriptSet)
                                     {
-                                        RhinoApp.WriteLine("  WARNING: Could not set script content");
+                                        // Try to get BaseScriptComponent's protected Context field
+                                        var ctxField = componentType.GetField("Context", BindingFlags.Instance | BindingFlags.NonPublic);
+                                        if (ctxField != null)
+                                        {
+                                            var scriptContext = ctxField.GetValue(component);
+                                            if (scriptContext != null)
+                                            {
+                                                // Get the 'Script' property (Grasshopper1Script)
+                                                var scriptProp = scriptContext.GetType()
+                                                          .GetProperty("Script", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                                                var gh1Script = scriptProp?.GetValue(scriptContext);
+                                                if (gh1Script != null)
+                                                {
+                                                    // Set its 'Text' property
+                                                    var textProp = gh1Script.GetType()
+                                                            .GetProperty("Text", BindingFlags.Instance | BindingFlags.Public);
+                                                    if (textProp != null && textProp.CanWrite)
+                                                    {
+                                                        textProp.SetValue(gh1Script, fullScript);
+                                                        RhinoApp.WriteLine("  Script set via legacy GH1 ScriptContext.Script.Text");
+                                                        // Reflection: force GH1 engine to recompile and run the updated script
+                                                        var recomputeMethod = scriptContext.GetType().GetMethod("ReCompute", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                                                        if (recomputeMethod != null)
+                                                        {
+                                                            var parms = recomputeMethod.GetParameters();
+                                                            if (parms.Length == 1 && parms[0].ParameterType.IsEnum)
+                                                            {
+                                                                var enumType = parms[0].ParameterType;
+                                                                object enumValue;
+                                                                try { enumValue = Enum.Parse(enumType, "RunScript"); }
+                                                                catch { enumValue = Enum.GetValues(enumType).GetValue(0); }
+                                                                recomputeMethod.Invoke(scriptContext, new object[] { enumValue });
+                                                                RhinoApp.WriteLine($"  ScriptContext.ReCompute invoked with {enumValue}");
+                                                            }
+                                                            else
+                                                            {
+                                                                recomputeMethod.Invoke(scriptContext, null);
+                                                                RhinoApp.WriteLine("  ScriptContext.ReCompute invoked");
+                                                            }
+                                                        }
+                                                        else
+                                                        {
+                                                            RhinoApp.WriteLine("  ScriptContext.ReCompute method not found");
+                                                        }
+                                                        // Expire solution and refresh canvas so new code takes effect
+                                                        if (component is IGH_ActiveObject legacyObj)
+                                                            legacyObj.ExpireSolution(true);
+                                                        component.Attributes?.ExpireLayout();
+                                                        var docGH2 = component.OnPingDocument();
+                                                        docGH2?.NewSolution(false);
+                                                        docGH2?.ScheduleSolution(10);
+
+                                                        // Try public SetScript(Grasshopper1Script) overload
+                                                        var publicSetScript = componentType.GetMethods(BindingFlags.Instance | BindingFlags.Public)
+                                                            .FirstOrDefault(m => m.Name == "SetScript" 
+                                                                && m.GetParameters().Length == 1 
+                                                                && m.GetParameters()[0].ParameterType.Name.Contains("Grasshopper1Script"));
+                                                        if (!scriptSet && publicSetScript != null)
+                                                        {
+                                                            try
+                                                            {
+                                                                var scriptPropComp = componentType.GetProperty("Script", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                                                                var currentScript = scriptPropComp.GetValue(component);
+                                                                if (currentScript != null)
+                                                                {
+                                                                    var langPropComp = currentScript.GetType().GetProperty("LanguageSpec", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                                                                    var langSpec = langPropComp.GetValue(currentScript);
+                                                                    var scriptCtor = currentScript.GetType().GetConstructor(new Type[]{ langSpec.GetType() });
+                                                                    var newGH1Script = scriptCtor.Invoke(new object[]{ langSpec });
+                                                                    var textPropComp = newGH1Script.GetType().GetProperty("Text", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                                                                    if (textPropComp != null && textPropComp.CanWrite)
+                                                                        textPropComp.SetValue(newGH1Script, fullScript);
+                                                                    var titlePropComp = newGH1Script.GetType().GetProperty("Title", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                                                                    if (titlePropComp != null && titlePropComp.CanWrite)
+                                                                        titlePropComp.SetValue(newGH1Script, component.NickName);
+                                                                    publicSetScript.Invoke(component, new object[]{ newGH1Script });
+                                                                    RhinoApp.WriteLine("  Script set using public SetScript(Grasshopper1Script)");
+                                                                    scriptSet = true;
+                                                                }
+                                                            }
+                                                            catch (Exception ex)
+                                                            {
+                                                                RhinoApp.WriteLine($"  public SetScript(Grasshopper1Script) failed: {ex.Message}");
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    
+                                    if (scriptSet)
+                                    {
+                                        result = new
+                                        {
+                                            id = component.InstanceGuid.ToString(),
+                                            type = componentType.Name,
+                                            name = component.NickName,
+                                            success = true
+                                        };
+                                    }
+                                    else
+                                    {
+                                        throw new InvalidOperationException("Could not set script content on component");
                                     }
                                 }
                             }
@@ -1350,6 +1454,107 @@ namespace GrasshopperMCP.Commands
                             activeObj.ExpireSolution(true);
                         }
                         
+                        // Force full UI refresh to apply new script
+                        component.Attributes?.ExpireLayout();
+                        var docGH = component.OnPingDocument();
+                        docGH?.NewSolution(false);
+                        docGH?.ScheduleSolution(10);
+                        
+                        // Try public SetScript(Grasshopper1Script) overload
+                        var publicSetScript = componentType.GetMethods(BindingFlags.Instance | BindingFlags.Public)
+                            .FirstOrDefault(m => m.Name == "SetScript" 
+                                && m.GetParameters().Length == 1 
+                                && m.GetParameters()[0].ParameterType.Name.Contains("Grasshopper1Script"));
+                        if (!scriptSet && publicSetScript != null)
+                        {
+                            try
+                            {
+                                var scriptPropComp = componentType.GetProperty("Script", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                                var currentScript = scriptPropComp.GetValue(component);
+                                if (currentScript != null)
+                                {
+                                    var langPropComp = currentScript.GetType().GetProperty("LanguageSpec", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                                    var langSpec = langPropComp.GetValue(currentScript);
+                                    var scriptCtor = currentScript.GetType().GetConstructor(new Type[]{ langSpec.GetType() });
+                                    var newGH1Script = scriptCtor.Invoke(new object[]{ langSpec });
+                                    var textPropComp = newGH1Script.GetType().GetProperty("Text", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                                    if (textPropComp != null && textPropComp.CanWrite)
+                                        textPropComp.SetValue(newGH1Script, fullScript);
+                                    var titlePropComp = newGH1Script.GetType().GetProperty("Title", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                                    if (titlePropComp != null && titlePropComp.CanWrite)
+                                        titlePropComp.SetValue(newGH1Script, component.NickName);
+                                    publicSetScript.Invoke(component, new object[]{ newGH1Script });
+                                    RhinoApp.WriteLine("  Script set using public SetScript(Grasshopper1Script)");
+                                    scriptSet = true;
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                RhinoApp.WriteLine($"  public SetScript(Grasshopper1Script) failed: {ex.Message}");
+                            }
+                        }
+                        
+                        // Method 3: Legacy GH1 ScriptContext fallback
+                        if (!scriptSet)
+                        {
+                            // Try to get BaseScriptComponent's protected Context field
+                            var ctxField = componentType.GetField("Context", BindingFlags.Instance | BindingFlags.NonPublic);
+                            if (ctxField != null)
+                            {
+                                var scriptContext = ctxField.GetValue(component);
+                                if (scriptContext != null)
+                                {
+                                    // Get the 'Script' property (Grasshopper1Script)
+                                    var scriptProp = scriptContext.GetType()
+                                                      .GetProperty("Script", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                                    var gh1Script = scriptProp?.GetValue(scriptContext);
+                                    if (gh1Script != null)
+                                    {
+                                        // Set its 'Text' property
+                                        var textProp = gh1Script.GetType()
+                                                        .GetProperty("Text", BindingFlags.Instance | BindingFlags.Public);
+                                        if (textProp != null && textProp.CanWrite)
+                                        {
+                                            textProp.SetValue(gh1Script, fullScript);
+                                            RhinoApp.WriteLine("  Script set via legacy GH1 ScriptContext.Script.Text");
+                                            // Reflection: force GH1 engine to recompile and run the updated script
+                                            var recomputeMethod = scriptContext.GetType().GetMethod("ReCompute", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                                            if (recomputeMethod != null)
+                                            {
+                                                var parms = recomputeMethod.GetParameters();
+                                                if (parms.Length == 1 && parms[0].ParameterType.IsEnum)
+                                                {
+                                                    var enumType = parms[0].ParameterType;
+                                                    object enumValue;
+                                                    try { enumValue = Enum.Parse(enumType, "RunScript"); }
+                                                    catch { enumValue = Enum.GetValues(enumType).GetValue(0); }
+                                                    recomputeMethod.Invoke(scriptContext, new object[] { enumValue });
+                                                    RhinoApp.WriteLine($"  ScriptContext.ReCompute invoked with {enumValue}");
+                                                }
+                                                else
+                                                {
+                                                    recomputeMethod.Invoke(scriptContext, null);
+                                                    RhinoApp.WriteLine("  ScriptContext.ReCompute invoked");
+                                                }
+                                            }
+                                            else
+                                            {
+                                                RhinoApp.WriteLine("  ScriptContext.ReCompute method not found");
+                                            }
+                                            // Expire solution and refresh canvas so new code takes effect
+                                            if (component is IGH_ActiveObject legacyObj)
+                                                legacyObj.ExpireSolution(true);
+                                            component.Attributes?.ExpireLayout();
+                                            var docGH2 = component.OnPingDocument();
+                                            docGH2?.NewSolution(false);
+                                            docGH2?.ScheduleSolution(10);
+                                            scriptSet = true;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         if (scriptSet)
                         {
                             result = new
