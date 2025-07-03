@@ -1035,6 +1035,11 @@ def main():
         help="Enable LCARS agent monitoring interface (enabled by default)",
     )
     parser.add_argument(
+        "--enhanced-cli",
+        action="store_true",
+        help="Run enhanced CLI with Rich formatting and real-time status",
+    )
+    parser.add_argument(
         "--start-mcp-server",
         action="store_true",
         help="Start HTTP MCP server for Grasshopper integration (legacy)",
