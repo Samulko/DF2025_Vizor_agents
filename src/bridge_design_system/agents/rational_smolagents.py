@@ -19,6 +19,7 @@ from smolagents import ToolCallingAgent, tool
 from src.bridge_design_system.config.logging_config import get_logger
 from src.bridge_design_system.config.model_config import ModelProvider
 from src.bridge_design_system.config.settings import settings
+from src.bridge_design_system.monitoring.trace_logger import log_agent_interaction
 
 logger = get_logger(__name__)
 
@@ -40,6 +41,7 @@ class RationalSmolagent:
             **kwargs: Additional arguments for extensibility
         """
         self.model_name = model_name
+        self.step_counter = 0
         
         # Agent identification
         self.name = "rational_agent"
@@ -99,12 +101,48 @@ class RationalSmolagent:
         """
         logger.info(f"Executing level checking task: {task[:100]}...")
         
+        # Workshop logging - start
+        self.step_counter += 1
+        import time
+        start_time = time.time()
+        
+        log_agent_interaction(
+            agent_name="rational_agent",
+            step_number=self.step_counter,
+            task_description=task[:200] + "..." if len(task) > 200 else task,
+            status="started"
+        )
+        
         try:
             result = self.agent.run(task)
+            
+            # Workshop logging - success
+            duration = time.time() - start_time
+            result_str = str(result) if result else ""
+            log_agent_interaction(
+                agent_name="rational_agent",
+                step_number=self.step_counter,
+                task_description=task[:200] + "..." if len(task) > 200 else task,
+                status="completed",
+                response_content=result_str[:500] + "..." if len(result_str) > 500 else result_str,
+                duration_seconds=duration
+            )
+            
             logger.info("Level checking task completed successfully")
             return result
             
         except Exception as e:
+            # Workshop logging - error
+            duration = time.time() - start_time
+            log_agent_interaction(
+                agent_name="rational_agent",
+                step_number=self.step_counter,
+                task_description=task[:200] + "..." if len(task) > 200 else task,
+                status="failed",
+                error_message=str(e),
+                duration_seconds=duration
+            )
+            
             logger.error(f"Level checking task failed: {e}")
             raise RuntimeError(f"Rational smolagent execution failed: {e}")
 
@@ -212,7 +250,65 @@ def create_rational_agent(model_name: str = "rational", **kwargs) -> ToolCalling
     # Store wrapper reference for proper cleanup
     internal_agent._wrapper = wrapper
     
-    logger.info("Rational smolagent created successfully")
+    # Override the run method to add logging when called as managed agent
+    original_run = internal_agent.run
+    
+    def logged_run(task: str, **kwargs):
+        """Override run method to add workshop logging for managed agent calls."""
+        logger.info(f"🎯 Rational agent executing task via managed_agents: {task[:100]}...")
+        
+        # Workshop logging - start
+        step_counter = getattr(internal_agent, '_step_counter', 0) + 1
+        setattr(internal_agent, '_step_counter', step_counter)
+        
+        import time
+        start_time = time.time()
+        
+        log_agent_interaction(
+            agent_name="rational_agent",
+            step_number=step_counter,
+            task_description=task[:200] + "..." if len(task) > 200 else task,
+            status="started"
+        )
+        
+        try:
+            # Call original run method
+            result = original_run(task, **kwargs)
+            
+            # Workshop logging - success
+            duration = time.time() - start_time
+            result_str = str(result) if result else ""
+            log_agent_interaction(
+                agent_name="rational_agent",
+                step_number=step_counter,
+                task_description=task[:200] + "..." if len(task) > 200 else task,
+                status="completed",
+                response_content=result_str[:500] + "..." if len(result_str) > 500 else result_str,
+                duration_seconds=duration
+            )
+            
+            logger.info("✅ Rational agent managed task completed successfully")
+            return result
+            
+        except Exception as e:
+            # Workshop logging - error
+            duration = time.time() - start_time
+            log_agent_interaction(
+                agent_name="rational_agent",
+                step_number=step_counter,
+                task_description=task[:200] + "..." if len(task) > 200 else task,
+                status="failed",
+                error_message=str(e),
+                duration_seconds=duration
+            )
+            
+            logger.error(f"❌ Rational agent managed task failed: {e}")
+            raise
+    
+    # Replace the run method
+    internal_agent.run = logged_run
+    
+    logger.info("Rational smolagent created successfully with logging override")
     return internal_agent
 
 

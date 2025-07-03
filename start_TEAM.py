@@ -34,8 +34,17 @@ def run_command_in_background(cmd, name):
         print(f"❌ Failed to start {name}: {e}")
         return None
 
+def signal_handler(signum, frame):
+    """Handle shutdown signals gracefully."""
+    print(f"\n🛑 Received signal {signum}, shutting down...")
+    raise KeyboardInterrupt()
+
 def main():
     """Main launcher function."""
+    # Set up signal handlers
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
     print("=" * 60)
     print("🌉 Bridge Design System - TEAM Launch")
     print("=" * 60)

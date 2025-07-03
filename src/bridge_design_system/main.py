@@ -500,6 +500,11 @@ def interactive_mode(
         # Don't start monitoring server - assume it's running separately
         # start_monitoring_server(enable_monitoring=enable_monitoring)
 
+        # Initialize trace logger if monitoring is enabled
+        if enable_monitoring:
+            trace_logger = get_trace_logger()
+            logger.info(f"📊 Workshop trace logging enabled - Session: {trace_logger.current_session_id}")
+
         # Always use remote monitoring callback
         monitoring_callback = get_monitoring_callback(enable_embedded_monitoring=False)
 
@@ -928,7 +933,29 @@ def interactive_mode(
                 try:
                     # Process the request with gaze context embedded in the text
                     print("\nProcessing...")
+                    start_time = time.time()
                     response = triage.handle_design_request(request=final_request, gaze_id=None)
+                    duration = time.time() - start_time
+
+                    # Log the interaction if monitoring is enabled
+                    if enable_monitoring:
+                        from .monitoring.trace_logger import log_agent_interaction
+                        log_agent_interaction(
+                            agent_name="triage_agent",
+                            step_number=getattr(triage, '_step_counter', 0) + 1,
+                            task_description=final_request[:200] + "..." if len(final_request) > 200 else final_request,
+                            status="completed" if response.success else "failed",
+                            tool_calls=getattr(response, 'tool_calls', []),
+                            response_content=response.message[:500] + "..." if len(response.message) > 500 else response.message,
+                            error_message=str(response.error) if response.error else None,
+                            duration_seconds=duration,
+                            token_usage=getattr(response, 'token_usage', None),
+                            memory_size=0  # Could be enhanced to track actual memory usage
+                        )
+                        # Update step counter
+                        if not hasattr(triage, '_step_counter'):
+                            triage._step_counter = 0
+                        triage._step_counter += 1
 
                     if response.success:
                         print(f"\nTriage Agent> {response.message}")
@@ -1004,7 +1031,8 @@ def main():
     parser.add_argument(
         "--monitoring",
         action="store_true",
-        help="Enable LCARS agent monitoring interface (disabled by default for clean CLI)",
+        default=True,
+        help="Enable LCARS agent monitoring interface (enabled by default)",
     )
     parser.add_argument(
         "--start-mcp-server",
