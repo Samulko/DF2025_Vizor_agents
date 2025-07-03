@@ -3,13 +3,14 @@ import json
 import math
 import argparse
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 import re
 import os
 
 from smolagents import CodeAgent, tool
 from src.bridge_design_system.config.logging_config import get_logger
 from src.bridge_design_system.config.model_config import ModelProvider
+from src.bridge_design_system.monitoring.workshop_logging import add_workshop_logging
 
 logger = get_logger(__name__)
 
@@ -169,14 +170,24 @@ tools = [
     interpret_and_update_description
 ]
 
-def create_category_agent(model_name: str = None) -> CodeAgent:
+def create_category_agent(model_name: str = None, monitoring_callback: Optional[Any] = None) -> CodeAgent:
     """
     Create a category agent for shape analysis.
+    
+    Args:
+        model_name: Model name for the agent
+        monitoring_callback: Optional callback for monitoring agent activities
     """
     agent_name = 'category'
     if model_name is None:
         model_name = 'gemini-2.5-flash-preview-05-20'
     model = ModelProvider.get_model(agent_name, temperature=None)
+    
+    # Prepare step_callbacks for monitoring
+    step_callbacks = []
+    if monitoring_callback:
+        step_callbacks.append(monitoring_callback)
+    
     agent = CodeAgent(
         tools=tools,
         model=model,
@@ -184,7 +195,12 @@ def create_category_agent(model_name: str = None) -> CodeAgent:
         additional_authorized_imports=["math", "json", "pathlib", "typing"],
         name="category_material_agent",
         description="Classifies geometry shapes and manages material categories",
+        step_callbacks=step_callbacks,
     )
+    
+    # Add workshop logging - just 1 line!
+    add_workshop_logging(agent, "category_agent")
+    
     return agent
 
 
