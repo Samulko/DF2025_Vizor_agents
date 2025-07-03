@@ -15,30 +15,22 @@
         0.06795782778743176
       ]
     ],
-    "angles": [
+    "tags": [],
+    "description": "",
+    "side_lengths": [
+      0.08163413697329566,
+      0.12178332545455753,
+      0.08463322514052546
+    ],
+    "angles_rad": [
       136.12309213781688,
       138.04474349542087,
       85.83216436676223
     ],
-    "sides": [
-      0.08163413697329566,
-      0.08463322514052546,
-      0.12178332545455753
-    ],
-    "angle_type": "obtuse",
-    "side_type": "scalene",
-    "description": "This is an obtuse and scalene triangle with ID object_000.",
-    "tags": [
-      "this",
-      "id",
-      "and",
-      "scalene",
-      "with",
-      "obtuse",
-      "is",
-      "object_000",
-      "an",
-      "triangle"
+    "angles_deg": [
+      7799.278673767346,
+      7909.3811862536395,
+      4917.820764688649
     ]
   },
   {
@@ -57,30 +49,22 @@
         -0.07146229643452724
       ]
     ],
-    "angles": [
+    "tags": [],
+    "description": "",
+    "side_lengths": [
+      0.13504886838999997,
+      0.19000468605643148,
+      0.13249427452094437
+    ],
+    "angles_rad": [
       135.78960817853394,
       134.70488363310184,
       89.50550818836419
     ],
-    "sides": [
-      0.13249427452094437,
-      0.13504886838999997,
-      0.19000468605643148
-    ],
-    "angle_type": "obtuse",
-    "side_type": "scalene",
-    "description": "This is an obtuse and scalene triangle with ID object_016.",
-    "tags": [
-      "this",
-      "object_016",
-      "id",
-      "and",
-      "scalene",
-      "with",
-      "obtuse",
-      "is",
-      "an",
-      "triangle"
+    "angles_deg": [
+      7780.171450365121,
+      7718.0213119776145,
+      5128.287862366899
     ]
   },
   {
@@ -99,30 +83,22 @@
         -0.16585751455952313
       ]
     ],
-    "angles": [
-      82.66435881008178,
-      141.52940998800517,
-      135.80623120191308
-    ],
-    "sides": [
+    "tags": [],
+    "description": "",
+    "side_lengths": [
       0.10445225279921672,
       0.11704037667262347,
       0.16652498735240903
     ],
-    "angle_type": "obtuse",
-    "side_type": "scalene",
-    "description": "This is an obtuse and scalene triangle with ID object_017.",
-    "tags": [
-      "this",
-      "object_017",
-      "id",
-      "and",
-      "scalene",
-      "with",
-      "obtuse",
-      "is",
-      "an",
-      "triangle"
+    "angles_rad": [
+      82.66435881008178,
+      141.52940998800517,
+      135.80623120191308
+    ],
+    "angles_deg": [
+      4736.31887597277,
+      8109.0378692893755,
+      7781.123879447493
     ]
   }
 ]
