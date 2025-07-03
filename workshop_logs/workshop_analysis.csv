@@ -1,0 +1,4 @@
+session_id,start_time,end_time,participant_id,workshop_group,total_interactions,agents_used,avg_response_time,errors_count,session_notes
+session_20250703_110600,2025-07-03T11:06:00.594392,2025-07-03T11:06:01.578318,test_user,monitoring_test,0,"",0.00,0,"Testing category agent monitoring integration"
+session_20250703_110637,2025-07-03T11:06:37.200055,2025-07-03T11:06:41.438055,test_user,monitoring_test,0,"",0.00,0,"Testing category agent monitoring integration"
+session_20250703_110657,2025-07-03T11:06:57.726266,2025-07-03T11:07:06.832837,test_user,monitoring_test,0,"",0.00,0,"Testing category agent monitoring integration"

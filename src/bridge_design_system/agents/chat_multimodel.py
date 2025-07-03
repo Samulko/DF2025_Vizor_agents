@@ -33,7 +33,7 @@ try:
 except ImportError:
     MULTIMODAL_DEPENDENCIES_AVAILABLE = False
 
-from .triage_chat_supervisor import BridgeDesignSupervisor, create_bridge_design_supervisor_tools
+from .triage_agent_smolagents import TriageSystemWrapper
 from ..config.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -76,9 +76,8 @@ class GeminiHandler(AsyncAudioVideoStreamHandler):
             input_sample_rate=16000,
         )
         
-        # Initialize bridge design supervisor
-        self.bridge_supervisor = BridgeDesignSupervisor()
-        self.supervisor_tools = create_bridge_design_supervisor_tools(self.bridge_supervisor)
+        # Initialize triage system directly
+        self.triage_system = TriageSystemWrapper()
         
         # Async queues for multimodal data
         self.audio_queue = asyncio.Queue()
@@ -91,7 +90,7 @@ class GeminiHandler(AsyncAudioVideoStreamHandler):
         self.current_visual_context = None
         self.uploaded_image_context = None
         
-        logger.info("🌉 Bridge multimodal handler initialized with supervisor tools")
+        logger.info("🌉 Bridge multimodal handler initialized with triage system")
 
     def copy(self) -> "GeminiHandler":
         return GeminiHandler()
@@ -103,28 +102,50 @@ class GeminiHandler(AsyncAudioVideoStreamHandler):
             http_options={"api_version": "v1alpha"}
         )
         
+        print("🛠️  [DEBUG] Creating Gemini Live API tools...")
+        tools = self._create_gemini_tools()
+        print(f"🛠️  [DEBUG] Created {len(tools)} tool declarations")
+        
         config = {
             "response_modalities": ["AUDIO"],
-            "tools": self._create_gemini_tools(),
+            "tools": tools,
             "system_instruction": self._get_multimodal_bridge_prompt(),
         }
         
+        print("🔧 [DEBUG] Multimodal config being sent to Gemini Live API:")
+        print(f"    Response Modalities: {config['response_modalities']}")
+        print(f"    Tools: {[tool['function_declarations'][0]['name'] for tool in config['tools']]}")
+        print(f"    System Instruction Length: {len(config['system_instruction'])} chars")
+        
         async with client.aio.live.connect(
-            model="gemini-live-2.5-flash-preview",
+            model="gemini-2.0-flash-live-001",
             config=config,
         ) as session:
+            print("✅ [DEBUG] Connected to Gemini Live API successfully!")
+            print(f"🔗 [DEBUG] Session object: {type(session)}")
+            
             self.session = session
             
-            # Handle tool calls
-            session.on_tool_call = self._handle_tool_call
+            print("🛠️  [DEBUG] Setting up manual tool call handling...")
             
             while not self.quit.is_set():
                 turn = self.session.receive()
                 try:
                     async for response in turn:
-                        if data := response.data:
-                            audio = np.frombuffer(data, dtype=np.int16).reshape(1, -1)
+                        print(f"📨 [DEBUG] Received response type: {type(response)}")
+                        
+                        # Handle audio data
+                        if hasattr(response, 'data') and response.data:
+                            audio = np.frombuffer(response.data, dtype=np.int16).reshape(1, -1)
                             self.audio_queue.put_nowait(audio)
+                        
+                        # Handle tool calls - CRITICAL: Manual handling required for Live API
+                        if hasattr(response, 'tool_call') and response.tool_call:
+                            print("\n" + "🎆"*60)
+                            print("🎆 [BREAKTHROUGH] MULTIMODAL TOOL CALL RECEIVED! 🎆")
+                            print("🎆"*60)
+                            await self._handle_tool_call(response.tool_call)
+                            
                 except websockets.exceptions.ConnectionClosedOK:
                     logger.info("Gemini Live connection closed")
                     break
@@ -189,94 +210,162 @@ class GeminiHandler(AsyncAudioVideoStreamHandler):
             self.uploaded_image_context = None
 
     def _create_gemini_tools(self):
-        """Convert bridge supervisor tools to Gemini Live API function_declarations format."""
-        gemini_tools = []
-        for tool_func in self.supervisor_tools:
-            try:
-                # Handle smolagents tool objects
-                if hasattr(tool_func, 'name'):
-                    tool_name = tool_func.name
-                    tool_description = getattr(tool_func, 'description', f"Bridge design tool: {tool_name}")
-                    actual_func = tool_func.fn if hasattr(tool_func, 'fn') else tool_func
-                else:
-                    tool_name = tool_func.__name__
-                    tool_description = tool_func.__doc__ or f"Bridge design tool: {tool_name}"
-                    actual_func = tool_func
-                import inspect
-                sig = inspect.signature(actual_func)
-                parameters = {
-                    "type": "object",
-                    "properties": {},
-                    "required": []
-                }
-                for param_name, param in sig.parameters.items():
-                    param_type = "string"
-                    param_desc = f"Parameter: {param_name}"
-                    if param.annotation != inspect.Parameter.empty:
-                        if param.annotation == str:
-                            param_type = "string"
-                        elif param.annotation == int:
-                            param_type = "integer"
-                        elif param.annotation == bool:
-                            param_type = "boolean"
-                        elif param.annotation == dict or param.annotation == Dict:
-                            param_type = "object"
-                    parameters["properties"][param_name] = {
-                        "type": param_type,
-                        "description": param_desc
+        """Create tool declarations for Gemini Live API (function_declarations format)."""
+        
+        # Define the function declaration for Live API
+        bridge_design_request_declaration = {
+            "name": "bridge_design_request",
+            "description": "Send user request directly to the bridge design triage agent. This function implements the chat-to-triage pattern where the chat agent forwards all complex bridge design requests to the smolagents triage system which coordinates geometry agents, structural analysis, and other specialized agents.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "user_request": {
+                        "type": "string",
+                        "description": "The user's request about bridge design, engineering, or system operations"
+                    },
+                    "visual_context": {
+                        "type": "string",
+                        "description": "Optional description of visual context from camera/uploaded images"
                     }
-                    if param.default == inspect.Parameter.empty:
-                        parameters["required"].append(param_name)
-                tool_def = {
-                    "function_declarations": [{
-                        "name": tool_name,
-                        "description": tool_description,
-                        "parameters": parameters
-                    }]
-                }
-                gemini_tools.append(tool_def)
-            except Exception as e:
-                tool_name = getattr(tool_func, 'name', getattr(tool_func, '__name__', 'unknown'))
-                logger.warning(f"Could not convert tool {tool_name}: {e}")
-        logger.info(f"✅ Created {len(gemini_tools)} Gemini Live tools (Gemini API format)")
-        return gemini_tools
+                },
+                "required": ["user_request"]
+            }
+        }
+        
+        # Return in Live API format
+        tools = [{"function_declarations": [bridge_design_request_declaration]}]
+        logger.info(f"✅ Created {len(tools)} tool declarations for Live API")
+        return tools
+    
+    def _execute_bridge_design_request(self, user_request: str, visual_context: Optional[str] = None) -> str:
+        """Execute the bridge design request - the actual Python function."""
+        print("\n" + "🎆"*80)
+        print("🎆 [MAJOR SUCCESS] MULTIMODAL TOOL EXECUTION! 🎆")
+        print("🎆"*80)
+        print("🚨 [MULTIMODAL FUNCTION CALL] Executing bridge_design_request()")
+        print(f"📝 [USER REQUEST] {user_request}")
+        if visual_context:
+            print(f"👁️ [VISUAL CONTEXT] {visual_context}")
+        print("="*80)
+        
+        try:
+            # Add visual context to the request if available
+            enhanced_request = user_request
+            if visual_context:
+                enhanced_request = f"{user_request}\n\nVisual context: {visual_context}"
+            
+            # Add current visual input context if available
+            if self.current_visual_context is not None or self.uploaded_image_context is not None:
+                visual_info = []
+                if self.current_visual_context is not None:
+                    visual_info.append("Camera input available - user is showing something via camera")
+                if self.uploaded_image_context is not None:
+                    visual_info.append("Uploaded image available - user has provided a design reference")
+                
+                if visual_info:
+                    enhanced_request += f"\n\nMultimodal context: {'; '.join(visual_info)}"
+                    print(f"📹 [MULTIMODAL] Added context: {'; '.join(visual_info)}")
+            
+            print("🎯 [DEBUG] Forwarding request to triage agent...")
+            logger.info(f"🎯 Forwarding request to triage agent: {user_request[:100]}...")
+            
+            # Call the triage system directly
+            print("🔧 [DEBUG] Calling self.triage_system.handle_design_request()...")
+            response = self.triage_system.handle_design_request(enhanced_request)
+            
+            print(f"📊 [DEBUG] Triage response received:")
+            print(f"    Success: {response.success}")
+            print(f"    Message length: {len(response.message) if response.message else 0} characters")
+            
+            if response.success:
+                print("✅ [DEBUG] Triage agent completed request successfully")
+                print(f"📤 [RESPONSE] {response.message[:200]}...")
+                logger.info("✅ Triage agent completed request successfully")
+                return response.message
+            else:
+                print(f"❌ [DEBUG] Triage agent failed: {response.message}")
+                logger.error(f"❌ Triage agent failed: {response.message}")
+                return f"Bridge design system error: {response.message}"
+                
+        except Exception as e:
+            print(f"💥 [ERROR] Exception in multimodal bridge_design_request: {e}")
+            logger.error(f"Error calling triage agent: {e}")
+            import traceback
+            traceback.print_exc()
+            return f"Error communicating with bridge design system: {str(e)}"
 
     async def _handle_tool_call(self, tool_call):
         """Handle tool calls from Gemini Live session with visual context."""
         try:
-            tool_name = tool_call.name
-            tool_args = tool_call.args or {}
+            print("\n" + "🎆"*80)
+            print("🎆 [BREAKTHROUGH] MULTIMODAL TOOL CALL HANDLER TRIGGERED! 🎆")
+            print("🎆"*80)
+            print(f"🔥 [TOOL CALL TYPE] {type(tool_call)}")
+            print(f"🔥 [TOOL CALL DETAILS] {tool_call}")
+            print(f"🔥 [TOOL CALL ATTRS] {dir(tool_call) if hasattr(tool_call, '__dict__') else 'No attributes'}")
+            if hasattr(tool_call, '__dict__'):
+                print(f"🔥 [TOOL CALL DICT] {tool_call.__dict__}")
+            print("🔥"*80)
             
-            logger.info(f"🛠️ Handling multimodal tool call: {tool_name}")
+            logger.info(f"🛠️ Handling Gemini function call: {tool_call}")
             
-            # Add visual context to tool calls if available
-            if self.current_visual_context is not None or self.uploaded_image_context is not None:
-                visual_context = {
-                    "has_camera_input": self.current_visual_context is not None,
-                    "has_uploaded_image": self.uploaded_image_context is not None,
-                    "visual_analysis": "Visual context available for bridge design analysis"
-                }
-                tool_args["visual_context"] = visual_context
-                logger.debug("📹 Added visual context to tool call")
-            
-            # Find and call the corresponding supervisor tool
-            tool_func = None
-            for func in self.supervisor_tools:
-                if func.__name__ == tool_name:
-                    tool_func = func
-                    break
-            
-            if tool_func:
-                # Call the supervisor tool with enhanced context
-                result = tool_func(**tool_args)
-                logger.info(f"✅ Multimodal tool call completed: {tool_name}")
-                return result
+            # Handle manual function calls - Live API requires manual handling
+            if hasattr(tool_call, 'function_calls'):
+                function_responses = []
+                
+                for fc in tool_call.function_calls:
+                    print(f"📝 [FUNCTION CALL] Name: {fc.name}")
+                    print(f"📝 [FUNCTION CALL] ID: {fc.id}")
+                    print(f"📝 [FUNCTION CALL] Args: {fc.args}")
+                    
+                    # Execute the actual function based on name
+                    if fc.name == "bridge_design_request":
+                        # Extract arguments
+                        user_request = fc.args.get("user_request", "")
+                        visual_context = fc.args.get("visual_context", None)
+                        
+                        print(f"🎯 [EXECUTING] bridge_design_request with args: {fc.args}")
+                        
+                        # Call the actual function
+                        result = self._execute_bridge_design_request(user_request, visual_context)
+                        
+                        # Create function response for Live API
+                        from google.genai import types
+                        function_response = types.FunctionResponse(
+                            id=fc.id,
+                            name=fc.name,
+                            response={"result": result}
+                        )
+                        function_responses.append(function_response)
+                        
+                        print(f"✅ [FUNCTION RESPONSE] Created response for {fc.name}")
+                    else:
+                        print(f"❌ [UNKNOWN FUNCTION] {fc.name}")
+                        # Create error response
+                        from google.genai import types
+                        function_response = types.FunctionResponse(
+                            id=fc.id,
+                            name=fc.name,
+                            response={"error": f"Unknown function: {fc.name}"}
+                        )
+                        function_responses.append(function_response)
+                
+                # Send tool responses back to Gemini Live API
+                if function_responses:
+                    print(f"📤 [SENDING RESPONSES] {len(function_responses)} responses to Gemini")
+                    await self.session.send_tool_response(function_responses=function_responses)
+                    print("✅ [RESPONSES SENT] Tool responses sent to Gemini Live API")
+                
+                return {"status": "Function calls handled successfully"}
             else:
-                logger.error(f"❌ Unknown tool: {tool_name}")
-                return {"error": f"Unknown tool: {tool_name}"}
+                print("❌ [ERROR] No function_calls attribute found in tool_call")
+                return {"error": "No function_calls found in tool_call"}
                 
         except Exception as e:
-            logger.error(f"❌ Multimodal tool call failed: {e}")
+            print(f"💥 [ERROR] Tool call handler failed: {e}")
+            logger.error(f"❌ Tool call handler error: {e}")
+            import traceback
+            traceback.print_exc()
             return {"error": str(e)}
 
     def _get_multimodal_bridge_prompt(self) -> str:
