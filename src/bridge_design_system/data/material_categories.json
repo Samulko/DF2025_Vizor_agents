@@ -1,0 +1,107 @@
+{
+  "triangles": [
+    {
+      "id": "object_000",
+      "type": "obtuse_triangle"
+    },
+    {
+      "id": "object_016",
+      "type": "obtuse_triangle"
+    },
+    {
+      "id": "object_017",
+      "type": "obtuse_triangle"
+    },
+    {
+      "id": "object_018",
+      "type": "obtuse_triangle"
+    },
+    {
+      "id": "object_019",
+      "type": "obtuse_triangle"
+    }
+  ],
+  "quadrilaterals": [
+    {
+      "id": "object_009",
+      "type": "quadrilateral"
+    },
+    {
+      "id": "object_010",
+      "type": "quadrilateral"
+    },
+    {
+      "id": "object_011",
+      "type": "quadrilateral"
+    },
+    {
+      "id": "object_012",
+      "type": "quadrilateral"
+    },
+    {
+      "id": "object_013",
+      "type": "quadrilateral"
+    },
+    {
+      "id": "object_014",
+      "type": "quadrilateral"
+    },
+    {
+      "id": "object_015",
+      "type": "quadrilateral"
+    }
+  ],
+  "pentagons": [
+    {
+      "id": "object_005",
+      "type": "pentagon"
+    },
+    {
+      "id": "object_006",
+      "type": "pentagon"
+    },
+    {
+      "id": "object_007",
+      "type": "pentagon"
+    },
+    {
+      "id": "object_008",
+      "type": "pentagon"
+    }
+  ],
+  "hexagons": [
+    {
+      "id": "object_001",
+      "type": "hexagon"
+    },
+    {
+      "id": "object_002",
+      "type": "hexagon"
+    },
+    {
+      "id": "object_003",
+      "type": "hexagon"
+    },
+    {
+      "id": "object_004",
+      "type": "hexagon"
+    }
+  ],
+  "octagons": [],
+  "other_polygons": [],
+  "stats": {
+    "total": 20,
+    "triangles": 5,
+    "quadrilaterals": 7,
+    "pentagons": 4,
+    "hexagons": 4,
+    "octagons": 0,
+    "other_polygons": 0,
+    "types": {
+      "obtuse_triangle": 5,
+      "hexagon": 4,
+      "pentagon": 4,
+      "quadrilateral": 7
+    }
+  }
+}

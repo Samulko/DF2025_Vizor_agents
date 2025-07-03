@@ -1,131 +1,222 @@
 {
-  "total_stock_mm": 25740,
-  "beam_length_mm": 1980,
-  "kerf_loss_mm": 3,
-  "available_beams": [
+  "materials": [
     {
-      "id": "beam_001",
-      "original_length_mm": 1980,
-      "remaining_length_mm": 1980,
+      "material_id": "object_001",
+      "dimensions_mm": {
+        "length": 0.089,
+        "width": 0.12,
+        "height": null
+      },
+      "weight_kg": null,
+      "density_kg_m3": null,
       "cuts": [],
       "waste_mm": 0,
-      "utilization_percent": 0.0
+      "utilization_percent": 0.0,
+      "stiffness": "",
+      "texture": "",
+      "humidity": "",
+      "description": "",
+      "source": "",
+      "tags": []
     },
     {
-      "id": "beam_002",
-      "original_length_mm": 1980,
-      "remaining_length_mm": 1980,
+      "material_id": "object_002",
+      "dimensions_mm": {
+        "length": 0.101,
+        "width": 0.122,
+        "height": null
+      },
+      "weight_kg": null,
+      "density_kg_m3": null,
       "cuts": [],
       "waste_mm": 0,
-      "utilization_percent": 0.0
+      "utilization_percent": 0.0,
+      "stiffness": "",
+      "texture": "",
+      "humidity": "",
+      "description": "",
+      "source": "",
+      "tags": []
     },
     {
-      "id": "beam_003",
-      "original_length_mm": 1980,
-      "remaining_length_mm": 1980,
+      "material_id": "object_003",
+      "dimensions_mm": {
+        "length": 0.083,
+        "width": 0.13,
+        "height": null
+      },
+      "weight_kg": null,
+      "density_kg_m3": null,
       "cuts": [],
       "waste_mm": 0,
-      "utilization_percent": 0.0
+      "utilization_percent": 0.0,
+      "stiffness": "",
+      "texture": "",
+      "humidity": "",
+      "description": "",
+      "source": "",
+      "tags": []
     },
     {
-      "id": "beam_004",
-      "original_length_mm": 1980,
-      "remaining_length_mm": 1980,
+      "material_id": "object_004",
+      "dimensions_mm": {
+        "length": 0.109,
+        "width": 0.099,
+        "height": null
+      },
+      "weight_kg": null,
+      "density_kg_m3": null,
       "cuts": [],
       "waste_mm": 0,
-      "utilization_percent": 0.0
+      "utilization_percent": 0.0,
+      "stiffness": "",
+      "texture": "",
+      "humidity": "",
+      "description": "",
+      "source": "",
+      "tags": []
     },
     {
-      "id": "beam_005",
-      "original_length_mm": 1980,
-      "remaining_length_mm": 1980,
+      "material_id": "object_005",
+      "dimensions_mm": {
+        "length": 0.105,
+        "width": 0.149,
+        "height": null
+      },
+      "weight_kg": null,
+      "density_kg_m3": null,
       "cuts": [],
       "waste_mm": 0,
-      "utilization_percent": 0.0
+      "utilization_percent": 0.0,
+      "stiffness": "",
+      "texture": "",
+      "humidity": "",
+      "description": "",
+      "source": "",
+      "tags": []
     },
     {
-      "id": "beam_006",
-      "original_length_mm": 1980,
-      "remaining_length_mm": 1980,
+      "material_id": "object_006",
+      "dimensions_mm": {
+        "length": 0.107,
+        "width": 0.107,
+        "height": null
+      },
+      "weight_kg": null,
+      "density_kg_m3": null,
       "cuts": [],
       "waste_mm": 0,
-      "utilization_percent": 0.0
+      "utilization_percent": 0.0,
+      "stiffness": "",
+      "texture": "",
+      "humidity": "",
+      "description": "",
+      "source": "",
+      "tags": []
     },
     {
-      "id": "beam_007",
-      "original_length_mm": 1980,
-      "remaining_length_mm": 1980,
+      "material_id": "object_007",
+      "dimensions_mm": {
+        "length": 0.094,
+        "width": 0.093,
+        "height": null
+      },
+      "weight_kg": null,
+      "density_kg_m3": null,
       "cuts": [],
       "waste_mm": 0,
-      "utilization_percent": 0.0
+      "utilization_percent": 0.0,
+      "stiffness": "",
+      "texture": "",
+      "humidity": "",
+      "description": "",
+      "source": "",
+      "tags": []
     },
     {
-      "id": "beam_008",
-      "original_length_mm": 1980,
-      "remaining_length_mm": 1980,
+      "material_id": "object_008",
+      "dimensions_mm": {
+        "length": 0.101,
+        "width": 0.127,
+        "height": null
+      },
+      "weight_kg": null,
+      "density_kg_m3": null,
       "cuts": [],
       "waste_mm": 0,
-      "utilization_percent": 0.0
+      "utilization_percent": 0.0,
+      "stiffness": "",
+      "texture": "",
+      "humidity": "",
+      "description": "",
+      "source": "",
+      "tags": []
     },
     {
-      "id": "beam_009",
-      "original_length_mm": 1980,
-      "remaining_length_mm": 1980,
+      "material_id": "object_009",
+      "dimensions_mm": {
+        "length": 0.096,
+        "width": 0.117,
+        "height": null
+      },
+      "weight_kg": null,
+      "density_kg_m3": null,
       "cuts": [],
       "waste_mm": 0,
-      "utilization_percent": 0.0
+      "utilization_percent": 0.0,
+      "stiffness": "",
+      "texture": "",
+      "humidity": "",
+      "description": "",
+      "source": "",
+      "tags": []
     },
     {
-      "id": "beam_010",
-      "original_length_mm": 1980,
-      "remaining_length_mm": 1980,
+      "material_id": "object_010",
+      "dimensions_mm": {
+        "length": 0.102,
+        "width": 0.077,
+        "height": null
+      },
+      "weight_kg": null,
+      "density_kg_m3": null,
       "cuts": [],
       "waste_mm": 0,
-      "utilization_percent": 0.0
+      "utilization_percent": 0.0,
+      "stiffness": "",
+      "texture": "",
+      "humidity": "",
+      "description": "",
+      "source": "",
+      "tags": []
     },
     {
-      "id": "beam_011",
-      "original_length_mm": 1980,
-      "remaining_length_mm": 1980,
+      "material_id": "object_011",
+      "dimensions_mm": {
+        "length": 0.091,
+        "width": 0.117,
+        "height": null
+      },
+      "weight_kg": null,
+      "density_kg_m3": null,
       "cuts": [],
       "waste_mm": 0,
-      "utilization_percent": 0.0
-    },
-    {
-      "id": "beam_012",
-      "original_length_mm": 1980,
-      "remaining_length_mm": 1980,
-      "cuts": [],
-      "waste_mm": 0,
-      "utilization_percent": 0.0
-    },
-    {
-      "id": "beam_013",
-      "original_length_mm": 1980,
-      "remaining_length_mm": 1980,
-      "cuts": [],
-      "waste_mm": 0,
-      "utilization_percent": 0.0
+      "utilization_percent": 0.0,
+      "stiffness": "",
+      "texture": "",
+      "humidity": "",
+      "description": "",
+      "source": "",
+      "tags": []
     }
   ],
-  "used_elements": [],
   "total_waste_mm": 0,
   "total_utilization_percent": 0.0,
   "cutting_sessions": [],
-  "last_updated": "2025-06-26T13:19:28.005641",
+  "last_updated": "2025-07-02T04:37:30.242417",
   "metadata": {
-    "cross_section": "5x5cm",
-    "material_type": "timber",
     "project": "bridge_design",
-    "version": "1.0",
+    "version": "2.0",
     "units": "millimeters"
-  },
-  "statistics": {
-    "total_beams": 13,
-    "full_beams": 13,
-    "partial_beams": 0,
-    "average_beam_length_mm": 1980.0,
-    "material_efficiency_target": 95.0,
-    "waste_tolerance_mm": 100
   }
 }

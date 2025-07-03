@@ -71,25 +71,25 @@ def create_triage_system(
 
 
     # Create rational agent for level validation
-    from .rational_smolagents import create_rational_agent
+    # from .rational_smolagents import create_rational_agent
 
-    rational_monitor = None
-    if monitoring_callback:
-        # Check if it's a remote callback factory or local callback
-        if (
-            callable(monitoring_callback)
-            and hasattr(monitoring_callback, "__name__")
-            and "create" in monitoring_callback.__name__
-        ):
-            # Remote monitoring factory - create callback for this agent
-            rational_monitor = monitoring_callback("rational_agent")
-        else:
-            # Local monitoring - use existing pattern
-            from ..monitoring.agent_monitor import create_monitor_callback
+    # rational_monitor = None
+    # if monitoring_callback:
+    #     # Check if it's a remote callback factory or local callback
+    #     if (
+    #         callable(monitoring_callback)
+    #         and hasattr(monitoring_callback, "__name__")
+    #         and "create" in monitoring_callback.__name__
+    #     ):
+    #         # Remote monitoring factory - create callback for this agent
+    #         rational_monitor = monitoring_callback("rational_agent")
+    #     else:
+    #         # Local monitoring - use existing pattern
+    #         from ..monitoring.agent_monitor import create_monitor_callback
 
-            rational_monitor = create_monitor_callback("rational_agent", monitoring_callback)
+    #         rational_monitor = create_monitor_callback("rational_agent", monitoring_callback)
 
-    rational_agent = create_rational_agent(monitoring_callback=rational_monitor)
+    # rational_agent = create_rational_agent(monitoring_callback=rational_monitor)
 
     # Note: Material and structural analysis can be added as separate agents if needed
 
@@ -137,7 +137,7 @@ def create_triage_system(
         max_steps=max_steps,
         step_callbacks=step_callbacks,
         additional_authorized_imports=["typing", "json", "datetime"],
-        managed_agents=[geometry_agent, rational_agent],  # Pass ManagedAgent instances
+        managed_agents=[geometry_agent],  #, rational_agent # Pass ManagedAgent instances
         **kwargs,
     )
 
@@ -412,19 +412,19 @@ class TriageSystemWrapper:
                 and "create" in monitoring_callback.__name__
             ):
                 geometry_monitor = monitoring_callback("geometry_agent")
-                rational_monitor = monitoring_callback("rational_agent")
+                # rational_monitor = monitoring_callback("rational_agent")
             else:
                 from ..monitoring.agent_monitor import create_monitor_callback
 
                 geometry_monitor = create_monitor_callback("geometry_agent", monitoring_callback)
-                rational_monitor = create_monitor_callback("rational_agent", monitoring_callback)
+                # rational_monitor = create_monitor_callback("rational_agent", monitoring_callback)
 
         # Create agents using the updated factory functions (returns agents directly)
         self.geometry_agent = _create_mcp_enabled_geometry_agent(
             monitoring_callback=geometry_monitor,
         )
 
-        self.rational_agent = create_rational_agent(monitoring_callback=rational_monitor)
+        # self.rational_agent = create_rational_agent(monitoring_callback=rational_monitor)
 
         # Create triage manager with managed_agents and memory tracking
         manager_step_callbacks = [track_design_changes]
@@ -449,7 +449,7 @@ class TriageSystemWrapper:
             max_steps=6,
             step_callbacks=manager_step_callbacks,
             additional_authorized_imports=["typing", "json", "datetime"],
-            managed_agents=[self.geometry_agent, self.rational_agent],
+            managed_agents=[self.geometry_agent], #, self.rational_agent
         )
 
         self.component_registry = component_registry
@@ -529,16 +529,16 @@ class TriageSystemWrapper:
                 "name": "geometry_agent",
                 "mcp_integration": "enabled",
             },
-            "rational_agent": {
-                "initialized": hasattr(self, "rational_agent") and self.rational_agent is not None,
-                "type": (
-                    type(self.rational_agent).__name__
-                    if hasattr(self, "rational_agent")
-                    else "Unknown"
-                ),
-                "name": "rational_agent",
-                "level_validation": "enabled",
-            },
+            # "rational_agent": {
+            #     "initialized": hasattr(self, "rational_agent") and self.rational_agent is not None,
+            #     "type": (
+            #         type(self.rational_agent).__name__
+            #         if hasattr(self, "rational_agent")
+            #         else "Unknown"
+            #     ),
+            #     "name": "rational_agent",
+            #     "level_validation": "enabled",
+            # },
         }
 
     def reset_all_agents(self) -> None:

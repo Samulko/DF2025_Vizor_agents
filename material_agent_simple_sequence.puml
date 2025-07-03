@@ -1,0 +1,55 @@
+@startuml Material Agent - Core Workflow
+
+!theme plain
+skinparam backgroundColor #F8F9FA
+skinparam sequenceArrowThickness 2
+skinparam roundcorner 15
+
+title Material Agent - Core Shape Analysis Workflow
+
+actor User as U
+participant "Material Agent" as Agent
+participant "Shape Tools" as Tools
+participant "Data Store" as Data
+
+== Main Workflow ==
+
+U -> Agent: Start Analysis
+activate Agent
+
+Agent -> Data: Load material catalog
+activate Data
+Data --> Agent: Vertex data & metadata
+deactivate Data
+
+loop For each object
+    Agent -> Tools: Calculate distances
+    activate Tools
+    Tools --> Agent: Side lengths
+    deactivate Tools
+    
+    alt Triangle detected
+        Agent -> Tools: Calculate angles
+        activate Tools
+        Tools --> Agent: Angle measurements
+        deactivate Tools
+        
+        Agent -> Agent: Classify triangle type
+        note right of Agent: Equilateral/Isosceles/Scalene\nRight/Obtuse
+        
+    else Other shape
+        Agent -> Agent: Categorize as other
+    end
+end
+
+Agent -> Data: Save categorized results
+activate Data
+Data --> Agent: Confirmation
+deactivate Data
+
+Agent --> U: Analysis complete
+deactivate Agent
+
+note right of U: Results include:\n- Shape classifications\n- Statistics\n- Saved to JSON
+
+@enduml 

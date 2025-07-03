@@ -1,0 +1,303 @@
+@startuml Material Agent Architecture
+
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam classBackgroundColor #E8F4FD
+skinparam classBorderColor #2E86AB
+skinparam packageBackgroundColor #F0F8FF
+skinparam packageBorderColor #4682B4
+
+package "Material Agent System" {
+    
+    class MaterialAgent {
+        +create_material_agent()
+        +demo_material_agent()
+        +load_material_catalog()
+        +categorize_materials()
+        +analyze_triangle_shape()
+    }
+    
+    package "Tools" {
+        class CalculateDistance {
+            +calculate_distance(point1, point2)
+        }
+        
+        class CalculateAngles {
+            +calculate_angles(vertices)
+        }
+        
+        class SaveCategorizedData {
+            +save_categorized_data(data, filename)
+        }
+    }
+    
+    package "Data Processing" {
+        class CatalogLoader {
+            +load_material_catalog()
+        }
+        
+        class ShapeAnalyzer {
+            +analyze_triangle_shape(vertices)
+        }
+        
+        class MaterialCategorizer {
+            +categorize_materials(catalog_data)
+        }
+    }
+    
+    package "Data Storage" {
+        class FoundMaterialCatalog {
+            catalog: List[Object]
+        }
+        
+        class MaterialCategories {
+            triangles: List[Triangle]
+            other_shapes: List[Shape]
+            statistics: Statistics
+        }
+    }
+    
+    package "External Dependencies" {
+        class CodeAgent {
+            +run(task)
+            +tools
+            +model
+        }
+        
+        class ModelProvider {
+            +get_model(name)
+        }
+        
+        class SmolAgents {
+            @tool decorator
+        }
+    }
+}
+
+' Relationships
+MaterialAgent --> CalculateDistance : uses
+MaterialAgent --> CalculateAngles : uses
+MaterialAgent --> SaveCategorizedData : uses
+MaterialAgent --> CatalogLoader : uses
+MaterialAgent --> ShapeAnalyzer : uses
+MaterialAgent --> MaterialCategorizer : uses
+
+CatalogLoader --> FoundMaterialCatalog : reads
+MaterialCategorizer --> FoundMaterialCatalog : processes
+MaterialCategorizer --> MaterialCategories : creates
+SaveCategorizedData --> MaterialCategories : saves
+
+MaterialAgent --> CodeAgent : creates
+CodeAgent --> ModelProvider : uses
+CodeAgent --> SmolAgents : extends
+
+' Tool relationships
+CalculateDistance --> ShapeAnalyzer : provides distance calculation
+CalculateAngles --> ShapeAnalyzer : provides angle calculation
+
+@enduml
+
+@startuml Material Agent Workflow
+
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam activityBackgroundColor #E8F4FD
+skinparam activityBorderColor #2E86AB
+skinparam noteBackgroundColor #FFFACD
+skinparam noteBorderColor #FFD700
+
+start
+
+:Load Material Catalog;
+note right: Read found_material_catalog.json
+
+:Create Material Agent;
+note right: Initialize CodeAgent with tools
+
+:Process Each Object;
+note right: Iterate through catalog items
+
+if (Object has 3 vertices?) then (yes)
+    :Analyze Triangle Shape;
+    note right: Calculate sides and angles
+    
+    if (Has angle > 90°) then (yes)
+        :Classify as Obtuse Triangle;
+    elseif (Has angle = 90°) then (yes)
+        :Classify as Right Triangle;
+    elseif (All angles = 60°) then (yes)
+        :Classify as Equilateral Triangle;
+    elseif (Two sides equal) then (yes)
+        :Classify as Isosceles Triangle;
+    else (no)
+        :Classify as Scalene Triangle;
+    endif
+    
+    :Add to Triangles Category;
+else (no)
+    :Add to Other Shapes Category;
+    note right: Track vertex count
+endif
+
+:Update Statistics;
+note right: Count shapes and types
+
+if (More objects?) then (yes)
+    goto Process Each Object
+else (no)
+    :Save Categorized Data;
+    note right: Write to material_categories.json
+endif
+
+:Run Agent Analysis;
+note right: Use LLM for detailed analysis
+
+stop
+
+@enduml
+
+@startuml Material Agent Data Flow
+
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam componentBackgroundColor #E8F4FD
+skinparam componentBorderColor #2E86AB
+skinparam databaseBackgroundColor #F0F8FF
+skinparam databaseBorderColor #4682B4
+
+package "Input Data" {
+    database "found_material_catalog.json" as Catalog {
+        [object_001]
+        [object_002]
+        [object_003]
+        ...
+    }
+}
+
+package "Processing Engine" {
+    component "Material Agent" as Agent {
+        [Shape Analysis]
+        [Mathematical Calculations]
+        [Classification Logic]
+    }
+    
+    component "Tools" as Tools {
+        [calculate_distance]
+        [calculate_angles]
+        [save_categorized_data]
+    }
+    
+    component "LLM Integration" as LLM {
+        [CodeAgent]
+        [ModelProvider]
+    }
+}
+
+package "Output Data" {
+    database "material_categories.json" as Categories {
+        [triangles]
+        [other_shapes]
+        [statistics]
+    }
+}
+
+package "Analysis Results" {
+    component "Shape Types" as Shapes {
+        [equilateral_triangle]
+        [isosceles_triangle]
+        [scalene_triangle]
+        [right_triangle]
+        [obtuse_triangle]
+    }
+    
+    component "Statistics" as Stats {
+        [total_objects]
+        [triangle_count]
+        [shape_types_count]
+    }
+}
+
+' Data flow
+Catalog --> Agent : Load catalog data
+Agent --> Tools : Use mathematical tools
+Tools --> Agent : Return calculations
+Agent --> LLM : Request analysis
+LLM --> Agent : Provide insights
+Agent --> Categories : Save categorized data
+Agent --> Shapes : Classify shapes
+Agent --> Stats : Generate statistics
+
+@enduml
+
+@startuml Material Agent Class Structure
+
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam classBackgroundColor #E8F4FD
+skinparam classBorderColor #2E86AB
+
+class MaterialAgent {
+    +create_material_agent(tools, model_name)
+    +demo_material_agent()
+    --
+    -load_material_catalog()
+    -categorize_materials(catalog_data)
+    -analyze_triangle_shape(vertices)
+}
+
+class ShapeAnalysisTools {
+    +calculate_distance(point1, point2)
+    +calculate_angles(vertices)
+    +save_categorized_data(data, filename)
+}
+
+class DataProcessor {
+    +load_material_catalog()
+    +categorize_materials(catalog_data)
+    +analyze_triangle_shape(vertices)
+}
+
+class CatalogData {
+    +catalog: List[Object]
+    --
+    +Object {
+        +id: str
+        +vertices: List[List[float]]
+        +tags: List[str]
+    }
+}
+
+class CategorizedData {
+    +triangles: List[Triangle]
+    +other_shapes: List[Shape]
+    +statistics: Statistics
+    --
+    +Triangle {
+        +id: str
+        +vertices: List[List[float]]
+        +shape_type: str
+        +original_tags: List[str]
+    }
+    +Statistics {
+        +total_objects: int
+        +triangle_count: int
+        +shape_types: Dict[str, int]
+    }
+}
+
+class CodeAgent {
+    +tools: List
+    +model: Model
+    +max_steps: int
+    +run(task)
+}
+
+' Relationships
+MaterialAgent --> ShapeAnalysisTools : uses
+MaterialAgent --> DataProcessor : uses
+MaterialAgent --> CodeAgent : creates
+DataProcessor --> CatalogData : processes
+DataProcessor --> CategorizedData : creates
+ShapeAnalysisTools --> DataProcessor : supports
+
+@enduml 

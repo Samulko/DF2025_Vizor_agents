@@ -4,6 +4,8 @@ import math
 import argparse
 from pathlib import Path
 from typing import Dict, List, Any
+import re
+import os
 
 from smolagents import CodeAgent, tool
 from src.bridge_design_system.config.logging_config import get_logger
@@ -101,11 +103,80 @@ def generate_tags_from_description(description: str) -> list:
     words = re.findall(r'\b\w+\b', description.lower())
     return list(set(words))
 
+
+@tool
+def update_description(category: str, index: int, description: str) -> str:
+    """
+    Update the description for a specific object in all_categories.json.
+
+    Args:
+        category: The category name (e.g., 'triangle').
+        index: The index of the object in the category list.
+        description: The new description to set.
+
+    Returns:
+        A message indicating success or failure.
+    """
+    json_path = os.path.join(os.path.dirname(__file__), '../data/all_categories.json')
+    json_path = os.path.abspath(json_path)
+    with open(json_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    if category not in data or not (0 <= index < len(data[category])):
+        return "Invalid category or index."
+    old_desc = data[category][index].get("description", "")
+    data[category][index]["description"] = description
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    return f"Description updated for {category}[{index}]! (Old: '{old_desc}' -> New: '{description}')"
+
+
+@tool
+def interpret_and_update_description(natural_input: str) -> str:
+    """
+    Interpret input like 'the first geometry is a foam board' and update description in the catalog.
+
+    Args:
+        natural_input: A sentence describing a specific geometry (e.g., 'the second geometry is made of steel').
+
+    Returns:
+        A status message after attempting the update.
+    """
+    import re
+    match = re.match(r'the (\w+) geometry is (.+)', natural_input.lower())
+    if not match:
+        return "❌ Could not interpret input. Please use format like 'the first geometry is ...'."
+    ordinal_map = {
+        "first": 0, "second": 1, "third": 2, "fourth": 3,
+        "fifth": 4, "sixth": 5, "seventh": 6, "eighth": 7,
+        "ninth": 8, "tenth": 9
+    }
+    ordinal_word, desc = match.groups()
+    index = ordinal_map.get(ordinal_word)
+    if index is None:
+        return f"❌ Unsupported position: {ordinal_word}"
+    shape_category = "triangle"  # Default; can be improved
+    return update_description(shape_category, index, desc)
+
+
 # ─── STEP 2: AGENT FACTORY ────────────────────────────────────────────────────
 
-def create_material_agent(model_name: str = "default") -> CodeAgent:
-    model = ModelProvider.get_model(model_name)
-    tools = [calculate_distance, calculate_angles, save_categorized_data]
+tools = [
+    calculate_distance,
+    calculate_angles,
+    save_categorized_data,
+    generate_tags_from_description,
+    update_description,
+    interpret_and_update_description
+]
+
+def create_category_agent(model_name: str = None) -> CodeAgent:
+    """
+    Create a category agent for shape analysis.
+    """
+    agent_name = 'category'
+    if model_name is None:
+        model_name = getattr(settings, 'category_agent_model', 'gemini-2.5-flash-preview-05-20')
+    model = ModelProvider.get_model(agent_name, temperature=None)
     agent = CodeAgent(
         tools=tools,
         model=model,
@@ -186,9 +257,17 @@ def demo(catalog_file: Path, out_file: str, model_name: str = "material"):
     analysis = agent.run(prompt)
     logger.info("Agent analysis:\n" + analysis)
 
-# Aliases for compatibility with imports in __init__.py and main.py
-create_category_material_agent = create_material_agent
-demo_level_checking = demo
+
+def handle_natural_description_prompt(agent, prompt: str):
+    """
+    If the prompt is a natural description (not a geometry creation command),
+    call interpret_and_update_description. Otherwise, skip.
+    """
+    if 'generate' not in prompt.lower() and 'create' not in prompt.lower():
+        return agent.run(f"interpret_and_update_description('{prompt}')")
+    else:
+        return "🚫 Prompt suggests geometry creation — skipped."
+
 
 if __name__=="__main__":
     p = argparse.ArgumentParser()

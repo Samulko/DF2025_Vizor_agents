@@ -1,0 +1,141 @@
+@startuml Material Agent System Sequence Diagram
+
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam sequenceArrowThickness 2
+skinparam roundcorner 20
+skinparam maxmessagesize 60
+
+title Material Agent System - Shape Analysis Workflow
+
+actor User as U
+participant "Main Application" as MA
+participant "Material Agent" as MAgent
+participant "Model Provider" as MP
+participant "Shape Analysis Tools" as SAT
+participant "Data Manager" as DM
+participant "File System" as FS
+database "Material Catalog" as MC
+database "Categorized Data" as CD
+
+== Initialization Phase ==
+
+U -> MA: Start Material Agent Demo
+activate MA
+
+MA -> MAgent: create_material_agent()
+activate MAgent
+
+MAgent -> MP: get_model("default")
+activate MP
+MP --> MAgent: AI Model Instance
+deactivate MP
+
+MAgent -> SAT: Register Tools\n(calculate_distance, calculate_angles, save_categorized_data)
+activate SAT
+SAT --> MAgent: Tools Registered
+deactivate SAT
+
+MAgent --> MA: Agent Created Successfully
+deactivate MAgent
+
+== Data Loading Phase ==
+
+MA -> DM: load_material_catalog()
+activate DM
+
+DM -> FS: Read found_material_catalog.json
+activate FS
+FS --> DM: JSON Data
+deactivate FS
+
+DM --> MA: Material Catalog Data
+deactivate DM
+
+note right of MA: Catalog contains:\n- Object IDs\n- Vertex coordinates\n- Original tags
+
+== Shape Analysis Phase ==
+
+MA -> MAgent: categorize_materials(catalog_data)
+activate MAgent
+
+loop For each object in catalog
+    MAgent -> SAT: calculate_distance(point1, point2)
+    activate SAT
+    SAT --> MAgent: Euclidean distance
+    deactivate SAT
+    
+    alt Object has 3 vertices (Triangle)
+        MAgent -> SAT: calculate_angles(vertices)
+        activate SAT
+        SAT --> MAgent: Angle measurements
+        deactivate SAT
+        
+        MAgent -> MAgent: analyze_triangle_shape(vertices)
+        note right of MAgent: Classify as:\n- Equilateral\n- Isosceles\n- Scalene\n- Right\n- Obtuse
+        
+        MAgent -> MAgent: Update triangle statistics
+    else Object has other vertex count
+        MAgent -> MAgent: Categorize as "other_shapes"
+    end
+end
+
+MAgent --> MA: Categorized Materials Data
+deactivate MAgent
+
+note right of MA: Results include:\n- Triangle classifications\n- Shape statistics\n- Object metadata
+
+== Data Persistence Phase ==
+
+MA -> MAgent: Save categorized data
+activate MAgent
+
+MAgent -> SAT: save_categorized_data(categorized_objects, "material_categories.json")
+activate SAT
+
+SAT -> FS: Create/Write material_categories.json
+activate FS
+FS --> SAT: File saved successfully
+deactivate FS
+
+SAT --> MAgent: Confirmation message
+deactivate SAT
+
+MAgent --> MA: Save operation completed
+deactivate MAgent
+
+== Advanced Analysis Phase ==
+
+MA -> MAgent: Run detailed shape analysis
+activate MAgent
+
+MAgent -> SAT: calculate_distance() for side lengths
+activate SAT
+SAT --> MAgent: Side length measurements
+deactivate SAT
+
+MAgent -> SAT: calculate_angles() for angle analysis
+activate SAT
+SAT --> MAgent: Angle measurements
+deactivate SAT
+
+MAgent -> MAgent: Perform geometric analysis
+note right of MAgent: Analyze:\n- Geometric properties\n- Shape classifications\n- Special properties
+
+MAgent --> MA: Detailed analysis results
+deactivate MAgent
+
+== Results Presentation ==
+
+MA -> U: Display analysis summary
+note right of U: Shows:\n- Total objects analyzed\n- Triangle count and types\n- Other shapes found\n- File locations
+
+MA --> U: Demo completed successfully
+deactivate MA
+
+== Error Handling ==
+
+note over MA, FS: Error scenarios handled:
+note over MA, FS: - File not found\n- Invalid JSON data\n- Calculation errors\n- Permission issues
+
+@enduml 
