@@ -175,7 +175,7 @@ def create_category_agent(model_name: str = None) -> CodeAgent:
     """
     agent_name = 'category'
     if model_name is None:
-        model_name = getattr(settings, 'category_agent_model', 'gemini-2.5-flash-preview-05-20')
+        model_name = 'gemini-2.5-flash-preview-05-20'
     model = ModelProvider.get_model(agent_name, temperature=None)
     agent = CodeAgent(
         tools=tools,
@@ -244,7 +244,7 @@ def categorize(catalog: Dict[str, Any], agent=None) -> Dict[str, Any]:
 def demo(catalog_file: Path, out_file: str, model_name: str = "material"):
     logger.info("Loading catalog...")
     catalog = load_catalog(catalog_file)
-    agent = create_material_agent(model_name)
+    agent = create_category_agent(model_name)
     logger.info("Categorizing locally...")
     result = categorize(catalog, agent)
     logger.info(f"Found {result['stats']['triangles']} triangles out of {result['stats']['total']}")

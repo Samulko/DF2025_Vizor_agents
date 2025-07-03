@@ -142,7 +142,7 @@ def validate_environment():
     """Validate that required environment variables are set."""
     # Get unique providers needed
     providers = set()
-    for agent in ["triage", "geometry", "material", "structural", "syslogic"]:
+    for agent in ["triage", "geometry", "material", "structural", "syslogic", "category"]:
         provider = getattr(settings, f"{agent}_agent_provider", None)
         if provider:
             providers.add(provider)
@@ -984,6 +984,17 @@ def main():
         action="store_true",
         help="Disable VizorListener initialization - run without ROS dependency for gaze tracking",
     )
+    parser.add_argument(
+        "--multimodal",
+        action="store_true",
+        help="Launch multimodal bridge design chat agent with voice, video, and image support",
+    )
+    parser.add_argument(
+        "--multimodal-port",
+        type=int,
+        default=7860,
+        help="Port for multimodal web interface (default: 7860)",
+    )
 
     args = parser.parse_args()
 
@@ -1063,6 +1074,15 @@ def main():
         from .cli.enhanced_interface import run_enhanced_cli
 
         run_enhanced_cli(simple_mode=False)
+    elif args.multimodal:
+        logger.info("🚀 Starting multimodal bridge design chat agent...")
+        from .agents.chat_multimodel import launch_multimodal_bridge_chat
+        
+        launch_multimodal_bridge_chat(
+            server_port=args.multimodal_port,
+            debug=False,
+            share=False
+        )
     elif args.interactive:
         interactive_mode(
             use_legacy=args.legacy,

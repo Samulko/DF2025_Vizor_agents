@@ -49,7 +49,29 @@ def create_triage_system(
     # REFACTORED: Removed shared component tracking - geometry agent is now autonomous
 
     # Create autonomous geometry agent with full MCP access (proper smolagents pattern)
-    geometry_monitor = None
+    # DISABLED: Geometry agent temporarily disabled
+    # geometry_monitor = None
+    # if monitoring_callback:
+    #     # Check if it's a remote callback factory or local callback
+    #     if (
+    #         callable(monitoring_callback)
+    #         and hasattr(monitoring_callback, "__name__")
+    #         and "create" in monitoring_callback.__name__
+    #     ):
+    #         # Remote monitoring factory - create callback for this agent
+    #         geometry_monitor = monitoring_callback("geometry_agent")
+    #     else:
+    #         # Local monitoring - use existing pattern
+    #         from ..monitoring.agent_monitor import create_monitor_callback
+
+    #         geometry_monitor = create_monitor_callback("geometry_agent", monitoring_callback)
+
+    # geometry_agent = _create_mcp_enabled_geometry_agent(
+    #     monitoring_callback=geometry_monitor,
+    # )
+
+    # Create category agent for material analysis
+    category_monitor = None
     if monitoring_callback:
         # Check if it's a remote callback factory or local callback
         if (
@@ -58,15 +80,15 @@ def create_triage_system(
             and "create" in monitoring_callback.__name__
         ):
             # Remote monitoring factory - create callback for this agent
-            geometry_monitor = monitoring_callback("geometry_agent")
+            category_monitor = monitoring_callback("category_agent")
         else:
             # Local monitoring - use existing pattern
             from ..monitoring.agent_monitor import create_monitor_callback
 
-            geometry_monitor = create_monitor_callback("geometry_agent", monitoring_callback)
+            category_monitor = create_monitor_callback("category_agent", monitoring_callback)
 
-    geometry_agent = _create_mcp_enabled_geometry_agent(
-        monitoring_callback=geometry_monitor,
+    category_agent = _create_category_agent(
+        monitoring_callback=category_monitor,
     )
 
 
@@ -137,7 +159,7 @@ def create_triage_system(
         max_steps=max_steps,
         step_callbacks=step_callbacks,
         additional_authorized_imports=["typing", "json", "datetime"],
-        managed_agents=[geometry_agent],  #, rational_agent # Pass ManagedAgent instances
+        managed_agents=[category_agent],  # geometry_agent, rational_agent disabled, category_agent enabled
         **kwargs,
     )
 
@@ -187,6 +209,30 @@ def _create_mcp_enabled_geometry_agent(
 
     return create_geometry_agent(
         monitoring_callback=monitoring_callback,
+    )
+
+
+def _create_category_agent(
+    monitoring_callback: Optional[Any] = None,
+) -> Any:
+    """
+    Create category agent for material analysis and shape categorization.
+
+    Following smolagents best practices, this imports and configures
+    the standalone category agent for use in managed_agents.
+
+    Args:
+        monitoring_callback: Optional callback for real-time monitoring
+
+    Returns:
+        CategoryAgent instance configured for managed_agents
+    """
+    logger.info("Creating category agent for material analysis")
+
+    from .category_smolagent import create_category_agent
+
+    return create_category_agent(
+        model_name="category",
     )
 
 
@@ -402,26 +448,45 @@ class TriageSystemWrapper:
         manager_tools = basic_coordination_tools
 
         # Create managed agents using factory functions
-        geometry_monitor = None
-        rational_monitor = None
+        # DISABLED: All agents temporarily disabled
+        # geometry_monitor = None
+        # rational_monitor = None
 
+        # if monitoring_callback:
+        #     if (
+        #         callable(monitoring_callback)
+        #         and hasattr(monitoring_callback, "__name__")
+        #         and "create" in monitoring_callback.__name__
+        #     ):
+        #         geometry_monitor = monitoring_callback("geometry_agent")
+        #         # rational_monitor = monitoring_callback("rational_agent")
+        #     else:
+        #         from ..monitoring.agent_monitor import create_monitor_callback
+
+        #         geometry_monitor = create_monitor_callback("geometry_agent", monitoring_callback)
+        #         # rational_monitor = create_monitor_callback("rational_agent", monitoring_callback)
+
+        # # Create agents using the updated factory functions (returns agents directly)
+        # self.geometry_agent = _create_mcp_enabled_geometry_agent(
+        #     monitoring_callback=geometry_monitor,
+        # )
+
+        # Create category agent
+        category_monitor = None
         if monitoring_callback:
             if (
                 callable(monitoring_callback)
                 and hasattr(monitoring_callback, "__name__")
                 and "create" in monitoring_callback.__name__
             ):
-                geometry_monitor = monitoring_callback("geometry_agent")
-                # rational_monitor = monitoring_callback("rational_agent")
+                category_monitor = monitoring_callback("category_agent")
             else:
                 from ..monitoring.agent_monitor import create_monitor_callback
 
-                geometry_monitor = create_monitor_callback("geometry_agent", monitoring_callback)
-                # rational_monitor = create_monitor_callback("rational_agent", monitoring_callback)
+                category_monitor = create_monitor_callback("category_agent", monitoring_callback)
 
-        # Create agents using the updated factory functions (returns agents directly)
-        self.geometry_agent = _create_mcp_enabled_geometry_agent(
-            monitoring_callback=geometry_monitor,
+        self.category_agent = _create_category_agent(
+            monitoring_callback=category_monitor,
         )
 
         # self.rational_agent = create_rational_agent(monitoring_callback=rational_monitor)
@@ -449,7 +514,7 @@ class TriageSystemWrapper:
             max_steps=6,
             step_callbacks=manager_step_callbacks,
             additional_authorized_imports=["typing", "json", "datetime"],
-            managed_agents=[self.geometry_agent], #, self.rational_agent
+            managed_agents=[self.category_agent], # self.geometry_agent, self.rational_agent disabled, category enabled
         )
 
         self.component_registry = component_registry
@@ -516,18 +581,24 @@ class TriageSystemWrapper:
             "triage": {
                 "initialized": True,
                 "type": "smolagents_managed_agents",
-                "managed_agents": 2,  # managed_geometry + managed_rational
+                "managed_agents": 1,  # Category agent enabled
                 "max_steps": self.manager.max_steps,
             },
             "geometry_agent": {
-                "initialized": hasattr(self, "geometry_agent") and self.geometry_agent is not None,
+                "initialized": False,
+                "type": "Disabled",
+                "name": "geometry_agent",
+                "mcp_integration": "disabled",
+            },
+            "category_agent": {
+                "initialized": hasattr(self, "category_agent") and self.category_agent is not None,
                 "type": (
-                    type(self.geometry_agent).__name__
-                    if hasattr(self, "geometry_agent")
+                    type(self.category_agent).__name__
+                    if hasattr(self, "category_agent")
                     else "Unknown"
                 ),
-                "name": "geometry_agent",
-                "mcp_integration": "enabled",
+                "name": "category_agent",
+                "material_analysis": "enabled",
             },
             # "rational_agent": {
             #     "initialized": hasattr(self, "rational_agent") and self.rational_agent is not None,
@@ -616,6 +687,44 @@ class TriageSystemWrapper:
 
         except Exception as e:
             logger.error(f"❌ Memory transfer failed: {e}")
+            return False
+
+    def transfer_category_memory(self, element_filter: Optional[str] = None) -> bool:
+        """
+        Transfer design memory from category agent to triage agent.
+
+        Args:
+            element_filter: Optional element ID to filter transfer
+
+        Returns:
+            True if transfer successful, False otherwise
+        """
+        try:
+            from ..memory import transfer_agent_memory
+
+            logger.info("🔄 Transferring category memory to triage agent")
+
+            # Get the actual category agent
+            category_agent = self.category_agent
+            if hasattr(category_agent, "_wrapper"):
+                source_agent = category_agent._wrapper.agent
+            else:
+                source_agent = category_agent
+
+            # Transfer to triage manager
+            success = transfer_agent_memory(
+                source_agent=source_agent, target_agent=self.manager, element_filter=element_filter
+            )
+
+            if success:
+                logger.info("✅ Category memory transfer completed successfully")
+            else:
+                logger.warning("⚠️ No category memory found to transfer")
+
+            return success
+
+        except Exception as e:
+            logger.error(f"❌ Category memory transfer failed: {e}")
             return False
 
     def query_element_original_state(self, element_id: str) -> Optional[Dict[str, Any]]:
