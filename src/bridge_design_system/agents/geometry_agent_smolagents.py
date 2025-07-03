@@ -18,6 +18,7 @@ from ..config.logging_config import get_logger
 from ..config.model_config import ModelProvider
 from ..config.settings import settings
 from ..memory import track_design_changes
+from ..monitoring.trace_logger import log_agent_interaction
 
 logger = get_logger(__name__)
 
@@ -37,6 +38,7 @@ class SmolagentsGeometryAgent:
     ):
         """Initialize the smolagents geometry agent with persistent MCP connection."""
         self.model_name = model_name
+        self.step_counter = 0
 
         # Required attributes for smolagents managed_agents
         self.name = "geometry_agent"
@@ -102,6 +104,18 @@ class SmolagentsGeometryAgent:
         and memory across multiple requests for iterative design.
         """
         logger.info(f"🎯 Executing task with persistent smolagents geometry agent: {task[:100]}...")
+        
+        # Workshop logging - start
+        self.step_counter += 1
+        import time
+        start_time = time.time()
+        
+        log_agent_interaction(
+            agent_name="geometry_agent",
+            step_number=self.step_counter,
+            task_description=task[:200] + "..." if len(task) > 200 else task,
+            status="started"
+        )
 
         try:
             # Log memory state before execution
@@ -121,10 +135,33 @@ class SmolagentsGeometryAgent:
 
             # Component registration removed - using native smolagents memory instead
 
+            # Workshop logging - success
+            duration = time.time() - start_time
+            result_str = str(result) if result else ""
+            log_agent_interaction(
+                agent_name="geometry_agent",
+                step_number=self.step_counter,
+                task_description=task[:200] + "..." if len(task) > 200 else task,
+                status="completed",
+                response_content=result_str[:500] + "..." if len(result_str) > 500 else result_str,
+                duration_seconds=duration
+            )
+
             logger.info("✅ Task completed successfully with persistent smolagents geometry agent")
             return result
 
         except Exception as e:
+            # Workshop logging - error
+            duration = time.time() - start_time
+            log_agent_interaction(
+                agent_name="geometry_agent",
+                step_number=self.step_counter,
+                task_description=task[:200] + "..." if len(task) > 200 else task,
+                status="failed",
+                error_message=str(e),
+                duration_seconds=duration
+            )
+            
             logger.error(f"❌ Persistent smolagents geometry agent execution failed: {e}")
             raise RuntimeError(f"Geometry agent requires active MCP connection: {e}")
 
@@ -332,9 +369,67 @@ def create_geometry_agent(
     # Store reference to wrapper for cleanup purposes
     internal_agent._wrapper = wrapper
 
+    # Override the run method to add logging when called as managed agent
+    original_run = internal_agent.run
+    
+    def logged_run(task: str, **kwargs):
+        """Override run method to add workshop logging for managed agent calls."""
+        logger.info(f"🎯 Geometry agent executing task via managed_agents: {task[:100]}...")
+        
+        # Workshop logging - start
+        step_counter = getattr(internal_agent, '_step_counter', 0) + 1
+        setattr(internal_agent, '_step_counter', step_counter)
+        
+        import time
+        start_time = time.time()
+        
+        log_agent_interaction(
+            agent_name="geometry_agent",
+            step_number=step_counter,
+            task_description=task[:200] + "..." if len(task) > 200 else task,
+            status="started"
+        )
+        
+        try:
+            # Call original run method
+            result = original_run(task, **kwargs)
+            
+            # Workshop logging - success
+            duration = time.time() - start_time
+            result_str = str(result) if result else ""
+            log_agent_interaction(
+                agent_name="geometry_agent",
+                step_number=step_counter,
+                task_description=task[:200] + "..." if len(task) > 200 else task,
+                status="completed",
+                response_content=result_str[:500] + "..." if len(result_str) > 500 else result_str,
+                duration_seconds=duration
+            )
+            
+            logger.info("✅ Geometry agent managed task completed successfully")
+            return result
+            
+        except Exception as e:
+            # Workshop logging - error
+            duration = time.time() - start_time
+            log_agent_interaction(
+                agent_name="geometry_agent",
+                step_number=step_counter,
+                task_description=task[:200] + "..." if len(task) > 200 else task,
+                status="failed",
+                error_message=str(e),
+                duration_seconds=duration
+            )
+            
+            logger.error(f"❌ Geometry agent managed task failed: {e}")
+            raise
+    
+    # Replace the run method
+    internal_agent.run = logged_run
+
     # Agent configured for managed_agents pattern with proper name/description in constructor
 
-    logger.info("✅ Created geometry agent configured for managed_agents pattern")
+    logger.info("✅ Created geometry agent configured for managed_agents pattern with logging override")
     return internal_agent
 
 
