@@ -1,0 +1,766 @@
+/' cSpell:disable '/
+@startuml bridge_agents_sequence_diagram
+
+!theme plain
+title Bridge Design Agent System - Multi-Agent Architecture with MCP Integration
+
+actor User as U
+box "Voice Interface" #LightBlue
+    participant "Wake Word\n(Porcupine)" as WW
+    participant "Voice Input\n(Whisper)" as VI
+    participant "Voice Assistant" as VA
+end box
+
+box "Chat & Coordination" #LightGreen
+    participant "Bridge Chat Agent\n(Gemini Live\nmodel: gemini-live-2.5-flash-preview)" as BCA
+    participant "Bridge Multimodal Agent\n(Gemini Live\nmodel: gemini-live-2.5-flash-preview)" as BMA
+    participant "Main System\n(main.py)" as MAIN
+    participant "Triage Agent\n(Coordinator)" as TA
+    participant "Bridge Design\nSupervisor" as BDS
+end box
+
+box "Specialized Agents" #LightYellow
+    participant "Geometry Agent\n(MCP-enabled)" as GA
+    participant "Rational Agent\n(Structural)" as RA
+    participant "SysLogic Agent\n(Systems)" as SLA
+    participant "HRC Agent\n(Human-Robot)" as HRA
+end box
+
+box "Backend Integration" #LightCoral
+    participant "MCP Bridge\n(MCPAdapt)" as MCP
+    participant "Grasshopper\n(C# Component)" as GH
+    participant "Component Registry" as CR
+    participant "Material Inventory\nManager" as MIM
+end box
+
+box "Monitoring & Telemetry" #LightGray
+    participant "Agent Monitor\n(Callbacks)" as AM
+    participant "WebSocket Server\n(Status)" as WS
+    participant "LCARS Monitor\n(UI)" as LCARS
+    participant "OpenTelemetry\n(Tracing)" as OTEL
+    participant "Trace Logger" as TL
+end box
+
+== System Initialization ==
+
+U -> MAIN: Start system (interactive_mode)
+activate MAIN
+
+MAIN -> MAIN: validate_environment()
+note right: Check API keys:\n- OpenAI, Anthropic, Gemini\n- MCP server paths
+
+MAIN -> CR: initialize_registry()
+activate CR
+CR -> CR: Load component definitions
+CR -> MIM: Initialize material inventory
+activate MIM
+MIM -> MIM: Load material_inventory.json
+
+MAIN -> AM: create_agent_monitor_system()
+activate AM
+AM -> WS: Initialize WebSocket broadcaster
+activate WS
+AM -> TL: Initialize trace logger
+activate TL
+
+MAIN -> LCARS: start_monitoring_server()
+activate LCARS
+LCARS -> WS: Connect to WebSocket feed
+LCARS -> OTEL: Initialize OpenTelemetry bridge
+activate OTEL
+
+MAIN -> TA: create_triage_system()
+activate TA
+
+TA -> GA: _create_mcp_enabled_geometry_agent()
+activate GA
+GA -> MCP: MCPAdapt(stdio_params)
+activate MCP
+note right MCP: Command: python -m grasshopper_mcp\nArgs: --stdio
+MCP -> GH: Start C# MCP component
+activate GH
+GH -> GH: Load ComponentKnowledgeBase.json
+GH -> GH: Initialize FuzzyMatcher
+GH --> MCP: Available tools:\n- create_component\n- connect_components\n- get_document_info
+MCP --> GA: 15+ MCP tools integrated
+GA -> GA: Create ToolCallingAgent(max_steps=12)
+GA -> AM: Register monitoring callback
+
+TA -> RA: create_rational_agent()
+activate RA
+RA -> RA: Load structural analysis tools
+RA -> AM: Register monitoring callback
+
+TA -> SLA: create_syslogic_agent() [Optional]
+activate SLA
+TA -> HRA: create_hrc_agent() [Optional]  
+activate HRA
+
+TA -> BDS: create_bridge_design_supervisor()
+activate BDS
+BDS -> BDS: Initialize with managed agents:\n- Geometry Agent\n- Rational Agent
+BDS -> AM: Register supervisor monitoring
+
+== Voice Interaction Flow ==
+
+note over U,VI: Voice Input Pipeline with Wake Word Detection
+
+U -> WW: Ambient audio monitoring
+activate WW
+WW -> WW: pvporcupine.detect("Hey Vizor")
+WW -> VI: Wake word detected!
+activate VI
+
+VI -> VI: pvrecorder.start()
+VI -> U: "[MIC] Listening..."
+
+U -> VI: "Create a cable-stayed bridge"
+VI -> VI: Record audio frames
+VI -> VI: cobra.process() [VAD]
+note right VI: Voice Activity Detection\nto determine speech end
+
+alt Use OpenAI API
+    VI -> VI: Convert to WAV format
+    VI -> VI: OpenAI Whisper API call
+else Local Whisper
+    VI -> VI: whisper.load_model("tiny.en")
+    VI -> VI: Local transcription
+end
+
+VI -> VI: Apply context prompts
+VI --> MAIN: "Create a cable-stayed bridge"
+deactivate VI
+
+alt Voice Chat Mode (Gemini Live)
+    MAIN -> BCA: launch_bridge_chat_agent()
+    activate BCA
+    
+    BCA -> BCA: Initialize Gemini Live session (model: gemini-live-2.5-flash-preview)
+    note right BCA: Real-time bidirectional\naudio streaming\nTools declared using Gemini API function_declarations\n(see https://ai.google.dev/gemini-api/docs/live-tools)
+    BCA -> BCA: Configure bridge supervisor tools
+    BCA -> AM: Register chat agent monitoring
+    
+    U -> BCA: Voice input (real-time stream)
+    BCA -> BCA: Process with Gemini Live API
+    BCA -> TL: Log interaction start
+    
+    alt Complex Bridge Design Task
+        BCA -> BCA: Detect tool call needed
+        BCA -> BDS: Tool call: design_bridge_component(task)\n[via Gemini API function_declarations]
+        
+        BDS -> AM: Update status: "coordinating"
+        BDS -> GA: Delegate geometry creation
+        BDS -> RA: Request structural validation
+        BDS -> CR: Register new components
+        BDS --> BCA: Structured design results
+        
+        BCA -> BCA: Convert results to natural language
+        BCA -> TL: Log tool call completion
+        
+    else Simple Engineering Question
+        BCA -> BCA: Direct response from Gemini
+        note right BCA: Basic bridge concepts,\nmaterials, terminology
+    end
+    
+    BCA -> U: Voice response (synthesized)
+    BCA -> AM: Update status: "completed"
+    deactivate BCA
+    
+else Multimodal Chat Mode (Gemini Live)
+    MAIN -> BMA: launch_multimodal_bridge_chat()
+    activate BMA
+    
+    BMA -> BMA: Initialize Gemini Live session (model: gemini-live-2.5-flash-preview)
+    note right BMA: Real-time audio, video, image streaming\nTools declared using Gemini API function_declarations\n(see https://ai.google.dev/gemini-api/docs/live-tools)
+    BMA -> BMA: Configure bridge supervisor tools
+    BMA -> AM: Register multimodal agent monitoring
+    
+    U -> BMA: Voice, video, image input (real-time stream)
+    BMA -> BMA: Process with Gemini Live API (with visual context)
+    BMA -> TL: Log interaction start
+    
+    alt Complex Bridge Design Task
+        BMA -> BMA: Detect tool call needed (with multimodal context)
+        BMA -> BDS: Tool call: design_bridge_component(task, visual_context)\n[via Gemini API function_declarations]
+        
+        BDS -> AM: Update status: "coordinating"
+        BDS -> GA: Delegate geometry creation
+        BDS -> RA: Request structural validation
+        BDS -> CR: Register new components
+        BDS --> BMA: Structured design results
+        
+        BMA -> BMA: Convert results to natural language
+        BMA -> TL: Log tool call completion
+        
+    else Simple Engineering Question
+        BMA -> BMA: Direct response from Gemini
+        note right BMA: Basic bridge concepts,\nmaterials, terminology
+    end
+    
+    BMA -> U: Voice response (synthesized)
+    BMA -> AM: Update status: "completed"
+    deactivate BMA
+end
+
+== Triage and Delegation Flow ==
+
+note over TA: Intelligent task routing based on request analysis
+
+TA -> TA: Analyze request type using LLM
+TA -> TL: log_agent_interaction(step_start)
+TA -> AM: Update status: "analyzing"
+
+alt Simple Geometry Task
+    note right TA: "Add a beam between points"
+    TA -> GA: Delegate to geometry agent
+    GA -> AM: Update status: "mcp_connecting"
+    GA -> MCP: create_component(type="beam")
+    MCP -> GH: ComponentCommandHandler.CreateComponent()
+    GH -> GH: Generate Grasshopper component
+    GH -> GH: Update document state
+    GH --> MCP: Component GUID + properties
+    MCP --> GA: Tool execution result
+    GA -> GA: Update memory with design state
+    GA -> CR: register_bridge_component()
+    CR -> CR: Store component metadata
+    GA -> AM: Update status: "completed"
+    GA --> TA: Geometry creation results
+    
+else Structural Analysis Task
+    note right TA: "Calculate load capacity"
+    TA -> RA: Delegate to rational agent
+    RA -> AM: Update status: "calculating"
+    RA -> RA: Load structural formulas
+    RA -> RA: Apply safety factors
+    RA -> RA: Generate analysis report
+    RA -> MIM: Query material properties
+    MIM --> RA: Material specifications
+    RA -> AM: Update status: "completed"
+    RA --> TA: Analysis results with recommendations
+    
+else Material Management Task
+    note right TA: "What materials are available?"
+    TA -> MIM: Query material inventory
+    MIM -> MIM: Load material_inventory.json
+    MIM -> MIM: Filter by bridge requirements
+    MIM --> TA: Available materials list
+    
+else Systems Integration Task
+    note right TA: "Connect bridge to monitoring"
+    TA -> SLA: Delegate to systems logic agent
+    SLA -> SLA: Design monitoring system
+    SLA --> TA: System integration plan
+    
+else Human-Robot Collaboration
+    note right TA: "Plan robot assembly sequence"
+    TA -> HRA: Delegate to HRC agent
+    HRA -> HRA: Generate robot paths
+    HRA -> GA: Request assembly geometry
+    GA -> MCP: get_document_info()
+    MCP -> GH: DocumentCommandHandler.GetInfo()
+    GH --> MCP: Current component positions
+    MCP --> GA: Document state
+    GA --> HRA: Spatial constraints
+    HRA --> TA: Robot assembly plan
+    
+else Complex Bridge Design (Multi-Agent)
+    note right TA: "Design complete cable-stayed bridge"
+    TA -> BDS: Coordinate multi-agent task
+    
+    BDS -> AM: Update status: "coordinating"
+    
+    par Geometry Creation
+        BDS -> GA: Create bridge structure
+        GA -> MCP: Multiple MCP tool calls
+        MCP -> GH: Create towers, cables, deck
+        GH -> GH: Apply parametric constraints
+        GH --> MCP: Bridge geometry data
+        MCP --> GA: Geometric model
+        GA -> CR: Register all components
+    and Structural Validation
+        BDS -> RA: Validate structural integrity
+        RA -> MIM: Get material properties
+        MIM --> RA: Steel, concrete specs
+        RA -> RA: Calculate load paths
+        RA -> RA: Verify safety factors
+    and Material Planning
+        BDS -> MIM: Reserve required materials
+        MIM -> MIM: Check inventory availability
+        MIM -> MIM: Generate procurement list
+    end
+    
+    BDS -> BDS: Coordinate design iterations
+    note right BDS: Iterative refinement based\non structural feedback
+    
+    BDS -> CR: Finalize component registry
+    CR -> CR: Create design documentation
+    BDS -> AM: Update status: "design_complete"
+    BDS --> TA: Complete bridge design package
+end
+
+TA -> TL: log_agent_interaction(step_complete)
+TA -> AM: Update status: "task_routing_complete"
+TA --> MAIN: Task results with metadata
+
+== Real-time Monitoring Flow ==
+
+note over AM,LCARS: Multi-layered monitoring system with real-time telemetry
+
+loop Continuous Agent Monitoring
+    par Agent Status Updates
+        GA -> AM: MonitorCallback(memory_step, agent)
+        note right AM: Extract step data:\n- Tool calls\n- Status\n- Memory size
+        AM -> AM: Rate limiting (0.5s cooldown)
+        AM -> WS: Broadcast agent status
+        
+        RA -> AM: Step callback with analysis data
+        AM -> AM: Update status tracker
+        
+        TA -> AM: Coordination status updates
+        note right AM: Task routing decisions\nand delegation states
+        
+        BDS -> AM: Supervisor coordination events
+        AM -> AM: Track multi-agent orchestration
+        
+    and WebSocket Broadcasting
+        WS -> WS: Manage client connections
+        WS -> WS: Serialize status data to JSON
+        WS -> LCARS: Real-time status updates
+        WS -> U: Send to connected clients (optional)
+        
+    and LCARS Visualization
+        LCARS -> LCARS: Update agent status display
+        LCARS -> LCARS: Render system architecture view
+        LCARS -> U: Live dashboard (localhost:5000)
+        note right LCARS: Star Trek-inspired\nengineering interface
+        
+    and OpenTelemetry Integration
+        TL -> OTEL: Structured trace events
+        OTEL -> OTEL: Process spans and metrics
+        OTEL -> OTEL: Export to configured backend
+        note right OTEL: Workshop session analysis\nfor performance optimization
+    end
+    
+    AM -> AM: Cleanup stale connections
+    AM -> AM: Memory usage optimization
+end
+
+== Advanced Monitoring Features ==
+
+alt High Performance Mode
+    AM -> AM: Skip every other update
+    note right AM: Reduce monitoring overhead\nfor production systems
+    
+else Error State Monitoring
+    GA -> AM: MCP connection error
+    AM -> AM: Queue error update
+    AM -> WS: Broadcast error status
+    WS -> LCARS: Red alert indicators
+    LCARS -> U: Visual/audio error alerts
+    
+else Memory Tracking
+    GA -> GA: track_design_changes callback
+    GA -> AM: Memory step count updates
+    AM -> WS: Memory usage metrics
+    WS -> LCARS: Memory visualization graphs
+    
+else Remote Monitoring
+    AM -> AM: RemoteMonitorCallback mode
+    AM -> AM: HTTP POST to remote endpoint
+    note right AM: Distributed monitoring\nfor multi-system deployments
+end
+
+== Performance Analytics ==
+
+TL -> TL: Workshop session tracking
+TL -> TL: Agent performance metrics
+TL -> TL: Task completion analytics
+TL -> OTEL: Export session summary
+OTEL -> OTEL: Generate performance reports
+note over TL,OTEL: Post-session analysis for\nsystem optimization
+
+== Memory and State Management ==
+
+note over GA,BDS: Sophisticated memory management using smolagents native patterns
+
+par Individual Agent Memory
+    GA -> GA: track_design_changes(memory_step, agent)
+    note right GA: Native smolagents callback:\n- ActionStep tracking\n- Tool execution history\n- Design state persistence
+    GA -> GA: agent.memory.steps.append(ActionStep)
+    GA -> GA: Update component cache
+    
+    RA -> RA: track_design_changes(memory_step, agent)
+    note right RA: Structural analysis memory:\n- Load calculations\n- Safety factor history\n- Material selections
+    RA -> RA: Maintain calculation history
+    
+and Cross-Agent Memory Coordination
+    BDS -> BDS: Coordinate agent memories
+    note right BDS: Managed agents pattern:\n- Context sharing\n- State synchronization\n- Design iteration tracking
+    
+    BDS -> GA: Request design history context
+    GA -> GA: get_my_element_history(element_id)
+    GA --> BDS: Element modification timeline
+    
+    BDS -> RA: Share structural constraints
+    RA -> RA: Update analysis context
+    
+and Component Registry Integration  
+    GA -> CR: register_bridge_component(type, id, data)
+    CR -> CR: Store component metadata
+    CR -> CR: Track component relationships
+    CR -> CR: Maintain design history
+    
+    TA -> CR: Query component state
+    CR --> TA: Current design snapshot
+end
+
+== Advanced Memory Features ==
+
+alt Manual Step Control (Enhanced Memory)
+    GA -> GA: run_with_manual_steps(task)
+    note right GA: Manual execution pattern:\n- Step-by-step control\n- Memory modification between steps\n- Enhanced state tracking
+    
+    loop For each step
+        GA -> GA: agent.step(memory_step)
+        GA -> GA: Modify memory between steps
+        GA -> GA: memory_step.observations += "[DESIGN_STATE]"
+        GA -> AM: Enhanced memory tracking
+    end
+    
+else Context-Based Recall
+    TA -> GA: Provide historical context
+    note right TA: Instead of parsing memory,\nprovide relevant context\nfor new tasks
+    GA -> GA: Process context in new task
+    GA -> GA: Reason over provided history
+    
+else Memory Transfer Operations
+    TA -> TA: transfer_geometry_memory(filter)
+    TA -> GA: Extract filtered design state
+    GA --> TA: Relevant memory subset
+    TA -> RA: Provide context for analysis
+    
+else Session Reset with Backup
+    MAIN -> TA: reset_all_agents()
+    
+    par Agent Memory Cleanup
+        TA -> GA: Clear memory steps
+        GA -> GA: supervisor.memory.steps.clear()
+        GA -> GA: Clear managed_agents memory
+        GA -> GA: Clear internal component cache
+        
+        TA -> RA: Clear memory steps  
+        RA -> RA: agent.memory.steps.clear()
+        
+        TA -> BDS: reset_design_session()
+        BDS -> BDS: Clear supervisor memory
+        BDS -> BDS: Reset managed agents memory
+        
+    and State Backup
+        TA -> CR: Create design snapshot
+        CR -> CR: Save to backups/auto_backup_*.json
+        CR -> CR: Preserve component registry state
+        
+        TA -> MIM: Backup material assignments
+        MIM -> MIM: Save inventory state
+    end
+    
+    TA --> MAIN: Reset complete with backup
+end
+
+note over GA,CR: Memory architecture enables:\n- Persistent design sessions\n- Iterative refinement\n- Error recovery\n- Multi-agent coordination
+
+== Error Handling and Recovery ==
+
+note over GA,LCARS: Multi-layered error handling with graceful degradation
+
+alt MCP Connection Error
+    GA -> MCP: create_component() call
+    MCP -x GH: Connection timeout/failure
+    MCP --> GA: ConnectionError exception
+    GA -> GA: Log error details
+    GA -> AM: Update status: "mcp_error"
+    GA -> WS: Broadcast error state
+    WS -> LCARS: Red alert indicators
+    LCARS -> U: "[WARNING] MCP Connection Lost"
+    
+    GA -> GA: Attempt reconnection (3 retries)
+    alt Reconnection Successful
+        GA -> MCP: Re-establish connection
+        MCP -> GH: Restart C# component
+        GA -> AM: Update status: "mcp_reconnected"
+        GA -> TA: "Connection restored, retrying task"
+    else Reconnection Failed
+        GA --> TA: "MCP unavailable, geometric operations disabled"
+        TA -> TA: Route to alternative agents
+        TA -> RA: "Continue with structural analysis only"
+    end
+    
+else Agent Execution Error  
+    TA -> GA: Complex geometry task
+    GA -> GA: agent.run(task) execution
+    GA -x GA: Tool execution exception
+    GA -> AM: Queue error update
+    AM -> AM: Extract error details
+    AM -> WS: Broadcast error status
+    WS -> LCARS: Display error context
+    
+    GA -> TL: log_agent_interaction(error)
+    TL -> OTEL: Error telemetry data
+    
+    TA -> TA: Catch execution exception
+    TA -> TA: Analyze error type
+    alt Recoverable Error
+        TA -> GA: Retry with simplified parameters
+        note right TA: Reduce complexity,\nbreak into smaller tasks
+    else Non-recoverable Error
+        TA -> BDS: Escalate to supervisor
+        BDS -> RA: Alternative structural approach
+        BDS --> TA: Fallback solution
+    end
+    
+else Voice Processing Error
+    U -> VI: Unclear audio input
+    VI -> VI: Whisper transcription fails
+    VI -> VI: Return "transcription failed"
+    VI -> MAIN: Error message
+    
+    alt Voice Chat Mode
+        MAIN -> BCA: Handle transcription error
+        BCA -> U: "Sorry, I didn't catch that. Could you repeat?"
+        U -> VI: Clearer voice input
+    else CLI Mode
+        MAIN -> U: "Voice input failed, please type your request:"
+        U -> MAIN: Text input fallback
+    end
+    
+else API Rate Limiting
+    GA -> MCP: Rapid tool calls
+    MCP --> GA: Rate limit exceeded
+    GA -> GA: Implement exponential backoff
+    GA -> AM: Update status: "rate_limited"
+    
+    loop Retry with backoff
+        GA -> GA: wait(delay_seconds)
+        GA -> MCP: Retry tool call
+        alt Success
+            GA -> AM: Update status: "operational"
+        else Still rate limited
+            GA -> GA: Increase delay_seconds *= 2
+        end
+    end
+    
+else Memory Overflow
+    GA -> GA: Check memory size
+    GA -> GA: memory.steps.length > threshold
+    GA -> AM: Update status: "memory_cleanup"
+    GA -> GA: Compress old memory steps
+    GA -> GA: Keep recent critical steps
+    GA -> CR: Archive old design states
+    CR -> CR: Save to backup files
+    GA -> AM: Update status: "memory_optimized"
+    
+else System Resource Exhaustion
+    MAIN -> MAIN: Check system resources
+    MAIN -> AM: CPU/Memory warning
+    AM -> WS: Broadcast resource alert
+    WS -> LCARS: Performance warnings
+    
+    MAIN -> AM: Enable high performance mode
+    AM -> AM: Skip monitoring updates
+    AM -> AM: Reduce callback frequency
+    
+    MAIN -> TA: Limit concurrent agents
+    TA -> TA: Queue tasks instead of parallel execution
+    
+else Grasshopper Component Error
+    GH -> GH: Component creation fails
+    GH -> GH: Invalid parameters detected
+    GH --> MCP: Component error details
+    MCP --> GA: Detailed error information
+    
+    GA -> GA: Parse error message
+    GA -> GA: Suggest parameter corrections
+    GA -> TA: "Geometry failed: Invalid span length"
+    TA -> RA: "Please validate structural requirements"
+    RA --> TA: "Maximum span: 100m for this configuration"
+    TA -> GA: "Retry with span <= 100m"
+end
+
+== Recovery Coordination ==
+
+note over TA,BDS: Intelligent error recovery with context preservation
+
+TA -> TA: Maintain error context
+TA -> CR: Save partial progress
+CR -> CR: Create recovery checkpoint
+TA -> AM: Update recovery status
+AM -> WS: Recovery progress updates
+WS -> LCARS: Show recovery operations
+LCARS -> U: "[RECOVERY] Recovering from error, please wait..."
+
+TA -> BDS: Coordinate recovery strategy
+BDS -> BDS: Assess agent availability
+BDS -> GA: Check MCP connection status
+BDS -> RA: Verify analysis capabilities
+BDS --> TA: Recovery plan with available agents
+
+TA -> U: "Error resolved. Continuing with modified approach."
+
+== Session Reset ==
+
+note over U,CR: Comprehensive session reset with state preservation
+
+U -> MAIN: Reset request (CLI command or UI)
+MAIN -> MAIN: Confirm reset operation
+MAIN -> AM: Broadcast reset notification
+AM -> WS: Notify all connected clients
+WS -> LCARS: Display reset progress
+LCARS -> U: "[RESET] Resetting system state..."
+
+MAIN -> TA: reset_all_agents()
+
+par Agent Memory Cleanup
+    TA -> GA: Clear geometry agent memory
+    GA -> GA: supervisor.memory.steps.clear()
+    GA -> GA: Clear managed_agents memory
+    GA -> GA: Reset internal component cache
+    GA -> AM: Update status: "memory_cleared"
+    
+    TA -> RA: Clear structural agent memory  
+    RA -> RA: agent.memory.steps.clear()
+    RA -> RA: Reset calculation history
+    RA -> AM: Update status: "memory_cleared"
+    
+    TA -> BDS: reset_design_session()
+    BDS -> BDS: Clear supervisor memory
+    BDS -> BDS: Reset managed agents memory
+    BDS -> AM: Update status: "supervisor_reset"
+    
+    TA -> SLA: Clear systems logic memory [Optional]
+    TA -> HRA: Clear HRC agent memory [Optional]
+
+and State Backup Operations
+    TA -> CR: Create pre-reset backup
+    CR -> CR: Generate timestamp: 20250101_120000
+    CR -> CR: Save to backups/auto_backup_before_reset_*.json
+    CR -> CR: Preserve component registry state
+    CR -> AM: Update status: "backup_complete"
+    
+    TA -> MIM: Backup material assignments
+    MIM -> MIM: Save current inventory state
+    MIM -> MIM: Preserve material reservations
+    MIM -> AM: Update status: "inventory_backed_up"
+
+and Monitoring Reset
+    AM -> AM: Clear agent status history
+    AM -> WS: Reset connection states
+    WS -> WS: Clear client message queues
+    TL -> TL: Finalize current session logs
+    TL -> OTEL: Export final session metrics
+end
+
+TA -> TA: Reset triage agent own memory
+TA -> TA: Clear task routing history
+TA -> AM: Update status: "reset_complete"
+TA --> MAIN: "All agents reset successfully"
+
+MAIN -> CR: Verify system state
+CR --> MAIN: "Clean state confirmed"
+MAIN -> AM: Broadcast reset completion
+AM -> WS: Notify reset complete
+WS -> LCARS: Update display
+LCARS -> U: "[SUCCESS] System reset complete - Ready for new session"
+
+== System Shutdown ==
+
+note over U,OTEL: Graceful shutdown with resource cleanup and session finalization
+
+U -> MAIN: Shutdown signal (Ctrl+C, SIGTERM, or UI command)
+MAIN -> MAIN: Initiate graceful shutdown sequence
+MAIN -> AM: Broadcast shutdown notification
+AM -> WS: Notify all clients of pending shutdown
+WS -> LCARS: Display shutdown countdown
+LCARS -> U: "[WARNING] System shutting down in 10 seconds..."
+
+par Agent Cleanup
+    MAIN -> TA: Cleanup and finalize agents
+    TA -> GA: Graceful geometry agent shutdown
+    GA -> MCP: Close MCP connection gracefully
+    MCP -> GH: Send termination signal to C# component
+    GH -> GH: Save current document state
+    GH -> GH: Release Grasshopper resources
+    GH -> GH: Clean exit
+    deactivate GH
+    MCP -> MCP: Close stdio connection
+    deactivate MCP
+    GA -> AM: Update status: "shutdown_complete"
+    deactivate GA
+    
+    TA -> RA: Shutdown structural agent
+    RA -> RA: Save analysis state
+    RA -> AM: Update status: "shutdown_complete"
+    deactivate RA
+    
+    TA -> BDS: Shutdown bridge supervisor
+    BDS -> BDS: Finalize managed agents
+    BDS -> AM: Update status: "shutdown_complete"
+    deactivate BDS
+    
+    TA -> SLA: Shutdown systems agent [Optional]
+    deactivate SLA
+    TA -> HRA: Shutdown HRC agent [Optional]
+    deactivate HRA
+    
+    TA -> AM: Update status: "all_agents_shutdown"
+    deactivate TA
+
+and State Persistence
+    MAIN -> CR: Final state backup
+    CR -> CR: Save component registry
+    CR -> CR: Create shutdown snapshot
+    CR -> AM: Update status: "final_backup_complete"
+    deactivate CR
+    
+    MAIN -> MIM: Save material inventory
+    MIM -> MIM: Persist current state
+    MIM -> AM: Update status: "inventory_saved"
+    deactivate MIM
+
+and Session Finalization
+    MAIN -> TL: Finalize workshop session
+    TL -> TL: Generate session summary
+    TL -> TL: Calculate performance metrics
+    TL -> OTEL: Export final telemetry
+    OTEL -> OTEL: Process and export all spans
+    OTEL -> OTEL: Generate session report
+    TL -> AM: Update status: "session_finalized"
+    deactivate TL
+    deactivate OTEL
+
+and Interface Shutdown
+    MAIN -> WS: Stop WebSocket server
+    WS -> WS: Close all client connections
+    WS -> LCARS: Send final goodbye message
+    LCARS -> U: "[GOODBYE] Bridge Design System offline"
+    WS -> WS: Release network resources
+    deactivate WS
+    
+    MAIN -> LCARS: Stop LCARS interface
+    LCARS -> LCARS: Save UI preferences
+    LCARS -> LCARS: Release web server resources
+    deactivate LCARS
+    
+    MAIN -> AM: Stop monitoring system
+    AM -> AM: Cleanup status trackers
+    AM -> AM: Release monitoring resources
+    deactivate AM
+end
+
+MAIN -> MAIN: Final cleanup
+MAIN -> MAIN: Release system resources
+MAIN -> U: "[SUCCESS] Bridge Design System shutdown complete"
+deactivate MAIN
+
+note over U: System fully offline\nAll resources released\nSession data preserved
+
+@enduml 
