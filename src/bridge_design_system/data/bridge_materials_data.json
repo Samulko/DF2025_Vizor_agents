@@ -1,0 +1,45 @@
+{
+  "steel": {
+    "strength": {
+      "tensile_strength_MPa": 400,
+      "compressive_strength_MPa": 400
+    },
+    "weight_density_kg_m3": 7850,
+    "cost_per_kg_usd": 1.5,
+    "properties": [
+      "high strength-to-weight ratio",
+      "ductile",
+      "corrosion resistant (if treated)",
+      "recyclable"
+    ]
+  },
+  "concrete": {
+    "strength": {
+      "tensile_strength_MPa": 2.5,
+      "compressive_strength_MPa": 30
+    },
+    "weight_density_kg_m3": 2400,
+    "cost_per_m3_usd": 100,
+    "properties": [
+      "high compressive strength",
+      "durable",
+      "fire resistant",
+      "formable",
+      "low tensile strength"
+    ]
+  },
+  "wood": {
+    "strength": {
+      "tensile_strength_MPa": 70,
+      "compressive_strength_MPa": 35
+    },
+    "weight_density_kg_m3": 700,
+    "cost_per_m3_usd": 500,
+    "properties": [
+      "renewable",
+      "aesthetic",
+      "good strength-to-weight ratio for certain applications",
+      "susceptible to rot and pests"
+    ]
+  }
+}
