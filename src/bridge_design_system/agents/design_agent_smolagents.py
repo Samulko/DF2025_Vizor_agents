@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional
 from mcp import StdioServerParameters
 from mcpadapt.core import MCPAdapt
 from mcpadapt.smolagents_adapter import SmolAgentsAdapter
-from smolagents import ToolCallingAgent
+from smolagents import ToolCallingAgent, tool
 
 from ..config.logging_config import get_logger
 from ..config.model_config import ModelProvider
@@ -18,6 +18,20 @@ from ..config.settings import settings
 from ..memory import track_design_changes
 
 logger = get_logger(__name__)
+
+@tool
+def build_shapes_from_json(found_objects_data: dict, category: str) -> list:
+    """
+    Build shape vertex lists from found objects JSON data for a given category.
+    Args:
+        found_objects_data: The loaded JSON data.
+        category: The category of shapes to extract (e.g., 'triangle', 'hexagon', etc.)
+    Returns:
+        List of shapes, each as a list of vertices.
+    """
+    if category not in found_objects_data:
+        raise ValueError(f"Category '{category}' not found in data.")
+    return [obj["vertices"] for obj in found_objects_data[category] if "vertices" in obj]
 
 
 class SmolagentsDesignAgent:
@@ -326,6 +340,6 @@ def get_design_system_prompt() -> str:
     project_root = current_file.parent.parent.parent.parent
     prompt_path = project_root / "system_prompts" / "design_agent.md"
     if not prompt_path.exists():
-        logger.warning("⚠️ Design agent system prompt not found, using default prompt")
+        logger.warning("⚠️ Design agent + not found, using default prompt")
         return """You are a design agent specialized in interactive 3D form exploration and assembly.\nYour role is to orchestrate the design-explore-refine-fabricate workflow, using a Python component in Grasshopper and the context7 database for memory/context.\n"""
     return prompt_path.read_text(encoding="utf-8")
