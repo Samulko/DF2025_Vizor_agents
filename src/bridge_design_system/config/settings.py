@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     triage_agent_model: str = "gemini-2.5-flash-preview-05-20"
     geometry_agent_provider: str = "gemini"
     geometry_agent_model: str = "gemini-2.5-flash-preview-05-20"
+    surface_agent_provider: str = "gemini"
+    surface_agent_model: str = "ggemini-2.5-pro"
     material_agent_provider: str = "gemini"
     material_agent_model: str = "gemini-2.5-flash-preview-05-20"
     structural_agent_provider: str = "gemini"
@@ -30,6 +32,12 @@ class Settings(BaseSettings):
     syslogic_agent_model: str = "gemini-2.5-flash-preview-05-20"
     rational_agent_provider: str = "gemini"
     rational_agent_model: str = "gemini-2.5-flash-preview-05-20"
+    category_agent_provider: str = "gemini"
+    category_agent_model: str = "gemini-2.5-flash-preview-05-20"
+
+    # Design Agent Configuration
+    design_agent_provider: str = "gemini"
+    design_agent_model: str = "gemini-2.5-pro"
 
     # MCP Configuration
     mcp_transport_mode: str = "http"  # "http" or "stdio"
@@ -59,20 +67,6 @@ class Settings(BaseSettings):
     # Development Settings
     debug: bool = False
     enable_profiling: bool = False
-
-    # OpenTelemetry Configuration
-    otel_backend: str = "hybrid"  # none, console, langfuse, phoenix, hybrid
-    otel_enabled: bool = True
-    langfuse_public_key: Optional[str] = None
-    langfuse_secret_key: Optional[str] = None
-    langfuse_host: str = "https://cloud.langfuse.com"  # EU region default
-    phoenix_host: str = "http://localhost"
-    phoenix_port: int = 6006
-    
-    # Monitoring Configuration
-    disable_custom_monitoring: bool = False
-    monitoring_host: str = "0.0.0.0"
-    monitoring_port: int = 5000
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", case_sensitive=False, extra="ignore"
