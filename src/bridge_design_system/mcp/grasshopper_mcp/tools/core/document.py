@@ -104,3 +104,21 @@ def get_geometry_agent_components() -> Dict[str, Any]:
             - components: List of component details (id, type, name)
     """
     return get_components_in_group("geometry_agent")
+
+def get_design_agent_components() -> Dict[str, Any]:
+    """
+    Get all component UUIDs from the design_agent group.
+
+    This is a specialized function that automatically retrieves components
+    from the "design_agent" group without requiring the group name to be specified.
+    This is intended for use by the geometry agent to discover its assigned components.
+
+    Returns:
+        Dict[str, Any]: Result containing:
+            - success: Boolean indicating if operation succeeded
+            - groupName: Always "design_agent"
+            - found: Whether the design_agent group was found
+            - componentCount: Number of components in the group
+            - components: List of component details (id, type, name)
+    """
+    return get_components_in_group("design_agent")
