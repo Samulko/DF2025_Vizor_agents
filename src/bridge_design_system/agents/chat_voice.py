@@ -847,7 +847,6 @@ def launch_bridge_chat_agent(server_port: int = 7860, share: bool = False, debug
             debug=debug,
             show_error=True,  # Show detailed error messages
             quiet=False,  # Don't suppress startup messages
-            enable_queue=True,  # Enable request queue for better handling
         )
         
     except Exception as e:
