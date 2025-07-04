@@ -27,10 +27,11 @@ async def startup_event():
     global status_tracker, websocket_manager
     status_tracker, websocket_manager = create_agent_monitor_system()
 
-    # Register the three agents we'll be monitoring
+    # Register the four agents we'll be monitoring
     status_tracker.register_agent("triage_agent", "CodeAgent")
-    status_tracker.register_agent("geometry_agent", "ToolCallingAgent")
-    status_tracker.register_agent("syslogic_agent", "CodeAgent")
+    status_tracker.register_agent("surface_agent", "ToolCallingAgent")
+    status_tracker.register_agent("category_agent", "CodeAgent")
+    status_tracker.register_agent("design_agent", "ToolCallingAgent")
 
     # NEW AGENT TEMPLATE - UNCOMMENT AND MODIFY FOR NEW AGENTS
     # status_tracker.register_agent("material_agent", "ToolCallingAgent")
@@ -48,7 +49,7 @@ async def startup_event():
     # Start periodic cleanup task for stale WebSocket connections
     asyncio.create_task(periodic_cleanup())
 
-    print("📊 Agent monitoring system initialized with 3 agents")
+    print("📊 Agent monitoring system initialized with 4 agents")
     # NOTE: Update the agent count above when adding new agents
 
 
