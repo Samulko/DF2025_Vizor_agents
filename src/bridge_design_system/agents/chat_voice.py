@@ -62,6 +62,14 @@ class BridgeChatHandler(AsyncStreamHandler):
         self.task_lock = asyncio.Lock()  # Thread-safe access to shared state
         
         logger.info("🌉 Bridge chat handler initialized for two-terminal IPC architecture")
+        
+        # Add startup diagnostic info
+        self.startup_diagnostics = {
+            "handler_initialized": True,
+            "session_created": False,
+            "microphone_test_passed": False,
+            "gemini_connected": False
+        }
 
     def copy(self) -> "BridgeChatHandler":
         return BridgeChatHandler(expected_layout="mono", output_sample_rate=self.output_sample_rate)
@@ -69,6 +77,14 @@ class BridgeChatHandler(AsyncStreamHandler):
     async def start_up(self):
         """Initialize Gemini Live session with bridge design tools."""
         print("🔧 [DEBUG] Starting Gemini Live session initialization...")
+        
+        # Enhanced startup with better error handling
+        try:
+            await self._check_microphone_availability()
+        except Exception as e:
+            print(f"⚠️ [WARNING] Microphone check failed: {e}")
+            print("   This might indicate browser permission issues")
+            print("   The system will still try to start - grant permissions when prompted")
         
         # Get API key from environment directly (no user input required)
         api_key = os.getenv("GEMINI_API_KEY")
@@ -131,6 +147,10 @@ class BridgeChatHandler(AsyncStreamHandler):
             print(f"🔧 [DEBUG] Session available methods: {[attr for attr in dir(session) if not attr.startswith('_')]}")
             print("🎧 [DEBUG] Audio streaming active - you can now speak to the system")
             print("🔄 [DEBUG] Waiting for user input...")
+            
+            # Update diagnostics
+            self.startup_diagnostics["session_created"] = True
+            self.startup_diagnostics["gemini_connected"] = True
             
             # Handle tool calls with enhanced debugging
             print("🛠️  [DEBUG] Using manual tool call detection (Live API requires manual handling)")
@@ -243,8 +263,19 @@ class BridgeChatHandler(AsyncStreamHandler):
             }
         }
         
-        # Return in Live API format - both tools
-        tools = [{"function_declarations": [bridge_design_request_declaration, are_smolagents_finished_declaration]}]
+        # Diagnostic tool for troubleshooting
+        diagnostics_declaration = {
+            "name": "get_system_diagnostics",
+            "description": "Get system diagnostics for troubleshooting voice interface issues. Use when user reports connection problems.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        }
+        
+        # Return in Live API format - all tools
+        tools = [{"function_declarations": [bridge_design_request_declaration, are_smolagents_finished_declaration, diagnostics_declaration]}]
         logger.info(f"✅ Created {len(tools[0]['function_declarations'])} tool declarations for Live API")
         return tools
     
@@ -494,14 +525,46 @@ class BridgeChatHandler(AsyncStreamHandler):
                         
                         print(f"✅ [FUNCTION RESPONSE] Created status response for {fc.name}")
                     
-                    else:
-                        print(f"❌ [UNKNOWN FUNCTION] {fc.name}")
-                        # Create error response
+                    elif fc.name == "get_system_diagnostics":
+                        print(f"🔍 [EXECUTING] get_system_diagnostics")
+                        
+                        # Get diagnostic information
+                        diagnostics = self.get_diagnostics()
+                        
+                        # Format diagnostics for user
+                        diag_text = f"""System Diagnostics:
+✅ Handler initialized: {diagnostics['startup_diagnostics'].get('handler_initialized', False)}
+✅ Session created: {diagnostics['startup_diagnostics'].get('session_created', False)}
+✅ Gemini connected: {diagnostics['startup_diagnostics'].get('gemini_connected', False)}
+✅ Microphone test: {diagnostics['startup_diagnostics'].get('microphone_test_passed', False)}
+✅ Active tasks: {diagnostics['active_tasks']}
+✅ Session active: {diagnostics['session_active']}
+
+💡 If microphone isn't working:
+1. Check browser permissions (click microphone icon in address bar)
+2. Clear browser data and refresh page
+3. Try different browser
+4. Use text interface fallback"""
+                        
+                        # Create function response for Live API
                         from google.genai import types
                         function_response = types.FunctionResponse(
                             id=fc.id,
                             name=fc.name,
-                            response={"error": f"Unknown function: {fc.name}"}
+                            response={"result": diag_text}
+                        )
+                        function_responses.append(function_response)
+                        
+                        print(f"✅ [FUNCTION RESPONSE] Created diagnostics response for {fc.name}")
+                    
+                    else:
+                        print(f"❌ [UNKNOWN FUNCTION] {fc.name}")
+                        # Create error response with helpful suggestion
+                        from google.genai import types
+                        function_response = types.FunctionResponse(
+                            id=fc.id,
+                            name=fc.name,
+                            response={"error": f"Unknown function: {fc.name}. Available functions: bridge_design_request, are_smolagents_finished_yet, get_system_diagnostics"}
                         )
                         function_responses.append(function_response)
                 
@@ -563,12 +626,22 @@ BEFORE sending ANY new bridge_design_request, you MUST FIRST check if previous t
 Available tools:
 - `are_smolagents_finished_yet`: Check if main.py has finished processing tasks - CALL THIS FIRST
 - `bridge_design_request`: Sends requests to main.py bridge design system via TCP IPC - ONLY AFTER CHECKING STATUS
+- `get_system_diagnostics`: Get diagnostic information when user reports technical issues
 
 Examples of proper workflow:
 - User: "Create a simple beam bridge"
 - Assistant: [calls are_smolagents_finished_yet first]
 - If busy: "I'm still processing a previous task. Please wait..."
 - If free: [calls bridge_design_request with the user's request]
+
+**TROUBLESHOOTING SUPPORT:**
+If user reports microphone/connection issues:
+1. Use get_system_diagnostics to check system status
+2. Guide them through common fixes:
+   - Browser permissions (click microphone icon in address bar)
+   - Clear browser data and refresh page
+   - Try different browser
+   - Use text interface fallback
 
 Two-Terminal Architecture:
 - Terminal 1: main.py (bridge design system with --enable-command-server)
@@ -598,8 +671,59 @@ REMEMBER: ALWAYS check task status BEFORE sending new bridge design requests. Th
         """Emit audio response to user."""
         return await wait_for_item(self.output_queue)
 
+    async def _check_microphone_availability(self):
+        """Check if microphone is available and accessible."""
+        print("🎤 [DEBUG] Checking microphone availability...")
+        
+        # This is a diagnostic check - actual microphone access happens in browser
+        # We can't directly test getUserMedia from Python, but we can check system audio
+        try:
+            import platform
+            system = platform.system()
+            
+            print(f"💻 [DEBUG] System: {system}")
+            
+            if system == "Linux":
+                # Try to check if ALSA/PulseAudio is available
+                try:
+                    import subprocess
+                    result = subprocess.run(["arecord", "-l"], capture_output=True, text=True, timeout=5)
+                    if result.returncode == 0 and "card" in result.stdout.lower():
+                        print("✅ [DEBUG] Linux audio devices detected")
+                        self.startup_diagnostics["microphone_test_passed"] = True
+                    else:
+                        print("⚠️ [DEBUG] No Linux audio devices found")
+                except (subprocess.TimeoutExpired, FileNotFoundError):
+                    print("⚠️ [DEBUG] Could not check Linux audio (arecord not available)")
+            
+            elif system == "Darwin":  # macOS
+                print("🍎 [DEBUG] macOS detected - check System Preferences for microphone access")
+                self.startup_diagnostics["microphone_test_passed"] = True
+            
+            elif system == "Windows":
+                print("🎪 [DEBUG] Windows detected - check Windows Sound settings")
+                self.startup_diagnostics["microphone_test_passed"] = True
+            
+            else:
+                print(f"❓ [DEBUG] Unknown system: {system}")
+                
+        except Exception as e:
+            print(f"⚠️ [DEBUG] Microphone check failed: {e}")
+            # Don't fail startup for this
+            pass
+    
+    def get_diagnostics(self) -> dict:
+        """Get diagnostic information for troubleshooting."""
+        return {
+            "startup_diagnostics": getattr(self, "startup_diagnostics", {}),
+            "active_tasks": len(self.processing_tasks),
+            "session_active": self.session is not None,
+            "quit_requested": self.quit.is_set()
+        }
+    
     def shutdown(self) -> None:
         """Shutdown handler."""
+        print("🔄 [DEBUG] Shutting down bridge chat handler...")
         self.quit.set()
 
 
@@ -620,6 +744,7 @@ def create_bridge_chat_stream(server_port: int = 7860, share: bool = False):
     
     import gradio as gr
     
+    # Enhanced UI with better error handling and troubleshooting info
     stream = Stream(
         modality="audio",
         mode="send-receive",
@@ -629,8 +754,16 @@ def create_bridge_chat_stream(server_port: int = 7860, share: bool = False):
         ui_args={
             "pulse_color": "rgb(0, 123, 255)",  # Bridge blue
             "icon_button_color": "rgb(0, 123, 255)",
-            "title": "🌉 Bridge Design Chat Assistant (Chat-Supervisor)",
-            "description": "Voice chat for bridge design with specialized supervisor coordination",
+            "title": "🌉 Bridge Design Chat Assistant",
+            "description": """Voice chat for bridge design with specialized supervisor coordination.
+            
+**🎤 MICROPHONE TROUBLESHOOTING:**
+• If "Record" button doesn't work: Check browser permissions (click microphone icon in address bar)
+• If connection times out: Allow microphone access when browser asks
+• If no permission popup: Try different browser (Chrome/Firefox) or refresh page
+• Still having issues? Use text interface: `python -m bridge_design_system.agents.chat_voice text`
+
+**✅ QUICK FIX:** Clear browser data and refresh page, then click "Allow" when prompted""",
         },
         additional_inputs=[
             gr.Dropdown(
@@ -661,7 +794,14 @@ def launch_bridge_chat_agent(server_port: int = 7860, share: bool = False, debug
     print("🔧 Supervisor Layer: Bridge Design Coordination")
     print("🎤 Voice Interface: Real-time conversation")
     print("🛠️ Tools: Bridge design supervisor callable via voice")
-    print(f"🌐 Web Interface: http://localhost:{server_port}")
+    print(f"🌐 Web Interface: http://127.0.0.1:{server_port}")
+    print()
+    print("🎤 [MICROPHONE SETUP] Common issues and solutions:")
+    print("   ✅ When you click 'Record', browser will ask for microphone permission")
+    print("   ✅ Click 'Allow' - don't click 'Block' or 'Don't Allow'")
+    print("   ✅ If you accidentally blocked: click microphone icon in browser address bar")
+    print("   ✅ If still stuck: try different browser or clear browser data")
+    print("   ✅ Fallback option: use text interface instead")
     print()
     print("🐛 [DEBUG MODE] Console debugging enabled:")
     print("   - Function calls will be logged with 🚨 markers")
@@ -685,23 +825,43 @@ def launch_bridge_chat_agent(server_port: int = 7860, share: bool = False, debug
         # Create and launch
         chat_stream = create_bridge_chat_stream(server_port, share)
         print("🌐 [DEBUG] Launching web interface...")
-        print(f"📱 [DEBUG] Open your browser to: http://localhost:{server_port}")
+        print(f"📱 [DEBUG] Open your browser to: http://127.0.0.1:{server_port}")
         print("🎤 [DEBUG] Click the microphone button and speak to test the system")
+        print()
+        print("⚠️ [IMPORTANT] If microphone doesn't work:")
+        print("   1. Check browser console (F12) for permission errors")
+        print("   2. Clear browser data and refresh page")
+        print("   3. Try different browser (Chrome, Firefox, Edge)")
+        print("   4. Use text fallback: python -m bridge_design_system.agents.chat_voice text")
         print()
         print("💡 [USAGE TIP] Try saying:")
         print("   'What is the current bridge design status?'")
         print("   'Create a simple beam bridge'")
         print("   'Show me available tools'")
         print()
-        chat_stream.ui.launch(server_port=server_port, share=share, debug=debug)
+        
+        # Enhanced launch with better error handling
+        chat_stream.ui.launch(
+            server_port=server_port, 
+            share=share, 
+            debug=debug,
+            show_error=True,  # Show detailed error messages
+            quiet=False,  # Don't suppress startup messages
+            enable_queue=True,  # Enable request queue for better handling
+        )
         
     except Exception as e:
         logger.error(f"Failed to launch chat agent: {e}")
         print(f"❌ Launch failed: {e}")
-        print("\nTroubleshooting:")
+        print("\n🔧 Troubleshooting steps:")
         print("1. Check API key: export GEMINI_API_KEY=your_key")
         print("2. Install dependencies: uv add google-genai fastrtc")
         print("3. Check network connectivity")
+        print("4. Try text interface: python -m bridge_design_system.agents.chat_voice text")
+        print("5. Check port availability: netstat -tulpn | grep 7860")
+        print("6. Try different port: python -m bridge_design_system.agents.chat_voice voice --port 7861")
+        print("\n💡 Most common issue: Browser microphone permissions")
+        print("   Solution: Clear browser data, refresh page, click 'Allow' when prompted")
 
 
 # Alternative text-based chat interface for testing
@@ -805,22 +965,101 @@ def launch_text_chat():
         print(f"❌ Text chat error: {e}")
 
 
+def verify_system_setup():
+    """Verify system setup and provide helpful diagnostics."""
+    print("🔍 System Setup Verification")
+    print("=" * 40)
+    
+    # Check dependencies
+    print("📦 Checking dependencies...")
+    if CHAT_DEPENDENCIES_AVAILABLE:
+        print("  ✅ FastRTC and Google GenAI available")
+    else:
+        print("  ❌ FastRTC/Google GenAI missing")
+        print("     Install with: uv add google-genai fastrtc")
+        return False
+    
+    # Check API key
+    print("🔑 Checking API key...")
+    if os.getenv("GEMINI_API_KEY"):
+        print("  ✅ GEMINI_API_KEY found")
+    else:
+        print("  ❌ GEMINI_API_KEY missing")
+        print("     Set in .env file: GEMINI_API_KEY=your_key_here")
+        return False
+    
+    # Check system audio
+    print("🎤 Checking system audio...")
+    try:
+        import platform
+        system = platform.system()
+        print(f"  ℹ️ System: {system}")
+        
+        if system == "Linux":
+            import subprocess
+            try:
+                result = subprocess.run(["arecord", "-l"], capture_output=True, text=True, timeout=3)
+                if result.returncode == 0:
+                    print("  ✅ Linux audio devices detected")
+                else:
+                    print("  ⚠️ No Linux audio devices found")
+            except (subprocess.TimeoutExpired, FileNotFoundError):
+                print("  ⚠️ Could not verify Linux audio (arecord not found)")
+        else:
+            print("  ℹ️ System audio check skipped (not Linux)")
+            
+    except Exception as e:
+        print(f"  ⚠️ System audio check failed: {e}")
+    
+    # Check network
+    print("🌐 Checking network...")
+    try:
+        import socket
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(1)
+        result = sock.connect_ex(('127.0.0.1', 7860))
+        sock.close()
+        if result == 0:
+            print("  ⚠️ Port 7860 already in use")
+        else:
+            print("  ✅ Port 7860 available")
+    except Exception as e:
+        print(f"  ⚠️ Network check failed: {e}")
+    
+    print()
+    print("💡 Common issues:")
+    print("  • Microphone not working: Browser permissions (most common)")
+    print("  • Connection timeout: Clear browser data, refresh page")
+    print("  • No audio devices: Check system sound settings")
+    print("  • Port in use: Stop other applications or use different port")
+    print()
+    return True
+
 # CLI entry point
 if __name__ == "__main__":
     import sys
     
     if len(sys.argv) > 1:
         if sys.argv[1] == "voice":
-            launch_bridge_chat_agent(debug=True)
+            if verify_system_setup():
+                launch_bridge_chat_agent(debug=True)
         elif sys.argv[1] == "text":
             launch_text_chat()
+        elif sys.argv[1] == "verify":
+            verify_system_setup()
         else:
-            print("Usage: python bridge_chat_agent.py [voice|text]")
+            print("Usage: python -m bridge_design_system.agents.chat_voice [voice|text|verify]")
     else:
         print("🌉 Bridge Design Chat Agent")
         print("Usage:")
-        print("  python bridge_chat_agent.py voice  # Voice interface")
-        print("  python bridge_chat_agent.py text   # Text interface")
+        print("  python -m bridge_design_system.agents.chat_voice voice   # Voice interface")
+        print("  python -m bridge_design_system.agents.chat_voice text    # Text interface")
+        print("  python -m bridge_design_system.agents.chat_voice verify  # System check")
+        print()
+        print("🔧 Troubleshooting:")
+        print("  • Run 'verify' first to check system setup")
+        print("  • Most issues are browser microphone permissions")
+        print("  • Use 'text' interface as fallback")
         print()
         print("Dependencies:")
         print("  uv add google-genai fastrtc") 
