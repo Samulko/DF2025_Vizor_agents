@@ -33,6 +33,9 @@ dependencies = [
     "fastrtc<0.0.30",
     "gradio>=4.0.0",
     "numpy>=1.24.1",
+    "arize-phoenix>=4.0.0",
+    "opentelemetry-api>=1.20.0",
+    "opentelemetry-sdk>=1.20.0",
 ]
 
 [project.optional-dependencies]
@@ -48,7 +51,6 @@ voice = [
     "pyaudio>=0.2.13",
     "openai-whisper>=20231117",
     "openai>=1.0.0",
-    "numpy>=1.24.1",
     "pvporcupine>=3.0.0",
     "pvrecorder>=1.2.0",
     "scipy>=1.10.0",
