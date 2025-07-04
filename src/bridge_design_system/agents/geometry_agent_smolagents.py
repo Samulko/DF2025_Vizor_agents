@@ -498,17 +498,19 @@ General Recommendations:
         # Import the structural balance tools
         try:
             from ..tools.structural_balance_tools import (
-                parse_beam_parameters_from_code,
+                parse_beams_as_loads,
                 calculate_structural_moments,
-                solve_balancing_beam_placement,
+                solve_swing_balance_placement,
+                calculate_swing_balance,
                 generate_beam_code
             )
             
             logger.info("✅ Successfully imported structural balance tools")
             return [
-                parse_beam_parameters_from_code,
+                parse_beams_as_loads,
                 calculate_structural_moments,
-                solve_balancing_beam_placement,
+                solve_swing_balance_placement,
+                calculate_swing_balance,
                 generate_beam_code
             ]
         except ImportError as e:

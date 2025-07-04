@@ -391,6 +391,52 @@ assembly_elements.append(beam)"""
     return json.dumps(result, indent=2)
 
 
+@tool
+def calculate_swing_balance(weight: float, required_moment: float, max_distance: float = 0.5) -> str:
+    """
+    Simple swing/seesaw balance calculator: weight × distance = moment.
+    
+    This tool implements the basic swing equation to find the distance needed
+    to balance a given moment with a given weight.
+    
+    Args:
+        weight: Weight of the new beam in kg
+        required_moment: Required moment to balance (from parse_beams_as_loads)
+        max_distance: Maximum allowed distance from pivot (default: 0.5m)
+        
+    Returns:
+        JSON string with distance calculation and feasibility check
+    """
+    import json
+    
+    if abs(weight) < 0.001:
+        return json.dumps({
+            "error": "Weight must be greater than 0.001 kg",
+            "suggestion": "Increase beam weight/length"
+        })
+    
+    # Basic swing equation: distance = moment / weight
+    required_distance = required_moment / weight
+    is_feasible = abs(required_distance) <= max_distance
+    
+    result = {
+        "swing_calculation": {
+            "weight": weight,
+            "required_moment": required_moment,
+            "calculated_distance": round(required_distance, 3),
+            "max_allowed_distance": max_distance,
+            "is_feasible": is_feasible
+        },
+        "recommendation": {
+            "action": "place beam at calculated distance" if is_feasible else "increase beam weight",
+            "new_weight_needed": round(abs(required_moment / max_distance), 3) if not is_feasible else None,
+            "equation": f"{weight} kg × {round(required_distance, 3)} m = {required_moment} kg⋅m"
+        }
+    }
+    
+    return json.dumps(result, indent=2)
+
+
 @tool 
 def generate_beam_code(beam_parameters_json: str, beam_id: str, beam_type: str = "yellow_a") -> str:
     """

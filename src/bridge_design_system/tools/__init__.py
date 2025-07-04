@@ -7,15 +7,17 @@ including MCP integration tools and structural balance calculation tools.
 
 # Import structural balance tools
 from .structural_balance_tools import (
-    parse_beam_parameters_from_code,
+    parse_beams_as_loads,
     calculate_structural_moments,
-    solve_balancing_beam_placement,
+    solve_swing_balance_placement,
+    calculate_swing_balance,
     generate_beam_code,
 )
 
 __all__ = [
-    "parse_beam_parameters_from_code",
+    "parse_beams_as_loads",
     "calculate_structural_moments",
-    "solve_balancing_beam_placement",
+    "solve_swing_balance_placement",
+    "calculate_swing_balance",
     "generate_beam_code",
 ]
