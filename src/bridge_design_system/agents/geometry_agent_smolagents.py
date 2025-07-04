@@ -81,6 +81,11 @@ class SmolagentsGeometryAgent:
 
         # Add self-history tool for smol-agents native context-based recall
         all_tools.append(self._create_self_history_tool())
+        
+        # Add structural balance tools for both MCP and fallback modes
+        structural_tools = self._create_structural_balance_tools()
+        all_tools.extend(structural_tools)
+        logger.info(f"🔧 Added {len(structural_tools)} structural balance tools")
 
         # Create persistent ToolCallingAgent with sufficient steps for error detection/fixing
         # Add native smolagents memory tracking callback for design state tracking
@@ -482,6 +487,34 @@ General Recommendations:
                 return f"Error accessing my memory: {str(e)}"
 
         return get_my_element_history
+    
+    def _create_structural_balance_tools(self) -> List:
+        """
+        Create structural balance calculation tools for the geometry agent.
+        
+        These tools help with parsing beam parameters, calculating moments,
+        and solving for optimal beam placement to achieve equilibrium.
+        """
+        # Import the structural balance tools
+        try:
+            from ..tools.structural_balance_tools import (
+                parse_beam_parameters_from_code,
+                calculate_structural_moments,
+                solve_balancing_beam_placement,
+                generate_beam_code
+            )
+            
+            logger.info("✅ Successfully imported structural balance tools")
+            return [
+                parse_beam_parameters_from_code,
+                calculate_structural_moments,
+                solve_balancing_beam_placement,
+                generate_beam_code
+            ]
+        except ImportError as e:
+            logger.warning(f"⚠️ Could not import structural balance tools: {e}")
+            # Return empty list if tools not available
+            return []
 
     def __del__(self):
         """Cleanup persistent MCP connection on agent destruction."""
