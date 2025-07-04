@@ -1,15 +1,14 @@
 # File: src/bridge_design_system/agents/category_smolagent.py
-import json
-import math
 import argparse
-from pathlib import Path
-from typing import Dict, List, Any
-import os
+import json
 import logging
+import math
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 import google.generativeai as genai
-
 from smolagents import CodeAgent, tool
+
 from bridge_design_system.config.model_config import ModelProvider
 from bridge_design_system.config.settings import settings
 
@@ -21,6 +20,7 @@ logging.basicConfig(level=logging.INFO)
 BASE_DIR = Path(__file__).resolve().parents[1] / "data"
 
 # ─── TOOLS ────────────────────────────────────────────────────────────────
+
 
 @tool
 def calculate_distance(point1: List[float], point2: List[float]) -> float:
@@ -35,6 +35,7 @@ def calculate_distance(point1: List[float], point2: List[float]) -> float:
         The Euclidean distance between point1 and point2.
     """
     return math.hypot(point2[0] - point1[0], point2[1] - point1[1])
+
 
 @tool
 def calculate_angles(vertices: List[List[float]]) -> List[float]:
@@ -52,16 +53,17 @@ def calculate_angles(vertices: List[List[float]]) -> List[float]:
     angles = []
     n = len(vertices)
     for i in range(n):
-        prev, curr, nxt = vertices[i], vertices[(i+1)%n], vertices[(i+2)%n]
+        prev, curr, nxt = vertices[i], vertices[(i + 1) % n], vertices[(i + 2) % n]
         v1 = (curr[0] - prev[0], curr[1] - prev[1])
         v2 = (nxt[0] - curr[0], nxt[1] - curr[1])
         mag1, mag2 = math.hypot(*v1), math.hypot(*v2)
         if mag1 and mag2:
-            cos_a = max(-1.0, min(1.0, (v1[0]*v2[0] + v1[1]*v2[1])/(mag1*mag2)))
+            cos_a = max(-1.0, min(1.0, (v1[0] * v2[0] + v1[1] * v2[1]) / (mag1 * mag2)))
             angles.append(math.degrees(math.acos(cos_a)))
         else:
             angles.append(0.0)
     return angles
+
 
 @tool
 def save_categorized_data(data: Dict[str, Any], filename: str) -> str:
@@ -77,18 +79,19 @@ def save_categorized_data(data: Dict[str, Any], filename: str) -> str:
     """
     out_path = BASE_DIR / filename
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(out_path, 'w', encoding='utf-8') as f:
+    with open(out_path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
     return f"✅ Data written to {out_path}"
+
 
 @tool
 def generate_tags_from_description(description: str) -> dict:
     """
     Clean up the description and generate tags using Google Generative AI.
-    
+
     Args:
         description: Description of the physical object
-        
+
     Returns:
         Dictionary with 'clean_description' (string) and 'tags' (list) keys.
         Example: {"clean_description": ..., "tags": [...]}
@@ -96,17 +99,17 @@ def generate_tags_from_description(description: str) -> dict:
     try:
         # Get Gemini API key from settings
         api_key = settings.gemini_api_key
-        
+
         if not api_key:
             logger.error("Gemini API key not found in settings")
             return {"clean_description": description, "tags": []}
-        
+
         # Configure the API
         genai.configure(api_key=api_key)
-        
+
         # Create the model
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        
+        model = genai.GenerativeModel("gemini-1.5-flash")
+
         # Prepare the prompt
         prompt = f"""
         For the following description of a physical object, provide:
@@ -119,46 +122,77 @@ def generate_tags_from_description(description: str) -> dict:
         
         Original description: '{description}'
         """
-        
+
         # Generate content
         response = model.generate_content(prompt)
-        
+
         # Parse the response
         response_text = response.text.strip()
-        
+
         # Extract clean description and tags
         clean_description = description  # fallback
         tags = []
-        
+
         # Parse the structured response
-        lines = response_text.split('\n')
+        lines = response_text.split("\n")
         for line in lines:
             line = line.strip()
-            if line.startswith('Clean Description:'):
-                clean_description = line.replace('Clean Description:', '').strip()
-            elif line.startswith('Tags:'):
-                tags_part = line.replace('Tags:', '').strip()
+            if line.startswith("Clean Description:"):
+                clean_description = line.replace("Clean Description:", "").strip()
+            elif line.startswith("Tags:"):
+                tags_part = line.replace("Tags:", "").strip()
                 # Parse comma-separated tags
-                tags = [tag.strip() for tag in tags_part.split(',') if tag.strip()]
-        
-        return {
-            "clean_description": clean_description,
-            "tags": tags
-        }
-        
+                tags = [tag.strip() for tag in tags_part.split(",") if tag.strip()]
+
+        return {"clean_description": clean_description, "tags": tags}
+
     except Exception as e:
         logger.error(f"Tag generation failed: {e}")
         return {"clean_description": description, "tags": []}
 
+
 # ─── AGENT FACTORY ────────────────────────────────────────────────────────
 
-def create_category_agent(model_name: str = None) -> CodeAgent:
-    agent_name = 'category'
+
+def get_category_system_prompt() -> str:
+    """Get custom system prompt for category agent from file."""
+    current_file = Path(__file__)
+    project_root = current_file.parent.parent.parent.parent
+    prompt_path = project_root / "system_prompts" / "category_agent.md"
+
+    if not prompt_path.exists():
+        # Return a default prompt if file doesn't exist
+        return """
+You are a specialized agent for material categorization and enrichment.
+Your primary tasks are:
+- Analyze geometric shapes based on vertices
+- Calculate shape properties (angles, distances, perimeter)
+- Generate clean descriptions and extract tags
+- Save enriched data in structured JSON format
+        """.strip()
+    return prompt_path.read_text(encoding="utf-8")
+
+
+def create_category_agent(
+    model_name: str = None, monitoring_callback: Optional[Any] = None
+) -> CodeAgent:
+    agent_name = "category"
     if model_name is None:
-        model_name = getattr(settings, 'category_agent_model', 'gemini-2.5-flash-preview-05-20')
+        model_name = getattr(settings, "category_agent_model", "gemini-2.5-flash-preview-05-20")
     model = ModelProvider.get_model(agent_name, temperature=None)
+
+    # Prepare step_callbacks for monitoring
+    step_callbacks = []
+    if monitoring_callback:
+        step_callbacks.append(monitoring_callback)
+
     # Register all computation tools, including tag generation
-    tools = [calculate_distance, calculate_angles, save_categorized_data, generate_tags_from_description]
+    tools = [
+        calculate_distance,
+        calculate_angles,
+        save_categorized_data,
+        generate_tags_from_description,
+    ]
     agent = CodeAgent(
         tools=tools,
         model=model,
@@ -166,16 +200,32 @@ def create_category_agent(model_name: str = None) -> CodeAgent:
         additional_authorized_imports=["math", "json", "pathlib", "typing"],
         name="category_agent",
         description="Classifies geometry shapes and manages material categories",
+        step_callbacks=step_callbacks,
     )
+
+    # Add custom system prompt
+    custom_prompt = get_category_system_prompt()
+    agent.prompt_templates["system_prompt"] = (
+        agent.prompt_templates["system_prompt"] + "\n\n" + custom_prompt
+    )
+
+    # Add workshop logging - just 1 line!
+    from ..monitoring.workshop_logging import add_workshop_logging
+
+    add_workshop_logging(agent, "category_agent")
+
     return agent
 
+
 # ─── SHAPE ANALYSIS ───────────────────────────────────────────────────────
+
 
 def load_catalog(path: Path) -> Dict[str, Any]:
     if not path.exists():
         raise FileNotFoundError(f"Catalog not found: {path}")
-    with open(path, 'r', encoding='utf-8') as f:
+    with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
+
 
 def analyze_shape(vertices: List[List[float]]) -> str:
     """
@@ -192,7 +242,7 @@ def analyze_shape(vertices: List[List[float]]) -> str:
         return "triangle"
     elif n == 4:
         # Check if it's a square (all sides equal, all angles ~90)
-        sides = [calculate_distance(vertices[i], vertices[(i+1)%4]) for i in range(4)]
+        sides = [calculate_distance(vertices[i], vertices[(i + 1) % 4]) for i in range(4)]
         angles = calculate_angles(vertices)
         if len(set(round(s, 3) for s in sides)) == 1 and all(abs(a - 90) < 5 for a in angles):
             return "square"
@@ -207,7 +257,10 @@ def analyze_shape(vertices: List[List[float]]) -> str:
     else:
         return f"polygon_{n}"
 
-def generate_shape_description(shape_type, vertices, angles=None, side_lengths=None, perimeter=None):
+
+def generate_shape_description(
+    shape_type, vertices, angles=None, side_lengths=None, perimeter=None
+):
     desc = f"A {shape_type} with vertices at {vertices}."
     if angles:
         desc += f" It has angles {', '.join(f'{a:.2f} degrees' for a in angles)}."
@@ -219,6 +272,7 @@ def generate_shape_description(shape_type, vertices, angles=None, side_lengths=N
 
 
 # ─── MAIN PROCESSING LOGIC ────────────────────────────────────────────────
+
 
 def process_catalog(catalog: Dict[str, Any], agent: CodeAgent) -> Dict[str, Any]:
     logger.info("Processing catalog items...")
@@ -235,7 +289,14 @@ def process_catalog(catalog: Dict[str, Any], agent: CodeAgent) -> Dict[str, Any]
         obj["shape_type"] = shape
         # Calculate angles, side lengths, perimeter
         angles = calculate_angles(vertices)
-        side_lengths = [calculate_distance(vertices[i], vertices[(i+1)%len(vertices)]) for i in range(len(vertices))] if len(vertices) >= 3 else []
+        side_lengths = (
+            [
+                calculate_distance(vertices[i], vertices[(i + 1) % len(vertices)])
+                for i in range(len(vertices))
+            ]
+            if len(vertices) >= 3
+            else []
+        )
         perimeter = sum(side_lengths) if side_lengths else 0.0
         # Generate shape description (local, not LLM)
         desc = generate_shape_description(shape, vertices, angles, side_lengths, perimeter)
@@ -246,11 +307,13 @@ def process_catalog(catalog: Dict[str, Any], agent: CodeAgent) -> Dict[str, Any]
     logger.info("Catalog processing complete.")
     return catalog
 
+
 # ─── CLI ENTRY POINT ──────────────────────────────────────────────────────
+
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--catalog", type=Path, default=BASE_DIR/"found_material_catalog.json")
+    parser.add_argument("--catalog", type=Path, default=BASE_DIR / "found_material_catalog.json")
     parser.add_argument("--output", type=str, default="material_categories.json")
     args = parser.parse_args()
 
@@ -265,12 +328,14 @@ def main():
     logger.info(msg)
     logger.info("Done.")
 
+
 def testTags():
     description = "Eh, the first piece is 10 cm thick, no, 10 mm thick, wooden, and stiff"
     result = generate_tags_from_description(description)
     print("Result:", result)
     print("Clean Description:", result["clean_description"])
     print("Tags:", result["tags"])
+
 
 def demo_category_agent():
     """
@@ -279,7 +344,7 @@ def demo_category_agent():
     # Path of the json output in the data directory
     data_dir = Path(__file__).resolve().parents[1] / "data"
     jsonPath = data_dir / "demo_output.json"
-    jsonPath = "demo_output.json"
+    jsonPath_str = "demo_output.json"
     print("🤖 Creating category agent...")
     agent = create_category_agent()
     print(f"Agent created: {agent.name}")
@@ -289,10 +354,10 @@ def demo_category_agent():
     # Example task for the agent
     print("\n📝 Running example agentic task...")
 
-    # Use the jsonPath variable in the task string
+    # Use the jsonPath_str variable in the task string
     task = (
         f"Given the vertices [[0,0], [1,0], [1,1], [0,1]] and the description 'Eh, the first piece is 10 cm thick, no, 10 mm thick, wooden, and stiff', "
-        f"classify the shape, calculate its angles and side lengths, generate a clean description and tags, and save the result to {jsonPath}."
+        f"classify the shape, calculate its angles and side lengths, generate a clean description and tags, and save the result to {jsonPath_str}."
     )
     result = agent.run(task)
     print(f"Result: {result}")

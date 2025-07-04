@@ -6,16 +6,17 @@ It integrates with the MCP-connected Grasshopper environment to generate and mod
 """
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from mcp import StdioServerParameters
 from mcpadapt.core import MCPAdapt
 from mcpadapt.smolagents_adapter import SmolAgentsAdapter
 from smolagents import ToolCallingAgent, tool
 
-from bridge_design_system.config.logging_config import get_logger
-from bridge_design_system.config.model_config import ModelProvider
-from bridge_design_system.config.settings import settings
+from ..config.logging_config import get_logger
+from ..config.model_config import ModelProvider
+from ..config.settings import settings
+from ..monitoring.workshop_logging import add_workshop_logging
 
 logger = get_logger(__name__)
 
@@ -28,43 +29,51 @@ class SurfaceAgent:
     performs surface analysis and adjustment operations.
     """
 
-    def __init__(self, model_name: str = "surface", **kwargs):
+    def __init__(
+        self, model_name: str = "surface", monitoring_callback: Optional[Any] = None, **kwargs
+    ):
         """
         Initialize the surface agent with MCP connection and custom tools.
 
         Args:
             model_name: Model configuration name from settings
+            monitoring_callback: Optional callback for monitoring agent activities
             **kwargs: Additional arguments for extensibility
         """
         self.model_name = model_name
-        
+
         # Agent identification
         self.name = "surface_agent"
-        self.description = "Generates, analyzes and adjusts surface shapes and parameters via natural language."
-        
+        self.description = (
+            "Generates, analyzes and adjusts surface shapes and parameters via natural language."
+        )
+
         # Initialize model
         self.model = ModelProvider.get_model("surface", temperature=0.1)
-        
+
         # MCP server configuration
         self.stdio_params = StdioServerParameters(
-            command=settings.mcp_stdio_command,
-            args=settings.mcp_stdio_args.split(","),
-            env=None
+            command=settings.mcp_stdio_command, args=settings.mcp_stdio_args.split(","), env=None
         )
-        
+
         # Establish MCP connection
         logger.info("Establishing MCP connection for surface agent...")
         try:
             self.mcp_connection = MCPAdapt(self.stdio_params, SmolAgentsAdapter())
             self.mcp_tools = self.mcp_connection.__enter__()
             logger.info(f"MCP connection established with {len(self.mcp_tools)} tools")
-            
+
             # Use MCP tools plus custom analysis and adjustment tools
             all_tools = list(self.mcp_tools)
             all_tools.append(self._create_shape_analysis_tool())
             all_tools.append(self._create_surface_adjust_tool())
             all_tools.append(self._create_surface_generation_tool())
-            
+
+            # Prepare step_callbacks for monitoring
+            step_callbacks = []
+            if monitoring_callback:
+                step_callbacks.append(monitoring_callback)
+
             # Create the ToolCallingAgent
             self.agent = ToolCallingAgent(
                 tools=all_tools,
@@ -72,16 +81,20 @@ class SurfaceAgent:
                 max_steps=8,
                 name="surface_agent",
                 description=self.description,
+                step_callbacks=step_callbacks,
             )
-            
+
             # Add specialized system prompt from file or default
             custom_prompt = get_surface_system_prompt()
             self.agent.prompt_templates["system_prompt"] = (
                 self.agent.prompt_templates["system_prompt"] + "\n\n" + custom_prompt
             )
-            
+
+            # Add workshop logging - just 1 line!
+            add_workshop_logging(self.agent, "surface_agent")
+
             logger.info("Surface agent initialized successfully")
-            
+
         except Exception as e:
             logger.error(f"Failed to initialize surface agent: {e}")
             raise RuntimeError(f"Surface agent initialization failed: {e}")
@@ -97,12 +110,12 @@ class SurfaceAgent:
             Result of the agent execution
         """
         logger.info(f"Executing surface agent task: {task[:100]}...")
-        
+
         try:
             result = self.agent.run(task)
             logger.info("Surface agent task completed successfully")
             return result
-            
+
         except Exception as e:
             logger.error(f"Surface agent task failed: {e}")
             raise RuntimeError(f"Surface agent execution failed: {e}")
@@ -114,6 +127,7 @@ class SurfaceAgent:
         Returns:
             Custom tool function for shape analysis
         """
+
         @tool
         def analyze_surface_shape(surface_id: str) -> str:
             """
@@ -147,6 +161,7 @@ Status: Ready for parameter extraction and shape classification
                 """.strip()
             except Exception as e:
                 return f"Error analyzing surface {surface_id}: {str(e)}"
+
         return analyze_surface_shape
 
     def _create_surface_adjust_tool(self):
@@ -156,8 +171,17 @@ Status: Ready for parameter extraction and shape classification
         Returns:
             Custom tool function for surface adjustment
         """
+
         @tool
-        def adjust_surface_parameters(surface_id: str, rows: Optional[int] = None, cols: Optional[int] = None, width: Optional[float] = None, depth: Optional[float] = None, height: Optional[float] = None, flatness: Optional[float] = None) -> str:
+        def adjust_surface_parameters(
+            surface_id: str,
+            rows: Optional[int] = None,
+            cols: Optional[int] = None,
+            width: Optional[float] = None,
+            depth: Optional[float] = None,
+            height: Optional[float] = None,
+            flatness: Optional[float] = None,
+        ) -> str:
             """
             Adjust the parameters of a surface using natural language instructions.
 
@@ -176,7 +200,9 @@ Status: Ready for parameter extraction and shape classification
                 'rows' and 'cols' control the density of the surface's control points (control mesh).
             """
             try:
-                logger.info(f"Adjusting surface {surface_id} with parameters: rows={rows}, cols={cols}, width={width}, depth={depth}, height={height}, flatness={flatness}")
+                logger.info(
+                    f"Adjusting surface {surface_id} with parameters: rows={rows}, cols={cols}, width={width}, depth={depth}, height={height}, flatness={flatness}"
+                )
                 return f"""
 SURFACE ADJUSTMENT REPORT - Surface {surface_id}:
 ============================================
@@ -198,6 +224,7 @@ Status: Adjustment instructions ready for execution
                 """.strip()
             except Exception as e:
                 return f"Error adjusting surface {surface_id}: {str(e)}"
+
         return adjust_surface_parameters
 
     def _create_surface_generation_tool(self):
@@ -207,6 +234,7 @@ Status: Adjustment instructions ready for execution
         Returns:
             Custom tool function for surface generation
         """
+
         @tool
         def generate_surface_from_description(description: str) -> str:
             """
@@ -237,6 +265,7 @@ Status: Surface generation instructions ready for execution
                 """.strip()
             except Exception as e:
                 return f"Error generating surface from description: {str(e)}"
+
         return generate_surface_from_description
 
     def __del__(self):
@@ -248,12 +277,13 @@ Status: Surface generation instructions ready for execution
         except Exception as e:
             logger.warning(f"Error closing MCP connection: {e}")
 
+
 def get_surface_system_prompt() -> str:
     """Get custom system prompt for surface agent from file or use default."""
     current_file = Path(__file__)
     project_root = current_file.parent
     prompt_path = project_root / "system_prompts" / "surface_agent.md"
-    
+
     if not prompt_path.exists():
         # Return a default prompt if file doesn't exist
         return """
@@ -271,29 +301,34 @@ Be systematic, precise, and responsive to user intent in surface generation and 
         """.strip()
     return prompt_path.read_text(encoding="utf-8")
 
-def create_surface_agent(model_name: str = "surface", **kwargs) -> ToolCallingAgent:
+
+def create_surface_agent(
+    model_name: str = "surface", monitoring_callback: Optional[Any] = None, **kwargs
+) -> ToolCallingAgent:
     """
     Factory function for creating surface agent instances.
 
     Args:
         model_name: Model configuration name from settings
+        monitoring_callback: Optional callback for monitoring agent activities
         **kwargs: Additional arguments for agent configuration
 
     Returns:
         Configured ToolCallingAgent for surface adjustment operations
     """
     logger.info("Creating surface agent...")
-    
-    wrapper = SurfaceAgent(model_name=model_name, **kwargs)
-    
+
+    wrapper = SurfaceAgent(model_name=model_name, monitoring_callback=monitoring_callback, **kwargs)
+
     # Extract the internal ToolCallingAgent
     internal_agent = wrapper.agent
-    
+
     # Store wrapper reference for proper cleanup
     internal_agent._wrapper = wrapper
-    
+
     logger.info("Surface agent created successfully")
     return internal_agent
+
 
 def demo_surface_agent():
     """
@@ -302,19 +337,20 @@ def demo_surface_agent():
     This function creates an agent instance and runs a simple surface analysis and adjustment task.
     """
     print("Starting surface agent demonstration...")
-    
+
     try:
         agent = create_surface_agent()
-        
+
         demo_task = "Analyze the current surface and adjust it to have 10 rows, 10 columns, width 20, depth 10, height 5, and flatness 0.8."
         result = agent.run(demo_task)
-        
+
         print("Demonstration completed successfully")
         print(f"Result: {result}")
-        
+
     except Exception as e:
         print(f"Demonstration failed: {e}")
         raise
 
+
 if __name__ == "__main__":
-    demo_surface_agent() 
+    demo_surface_agent()

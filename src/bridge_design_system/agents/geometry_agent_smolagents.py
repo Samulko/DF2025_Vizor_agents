@@ -56,7 +56,7 @@ class SmolagentsGeometryAgent:
         self.mcp_connection = None
         self.mcp_tools = []
         self.fallback_mode = False
-        
+
         logger.info("🔗 Establishing persistent MCP connection for geometry agent...")
         try:
             self.mcp_connection = MCPAdapt(self.stdio_params, SmolAgentsAdapter())
@@ -71,12 +71,12 @@ class SmolagentsGeometryAgent:
         except Exception as e:
             logger.warning(f"⚠️ Failed to establish MCP connection: {e}")
             logger.info("🔄 Falling back to simulation mode without MCP...")
-            
+
             # Enable fallback mode with simulation tools
             self.fallback_mode = True
             all_tools = self._create_fallback_tools()
             agent_description = "Bridge geometry agent running in simulation mode (no Grasshopper connection). Provides design feedback and parameter calculations for bridge components."
-            
+
             logger.info(f"🎯 Fallback mode enabled with {len(all_tools)} simulation tools")
 
         # Add self-history tool for smol-agents native context-based recall
@@ -101,13 +101,19 @@ class SmolagentsGeometryAgent:
         custom_prompt = get_geometry_system_prompt()
         if self.fallback_mode:
             custom_prompt += "\n\n**IMPORTANT: You are running in SIMULATION MODE without Grasshopper connection. Provide design feedback, parameter calculations, and conceptual guidance instead of actual geometry creation.**"
-        
+
         self.agent.prompt_templates["system_prompt"] = (
             self.agent.prompt_templates["system_prompt"] + "\n\n" + custom_prompt
         )
 
-        mode_status = "simulation mode" if self.fallback_mode else f"MCP mode with {len(self.mcp_tools)} tools"
-        logger.info(f"🎯 Geometry agent initialized successfully in {mode_status} with model {model_name}")
+        mode_status = (
+            "simulation mode"
+            if self.fallback_mode
+            else f"MCP mode with {len(self.mcp_tools)} tools"
+        )
+        logger.info(
+            f"🎯 Geometry agent initialized successfully in {mode_status} with model {model_name}"
+        )
 
     def run(self, task: str) -> Any:
         """
@@ -119,17 +125,18 @@ class SmolagentsGeometryAgent:
         # Workshop logging - start
         self.step_counter += 1
         import time
+
         start_time = time.time()
-        
+
         mode = "simulation" if self.fallback_mode else "MCP"
         logger.info(f"🎯 Executing task in {mode} mode: {task[:100]}...")
-        
+
         # Enhanced workshop logging - start
         log_agent_interaction(
             agent_name="geometry_agent",
             step_number=self.step_counter,
             task_description=task[:200] + "..." if len(task) > 200 else task,
-            status="started"
+            status="started",
         )
 
         try:
@@ -157,9 +164,9 @@ class SmolagentsGeometryAgent:
                 task_description=task[:200] + "..." if len(task) > 200 else task,
                 status="completed",
                 response_content=result_str[:500] + "..." if len(result_str) > 500 else result_str,
-                duration_seconds=duration
+                duration_seconds=duration,
             )
-            
+
             logger.info(f"✅ Task completed successfully in {mode} mode")
             return result
 
@@ -172,9 +179,9 @@ class SmolagentsGeometryAgent:
                 task_description=task[:200] + "..." if len(task) > 200 else task,
                 status="failed",
                 error_message=str(e),
-                duration_seconds=duration
+                duration_seconds=duration,
             )
-            
+
             logger.error(f"❌ Geometry agent execution failed in {mode} mode: {e}")
             # Don't re-raise as RuntimeError to avoid breaking the system
             return f"Error in {mode} mode: {e}"
@@ -244,21 +251,21 @@ class SmolagentsGeometryAgent:
     def _create_fallback_tools(self) -> List:
         """Create simulation tools for fallback mode when MCP is not available."""
         from smolagents import tool
-        
+
         @tool
         def simulate_bridge_component(component_type: str, parameters: dict) -> str:
             """
             Simulate creation of bridge component in fallback mode.
-            
+
             Args:
                 component_type: Type of component (deck, support, cable, etc.)
                 parameters: Component parameters (dimensions, material, etc.)
-            
+
             Returns:
                 Simulation result with feedback
             """
             logger.info(f"🎭 Simulating {component_type} component creation")
-            
+
             # Basic parameter validation
             feedback = []
             if not parameters:
@@ -269,26 +276,26 @@ class SmolagentsGeometryAgent:
                         feedback.append(f"✅ {key}: {value} - valid")
                     else:
                         feedback.append(f"⚠️ {key}: {value} - check value")
-            
+
             result = f"SIMULATION MODE: {component_type} component\n" + "\n".join(feedback)
-            result += f"\n\nTo create actual geometry, connect to Grasshopper via MCP."
+            result += "\n\nTo create actual geometry, connect to Grasshopper via MCP."
             return result
-        
+
         @tool
         def calculate_bridge_parameters(bridge_type: str, span: float, load: float) -> str:
             """
             Calculate bridge structural parameters in simulation mode.
-            
+
             Args:
                 bridge_type: Type of bridge (suspension, cable-stayed, truss, etc.)
                 span: Bridge span in meters
                 load: Design load in kN/m
-            
+
             Returns:
                 Calculated parameters and recommendations
             """
             logger.info(f"🧮 Calculating parameters for {bridge_type} bridge")
-            
+
             # Basic structural calculations (simplified)
             if bridge_type.lower() in ["suspension", "cable-stayed"]:
                 cable_tension = span * load * 0.5  # Simplified
@@ -318,31 +325,33 @@ General Recommendations:
 
 ⚠️ SIMULATION MODE: Connect to structural analysis tools for detailed design.
                 """
-            
+
             return recommendations.strip()
-        
+
         @tool
         def validate_bridge_geometry(element_id: str, constraints: dict) -> str:
             """
             Validate bridge geometry against constraints in simulation mode.
-            
+
             Args:
                 element_id: Element identifier to validate
                 constraints: Design constraints (clearance, load, deflection, etc.)
-            
+
             Returns:
                 Validation results and recommendations
             """
             logger.info(f"✅ Validating geometry for element {element_id}")
-            
+
             validation_results = [f"SIMULATION VALIDATION for {element_id}:"]
-            
+
             for constraint, value in constraints.items():
                 if constraint == "clearance" and isinstance(value, (int, float)):
                     if value >= 5.0:  # Minimum clearance 5m
                         validation_results.append(f"✅ {constraint}: {value}m - adequate")
                     else:
-                        validation_results.append(f"❌ {constraint}: {value}m - insufficient (min 5m)")
+                        validation_results.append(
+                            f"❌ {constraint}: {value}m - insufficient (min 5m)"
+                        )
                 elif constraint == "deflection" and isinstance(value, (int, float)):
                     if value <= 0.003:  # L/300 deflection limit
                         validation_results.append(f"✅ {constraint}: {value} - within limits")
@@ -350,18 +359,20 @@ General Recommendations:
                         validation_results.append(f"❌ {constraint}: {value} - exceeds L/300 limit")
                 else:
                     validation_results.append(f"ℹ️ {constraint}: {value} - noted")
-            
-            validation_results.append("\n⚠️ SIMULATION MODE: Connect to Grasshopper for actual validation.")
+
+            validation_results.append(
+                "\n⚠️ SIMULATION MODE: Connect to Grasshopper for actual validation."
+            )
             return "\n".join(validation_results)
-        
+
         @tool
         def get_component_status(element_id: str = None) -> str:
             """
             Get status of bridge components in simulation mode.
-            
+
             Args:
                 element_id: Optional specific element ID, or None for all components
-            
+
             Returns:
                 Component status information
             """
@@ -371,12 +382,12 @@ General Recommendations:
             else:
                 logger.info("📊 Getting status for all components")
                 return "SIMULATION MODE: Component status tracking requires MCP connection to Grasshopper. Currently running in simulation mode with design feedback only."
-        
+
         return [
             simulate_bridge_component,
-            calculate_bridge_parameters, 
+            calculate_bridge_parameters,
             validate_bridge_geometry,
-            get_component_status
+            get_component_status,
         ]
 
     # REMOVED: Manual memory parsing functions that fight against smol-agents patterns
@@ -411,8 +422,13 @@ General Recommendations:
             stats["agent_type"] = "geometry_agent"
             stats["mcp_integration"] = "simulation_mode" if self.fallback_mode else "enabled"
             stats["connection_status"] = (
-                "simulation" if self.fallback_mode 
-                else ("persistent" if hasattr(self, "mcp_connection") and self.mcp_connection else "disconnected")
+                "simulation"
+                if self.fallback_mode
+                else (
+                    "persistent"
+                    if hasattr(self, "mcp_connection") and self.mcp_connection
+                    else "disconnected"
+                )
             )
 
             return stats
@@ -449,7 +465,7 @@ General Recommendations:
             try:
                 # Access my own memory directly (no external parsing)
                 if not hasattr(self.agent, "memory") or not hasattr(self.agent.memory, "steps"):
-                    return f"I don't have any memory history yet."
+                    return "I don't have any memory history yet."
 
                 memory_steps = self.agent.memory.steps
                 relevant_steps = []
@@ -485,7 +501,11 @@ General Recommendations:
     def __del__(self):
         """Cleanup persistent MCP connection on agent destruction."""
         try:
-            if hasattr(self, "mcp_connection") and self.mcp_connection and not getattr(self, "fallback_mode", False):
+            if (
+                hasattr(self, "mcp_connection")
+                and self.mcp_connection
+                and not getattr(self, "fallback_mode", False)
+            ):
                 self.mcp_connection.__exit__(None, None, None)
                 logger.info("🔌 Persistent MCP connection closed for geometry agent")
             elif getattr(self, "fallback_mode", False):
@@ -526,29 +546,30 @@ def create_geometry_agent(
 
     # Override the run method to add logging when called as managed agent
     original_run = internal_agent.run
-    
+
     def logged_run(task: str, **kwargs):
         """Override run method to add workshop logging for managed agent calls."""
         logger.info(f"🎯 Geometry agent executing task via managed_agents: {task[:100]}...")
-        
+
         # Workshop logging - start
-        step_counter = getattr(internal_agent, '_step_counter', 0) + 1
-        setattr(internal_agent, '_step_counter', step_counter)
-        
+        step_counter = getattr(internal_agent, "_step_counter", 0) + 1
+        setattr(internal_agent, "_step_counter", step_counter)
+
         import time
+
         start_time = time.time()
-        
+
         log_agent_interaction(
             agent_name="geometry_agent",
             step_number=step_counter,
             task_description=task[:200] + "..." if len(task) > 200 else task,
-            status="started"
+            status="started",
         )
-        
+
         try:
             # Call original run method
             result = original_run(task, **kwargs)
-            
+
             # Workshop logging - success
             duration = time.time() - start_time
             result_str = str(result) if result else ""
@@ -558,12 +579,12 @@ def create_geometry_agent(
                 task_description=task[:200] + "..." if len(task) > 200 else task,
                 status="completed",
                 response_content=result_str[:500] + "..." if len(result_str) > 500 else result_str,
-                duration_seconds=duration
+                duration_seconds=duration,
             )
-            
+
             logger.info("✅ Geometry agent managed task completed successfully")
             return result
-            
+
         except Exception as e:
             # Workshop logging - error
             duration = time.time() - start_time
@@ -573,18 +594,25 @@ def create_geometry_agent(
                 task_description=task[:200] + "..." if len(task) > 200 else task,
                 status="failed",
                 error_message=str(e),
-                duration_seconds=duration
+                duration_seconds=duration,
             )
-            
+
             logger.error(f"❌ Geometry agent managed task failed: {e}")
             raise
-    
+
     # Replace the run method
     internal_agent.run = logged_run
 
     # Agent configured for managed_agents pattern with proper name/description in constructor
 
-    logger.info("✅ Created geometry agent configured for managed_agents pattern with logging override")
+    # Add workshop logging - just 1 line!
+    from ..monitoring.workshop_logging import add_workshop_logging
+
+    add_workshop_logging(internal_agent, "geometry_agent")
+
+    logger.info(
+        "✅ Created geometry agent configured for managed_agents pattern with logging override"
+    )
     return internal_agent
 
 

@@ -4,10 +4,9 @@ Design Smolagent - Design Agent for Grasshopper
 This agent is used for design tasks inside Rhino Grasshopper, leveraging MCP tools for component interaction.
 """
 
-from pathlib import Path
-from typing import Any, Dict, List, Optional
 import json
-import functools
+from pathlib import Path
+from typing import Any
 
 from mcp import StdioServerParameters
 from mcpadapt.core import MCPAdapt
@@ -22,11 +21,13 @@ logger = get_logger(__name__)
 
 print("[DEBUG] design_agent_test_smolagents.py loaded")
 
+
 def load_found_objects_data():
     """Load found objects data from all_categories.json for use by the design agent."""
     data_path = Path(__file__).parent.parent / "data" / "all_categories.json"
     with open(data_path, "r", encoding="utf-8") as f:
         return json.load(f)
+
 
 @tool
 def build_shapes_from_json(found_objects_data: dict, category: str) -> list:
@@ -40,7 +41,8 @@ def build_shapes_from_json(found_objects_data: dict, category: str) -> list:
     """
     if category not in found_objects_data:
         raise ValueError(f"Category '{category}' not found in data.")
-    return [obj['vertices'] for obj in found_objects_data[category] if 'vertices' in obj]
+    return [obj["vertices"] for obj in found_objects_data[category] if "vertices" in obj]
+
 
 class DesignSmolagent:
     """
@@ -59,34 +61,34 @@ class DesignSmolagent:
             **kwargs: Additional arguments for extensibility
         """
         self.model_name = model_name
-        
+
         # Agent identification
         self.name = "design_smolagents"
-        self.description = "Design agent for bridge design tasks in Rhino Grasshopper using MCP tools."
-        
+        self.description = (
+            "Design agent for bridge design tasks in Rhino Grasshopper using MCP tools."
+        )
+
         # Initialize model
         self.model = ModelProvider.get_model("design", temperature=0.1)
-        
+
         # MCP server configuration
         self.stdio_params = StdioServerParameters(
-            command=settings.mcp_stdio_command,
-            args=settings.mcp_stdio_args.split(","),
-            env=None
+            command=settings.mcp_stdio_command, args=settings.mcp_stdio_args.split(","), env=None
         )
-        
+
         # Establish MCP connection
         logger.info("Establishing MCP connection for design agent...")
         try:
             self.mcp_connection = MCPAdapt(self.stdio_params, SmolAgentsAdapter())
             self.mcp_tools = self.mcp_connection.__enter__()
             logger.info(f"MCP connection established with {len(self.mcp_tools)} tools")
-            
+
             # Load found objects data from JSON file
             self.found_objects_data = load_found_objects_data()
-            
+
             # Register the new tool as-is (no functools.partial)
             all_tools = list(self.mcp_tools) + [build_shapes_from_json]
-            
+
             # Create the ToolCallingAgent
             self.agent = ToolCallingAgent(
                 tools=all_tools,
@@ -95,18 +97,22 @@ class DesignSmolagent:
                 name="design_smolagents",
                 description=self.description,
             )
-            
+
             # Add specialized system prompt from file
             custom_prompt = get_design_agent_system_prompt()
             self.agent.prompt_templates["system_prompt"] = (
                 self.agent.prompt_templates["system_prompt"] + "\n\n" + custom_prompt
             )
-            
+
             # Optionally, make the data available to the agent (if needed by your framework)
             self.agent.found_objects_data = self.found_objects_data
-            
+
+            # Add workshop logging - just 1 line!
+            from ..monitoring.workshop_logging import add_workshop_logging
+            add_workshop_logging(self.agent, "design_agent")
+
             logger.info("Design smolagent initialized successfully")
-            
+
         except Exception as e:
             logger.error(f"Failed to initialize design smolagent: {e}")
             raise RuntimeError(f"Design smolagent initialization failed: {e}")
@@ -122,12 +128,12 @@ class DesignSmolagent:
             Result of the agent execution
         """
         logger.info(f"Executing design task: {task[:100]}...")
-        
+
         try:
             result = self.agent.run(task)
             logger.info("Design task completed successfully")
             return result
-            
+
         except Exception as e:
             logger.error(f"Design task failed: {e}")
             raise RuntimeError(f"Design smolagent execution failed: {e}")
@@ -154,15 +160,19 @@ def create_design_agent(model_name: str = "design_smolagents", **kwargs) -> Tool
         Configured ToolCallingAgent for design operations
     """
     logger.info("Creating design smolagent...")
-    
+
     wrapper = DesignSmolagent(model_name=model_name, **kwargs)
-    
+
     # Extract the internal ToolCallingAgent
     internal_agent = wrapper.agent
-    
+
     # Store wrapper reference for proper cleanup
     internal_agent._wrapper = wrapper
-    
+
+    # Add workshop logging - just 1 line!
+    from ..monitoring.workshop_logging import add_workshop_logging
+    add_workshop_logging(internal_agent, "design_agent")
+
     logger.info("Design smolagent created successfully")
     return internal_agent
 
@@ -175,19 +185,22 @@ def demo_design_agent():
     to demonstrate the agent's capabilities.
     """
     print("Starting design smolagent demonstration...")
-    
+
     try:
         agent = create_design_agent()
-        
-        demo_task = "Design a structure that packs into a box form, using the provided found objects data."
+
+        demo_task = (
+            "Design a structure that packs into a box form, using the provided found objects data."
+        )
         result = agent.run(demo_task)
-        
+
         print("Demonstration completed successfully")
         print(f"Result: {result}")
-        
+
     except Exception as e:
         print(f"Demonstration failed: {e}")
         raise
+
 
 def get_design_agent_system_prompt() -> str:
     current_file = Path(__file__)
@@ -224,6 +237,7 @@ def get_design_agent_system_prompt() -> str:
 def main():
     print("[DEBUG] main() called")
     demo_design_agent()
+
 
 if __name__ == "__main__":
     main()

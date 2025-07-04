@@ -52,7 +52,9 @@ class SmolagentsDesignAgent:
         try:
             self.mcp_connection = MCPAdapt(self.stdio_params, SmolAgentsAdapter())
             self.mcp_tools = self.mcp_connection.__enter__()
-            logger.info(f"✅ Persistent MCP connection established with {len(self.mcp_tools)} tools")
+            logger.info(
+                f"✅ Persistent MCP connection established with {len(self.mcp_tools)} tools"
+            )
             all_tools = list(self.mcp_tools)
             all_tools.append(self._create_self_history_tool())
             all_tools.append(self._create_design_requirements_tool())
@@ -72,12 +74,19 @@ class SmolagentsDesignAgent:
             self.agent.prompt_templates["system_prompt"] = (
                 self.agent.prompt_templates["system_prompt"] + "\n\n" + custom_prompt
             )
-            logger.info(f"🎯 Persistent design agent initialized successfully with model {model_name}")
+            logger.info(
+                f"🎯 Persistent design agent initialized successfully with model {model_name}"
+            )
         except Exception as e:
             logger.error(f"❌ Failed to establish persistent MCP connection: {e}")
             raise RuntimeError(f"Design agent requires active MCP connection: {e}")
 
-    def run(self, task: str, material_data: Optional[Dict] = None, user_tweaks: Optional[List[Dict]] = None) -> Any:
+    def run(
+        self,
+        task: str,
+        material_data: Optional[Dict] = None,
+        user_tweaks: Optional[List[Dict]] = None,
+    ) -> Any:
         """
         Orchestrate the full interactive design workflow:
         1. Wait for/accept catalogued material data
@@ -180,6 +189,7 @@ class SmolagentsDesignAgent:
     def get_memory_statistics(self) -> Dict[str, Any]:
         try:
             from ..memory import get_memory_statistics
+
             stats = get_memory_statistics(self.agent)
             stats["agent_type"] = "design_agent"
             stats["mcp_integration"] = "enabled"
@@ -193,6 +203,7 @@ class SmolagentsDesignAgent:
 
     def _create_self_history_tool(self):
         from smolagents import tool
+
         @tool
         def get_my_design_history(design_id: str) -> str:
             """
@@ -206,7 +217,7 @@ class SmolagentsDesignAgent:
             """
             try:
                 if not hasattr(self.agent, "memory") or not hasattr(self.agent.memory, "steps"):
-                    return f"I don't have any memory history yet."
+                    return "I don't have any memory history yet."
                 memory_steps = self.agent.memory.steps
                 relevant_steps = []
                 for step in memory_steps:
@@ -219,17 +230,17 @@ class SmolagentsDesignAgent:
                 for i, step in enumerate(relevant_steps, 1):
                     context += f"Memory Step {i} (Step #{step.step_number}):\n"
                     context += f"{step.observations}\n\n"
-                context += (
-                    f"Found {len(relevant_steps)} memory entries about design decision {design_id}.\n"
-                )
+                context += f"Found {len(relevant_steps)} memory entries about design decision {design_id}.\n"
                 context += "I can reason over this context to answer questions about this design's history."
                 return context
             except Exception as e:
                 return f"Error accessing my memory: {str(e)}"
+
         return get_my_design_history
 
     def _create_design_requirements_tool(self):
         from smolagents import tool
+
         @tool
         def manage_design_requirements(action: str, requirement_data: Optional[Dict] = None) -> str:
             """
@@ -255,10 +266,12 @@ class SmolagentsDesignAgent:
                     return "Invalid action or missing data"
             except Exception as e:
                 return f"Error managing requirements: {str(e)}"
+
         return manage_design_requirements
 
     def _create_design_validation_tool(self):
         from smolagents import tool
+
         @tool
         def validate_design_decision(decision_type: str, parameters: Dict) -> str:
             """
@@ -275,6 +288,7 @@ class SmolagentsDesignAgent:
                 return f"Validated {decision_type} decision: {parameters}"
             except Exception as e:
                 return f"Error validating design: {str(e)}"
+
         return validate_design_decision
 
     def __del__(self):
@@ -284,6 +298,7 @@ class SmolagentsDesignAgent:
                 logger.info("🔌 Persistent MCP connection closed for design agent")
         except Exception as e:
             logger.warning(f"⚠️ Error closing MCP connection in design agent: {e}")
+
 
 def create_design_agent(
     model_name: str = "design",
@@ -296,8 +311,15 @@ def create_design_agent(
     )
     internal_agent = wrapper.agent
     internal_agent._wrapper = wrapper
+
+    # Add workshop logging - just 1 line!
+    from ..monitoring.workshop_logging import add_workshop_logging
+
+    add_workshop_logging(internal_agent, "design_agent")
+
     logger.info("✅ Created design agent configured for managed_agents pattern")
     return internal_agent
+
 
 def get_design_system_prompt() -> str:
     current_file = Path(__file__)
