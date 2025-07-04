@@ -586,6 +586,7 @@ def interactive_mode(
 
         # Initialize TCP command server for external voice interfaces
         command_server_task = None
+        command_server_running = False
         if enable_command_server:
             try:
                 print("🚀 Starting TCP command server for external voice interfaces...")
@@ -610,28 +611,47 @@ def interactive_mode(
                 # Start command server in background thread
                 command_server = start_command_server(host="localhost", port=8082, command_handler=command_handler)
                 
+                # Check if server was created successfully
+                if command_server is None:
+                    raise RuntimeError("Failed to create command server")
+                
+                server_started = threading.Event()
+                server_error = None
+                
                 def run_command_server():
                     """Run command server in background thread."""
+                    nonlocal server_error
                     try:
                         import asyncio
                         loop = asyncio.new_event_loop()
                         asyncio.set_event_loop(loop)
+                        # Server start will fail if port is already in use
                         loop.run_until_complete(command_server.start())
+                        server_started.set()
                     except Exception as e:
+                        server_error = e
                         logger.error(f"❌ Command server error: {e}")
+                        server_started.set()
                 
                 command_server_thread = threading.Thread(target=run_command_server, daemon=True)
                 command_server_thread.start()
                 
-                # Give server time to start
-                time.sleep(1.0)
+                # Wait for server to start or fail
+                server_started.wait(timeout=2.0)
+                
+                if server_error:
+                    raise server_error
                 
                 print("✅ TCP command server started on localhost:8082")
                 print("📡 External voice interfaces can now connect")
+                command_server_running = True
                 
             except Exception as e:
                 logger.error(f"❌ Failed to start command server: {e}")
                 print(f"⚠️ Command server failed to start: {e}")
+                if "address already in use" in str(e).lower():
+                    print("   💡 Tip: Another instance may be running. Check with: lsof -i :8082")
+                    print("   💡 To kill it: kill -9 $(lsof -t -i:8082)")
                 print("   Continuing without command server...")
 
         print("\n" + "=" * 60)
@@ -660,10 +680,13 @@ def interactive_mode(
             print("⚠️ LCARS monitoring disabled (use --monitoring to enable)")
 
         # Show command server information
-        if enable_command_server:
-            print("🚀 TCP Command Server enabled on localhost:8082")
+        if command_server_running:
+            print("🚀 TCP Command Server running on localhost:8082")
             print("📡 External voice interfaces can connect via TCP")
             print("🎤 Use voice chat agent in separate terminal")
+        elif enable_command_server:
+            print("⚠️ Command server enabled but failed to start (port may be in use)")
+            print("   Check with: lsof -i :8082")
         else:
             print("⚠️ Command server disabled (use --enable-command-server to enable)")
 
