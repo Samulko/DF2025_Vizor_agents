@@ -14,6 +14,7 @@ from smolagents import CodeAgent, tool
 from ..config.logging_config import get_logger
 from ..config.model_config import ModelProvider
 from ..memory import track_design_changes
+from ..monitoring.workshop_logging import add_workshop_logging
 from .rational_smolagents import create_rational_agent
 
 # NOTE: Voice capabilities moved to bridge_chat_agent.py (chat-supervisor pattern)
@@ -153,6 +154,9 @@ def create_triage_system(
     manager.prompt_templates["system_prompt"] = (
         manager.prompt_templates["system_prompt"] + "\n\n" + custom_prompt
     )
+
+    # Add modular workshop logging - just 1 line!
+    add_workshop_logging(manager, "triage_agent")
 
     logger.info("Created triage system with native smolagents delegation")
     return manager
@@ -458,6 +462,9 @@ class TriageSystemWrapper:
 
         self.component_registry = component_registry
         self.logger = logger
+
+        # Add modular workshop logging - just 1 line!
+        add_workshop_logging(self.manager, "triage_agent")
 
         logger.info("✅ Created TriageSystemWrapper with proper managed_agents pattern")
 
