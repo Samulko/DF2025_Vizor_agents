@@ -440,12 +440,9 @@ uv run python -m bridge_design_system.main
 ```
 
 ```
-uv run python -m bridge_design_system.agents.chat_voice voice
-
 uv run python -m bridge_design_system.main --interactive --enable-command-server --disable-gaze
 
-  python -m bridge_design_system.agents.chat_voice voice
-
+uv run python -m bridge_design_system.agents.chat_voice voice
 ```
 
 ## License
