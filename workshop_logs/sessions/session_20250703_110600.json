@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "session_id": "session_20250703_110600",
+    "start_time": "2025-07-03T11:06:00.594392",
+    "end_time": "2025-07-03T11:06:01.578318",
+    "participant_id": "test_user",
+    "workshop_group": "monitoring_test",
+    "total_interactions": 0,
+    "agents_used": [],
+    "session_notes": "Testing category agent monitoring integration"
+  },
+  "traces": []
+}

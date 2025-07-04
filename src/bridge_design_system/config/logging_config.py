@@ -10,6 +10,12 @@ from .settings import settings
 
 def setup_logging():
     """Configure logging for the application."""
+    # Check if logging has already been configured to prevent duplicates
+    root_logger = logging.getLogger()
+    if root_logger.handlers:
+        # Logging already configured, skip setup
+        return
+    
     # Create logs directory if it doesn't exist
     log_dir = Path("logs")
     log_dir.mkdir(exist_ok=True)
@@ -47,7 +53,6 @@ def setup_logging():
     error_handler.setFormatter(detailed_formatter)
 
     # Configure root logger
-    root_logger = logging.getLogger()
     root_logger.setLevel(log_level)
     root_logger.addHandler(console_handler)
     root_logger.addHandler(file_handler)
