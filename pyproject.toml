@@ -33,9 +33,13 @@ dependencies = [
     "opentelemetry-exporter-otlp>=1.20.0",
     "openinference-instrumentation-smolagents>=0.1.0",
     "arize-phoenix>=5.0.0",
+    # Voice and chat dependencies for full system operation
     "fastrtc[stt,tts,vad]>=0.0.28",
-    "google-genai>=1.24.0",
+    "google-genai>=1.24.0", 
     "gradio>=5.35.0",
+    # Additional dependencies for complete functionality
+    "pillow>=10.0.0",  # Image processing for multimodal
+    "numpy>=1.24.1",   # Required by many AI/ML packages
 ]
 
 [project.optional-dependencies]
@@ -64,10 +68,8 @@ voice = [
     "numba>=0.58.0",
 ]
 chat = [
-    # Chat-supervisor pattern dependencies
-    "google-genai>=0.8.0",
-    "fastrtc>=0.0.28",  # Already in main deps but ensuring version
-    "gradio>=5.0.0",
+    # Chat-supervisor pattern dependencies (included in main dependencies)
+    # All chat dependencies are now in main deps for easier setup
 ]
 multimodal = [
     # Multimodal chat dependencies (audio + video + images)
@@ -111,6 +113,7 @@ select = [
 ]
 
 # UV mirror configuration for China firewall bypass
+# This enables fast package installation in China and other regions with PyPI access issues
 # Active configuration - change mirror if needed for your location
 [[tool.uv.index]]
 name = "aliyun"
