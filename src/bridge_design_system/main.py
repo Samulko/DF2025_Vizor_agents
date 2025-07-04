@@ -1052,10 +1052,18 @@ def interactive_mode(
                     # Second Ctrl+C - force exit
                     print("\n\n🛑 Force quit requested. Exiting...")
                     break
+                except EOFError:
+                    # Input stream closed - exit gracefully
+                    print("\n\n🛑 Input stream closed. Exiting...")
+                    break
                 except:
                     # Any other error during confirmation, just continue
                     print("\nContinuing...")
                     continue
+            except EOFError:
+                # Input stream closed (e.g., when running from start_TEAM.py and Ctrl+C is pressed)
+                print("\n\n🛑 Input stream closed. Shutting down gracefully...")
+                break
             except Exception as e:
                 logger.error(f"Error processing request: {e}", exc_info=True)
                 print(f"\nError: {str(e)}")
