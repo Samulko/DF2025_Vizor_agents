@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proportional Area Circles</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .circles-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 40px;
+            margin-top: 40px;
+        }
+        .circle-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+        .circle {
+            stroke-width: 2;
+            opacity: 0.7;
+            transition: opacity 0.3s;
+        }
+        .circle:hover {
+            opacity: 0.9;
+        }
+        .circle-0 {
+            fill: #e74c3c;
+            stroke: #c0392b;
+        }
+        .circle-1 {
+            fill: #2ecc71;
+            stroke: #27ae60;
+        }
+        .circle-2 {
+            fill: #f39c12;
+            stroke: #d68910;
+        }
+        .label {
+            font-size: 14px;
+            font-weight: bold;
+            fill: white;
+            text-anchor: middle;
+        }
+        .name-label {
+            margin-top: 10px;
+            font-size: 16px;
+            color: #333;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Proportional Area Visualization</h1>
+        
+        <div id="circlesContainer" class="circles-container"></div>
+    </div>
+
+    <script>
+        // Updated data - Category D increased by 10 percentage points (from 5 to 15)
+        const rawData = [
+            { name: 'Category A', percentage: 45 },
+            { name: 'Category C', percentage: 20 },
+            { name: 'Category D', percentage: 15 }
+        ];
+
+        // Normalize the data so percentages add up to 100%
+        // Calculate total of raw percentages
+        const total = rawData.reduce((sum, item) => sum + item.percentage, 0);
+        
+        // Normalize each percentage: (value / total) * 100
+        const data = rawData.map(item => ({
+            name: item.name,
+            percentage: Math.round((item.percentage / total) * 100 * 100) / 100 // Round to 2 decimal places
+        }));
+
+        function calculateRadius(percentage, maxRadius) {
+            // Area is proportional to percentage
+            // Area = π * r²
+            // If max percentage gets maxRadius, then:
+            // r = maxRadius * sqrt(percentage / 100)
+            return maxRadius * Math.sqrt(percentage / 100);
+        }
+
+        function createVisualization() {
+            const container = document.getElementById('circlesContainer');
+            container.innerHTML = '';
+            
+            const maxRadius = 120; // Maximum radius for 100%
+            
+            data.forEach((item, index) => {
+                const radius = calculateRadius(item.percentage, maxRadius);
+                
+                const circleGroup = document.createElement('div');
+                circleGroup.className = 'circle-group';
+                
+                const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                const svgSize = maxRadius * 2 + 20;
+                svg.setAttribute('width', svgSize);
+                svg.setAttribute('height', svgSize);
+                
+                const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                circle.setAttribute('cx', svgSize / 2);
+                circle.setAttribute('cy', svgSize / 2);
+                circle.setAttribute('r', radius);
+                circle.classList.add('circle', `circle-${index}`);
+                
+                const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                text.setAttribute('x', svgSize / 2);
+                text.setAttribute('y', svgSize / 2);
+                text.setAttribute('dy', '0.35em');
+                text.classList.add('label');
+                text.textContent = `${item.percentage}%`;
+                
+                svg.appendChild(circle);
+                svg.appendChild(text);
+                
+                const nameLabel = document.createElement('div');
+                nameLabel.className = 'name-label';
+                nameLabel.textContent = item.name;
+                
+                circleGroup.appendChild(svg);
+                circleGroup.appendChild(nameLabel);
+                container.appendChild(circleGroup);
+            });
+        }
+
+        // Create visualization
+        createVisualization();
+        
+        // Log the normalized data to console for verification
+        console.log('Normalized data:', data);
+        console.log('Total percentage:', data.reduce((sum, item) => sum + item.percentage, 0));
+    </script>
+</body>
+</html>
