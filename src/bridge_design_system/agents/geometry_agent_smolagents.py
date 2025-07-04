@@ -495,26 +495,26 @@ General Recommendations:
         These tools help with parsing beam parameters, calculating moments,
         and solving for optimal beam placement to achieve equilibrium.
         """
-        # Import the structural balance tools
+        # Import the simple balance tools
         try:
+            from ..tools.simple_balance_tools import (
+                parse_code_to_loads,
+                solve_balance_load,
+                check_balance_feasibility
+            )
             from ..tools.structural_balance_tools import (
-                parse_beams_as_loads,
-                calculate_structural_moments,
-                solve_swing_balance_placement,
-                calculate_swing_balance,
                 generate_beam_code
             )
             
-            logger.info("✅ Successfully imported structural balance tools")
+            logger.info("✅ Successfully imported simple balance tools")
             return [
-                parse_beams_as_loads,
-                calculate_structural_moments,
-                solve_swing_balance_placement,
-                calculate_swing_balance,
+                parse_code_to_loads,
+                solve_balance_load,
+                check_balance_feasibility,
                 generate_beam_code
             ]
         except ImportError as e:
-            logger.warning(f"⚠️ Could not import structural balance tools: {e}")
+            logger.warning(f"⚠️ Could not import balance tools: {e}")
             # Return empty list if tools not available
             return []
 
