@@ -10,6 +10,8 @@ import base64
 import json
 import os
 import pathlib
+import time
+import uuid
 from typing import AsyncGenerator, Literal, Dict, Any, List
 import numpy as np
 from dotenv import load_dotenv
@@ -54,6 +56,13 @@ class BridgeChatHandler(AsyncStreamHandler):
         self.input_queue: asyncio.Queue = asyncio.Queue()
         self.output_queue: asyncio.Queue = asyncio.Queue()
         self.quit: asyncio.Event = asyncio.Event()
+        
+        # Initialize session as None - will be set in start_up
+        self.session = None
+        
+        # Two-thread architecture: shared state for STS <-> Smolagents communication
+        self.processing_tasks: Dict[str, Dict] = {}  # Track active processing tasks
+        self.task_lock = asyncio.Lock()  # Thread-safe access to shared state
         
         logger.info("🌉 Bridge chat handler initialized with triage system")
 
@@ -139,43 +148,76 @@ class BridgeChatHandler(AsyncStreamHandler):
             
             print("🛠️  [DEBUG] Starting audio stream with manual tool detection...")
             
-            # Use start_stream like the multimodal version but with manual tool detection
-            async for audio in session.start_stream(stream=self.stream(), mime_type="audio/pcm"):
-                print(f"📨 [DEBUG] Received audio response: {type(audio)}")
-                
-                # Enhanced response debugging
-                if hasattr(audio, '__dict__'):
-                    print(f"📨 [DEBUG] Audio response attributes: {list(audio.__dict__.keys())}")
-                
-                # Handle audio data
-                if audio.data:
-                    print(f"🔊 [DEBUG] Audio data received: {len(audio.data)} bytes")
-                    array = np.frombuffer(audio.data, dtype=np.int16)
-                    self.output_queue.put_nowait((self.output_sample_rate, array))
-                
-                # Check for tool calls in the audio response
-                if hasattr(audio, 'tool_call') and audio.tool_call:
-                    print("\n" + "🎆"*60)
-                    print("🎆 [BREAKTHROUGH] VOICE TOOL CALL IN AUDIO! 🎆")
-                    print("🎆"*60)
-                    await self._handle_tool_call(audio.tool_call)
-                
-                # Check for server content with tool calls
-                if hasattr(audio, 'server_content') and audio.server_content:
-                    if hasattr(audio.server_content, 'tool_call') and audio.server_content.tool_call:
-                        print("\n" + "🎆"*60)
-                        print("🎆 [BREAKTHROUGH] VOICE TOOL CALL IN SERVER CONTENT! 🎆")
-                        print("🎆"*60)
-                        await self._handle_tool_call(audio.server_content.tool_call)
+            # CRITICAL: Live API terminates start_stream after tool calls
+            # Solution: Restart stream within same session after each tool call
+            print("🔄 [SESSION] Starting perpetual audio stream with restart capability...")
+            
+            while not self.quit.is_set():
+                try:
+                    print("🎤 [SESSION] Starting/Restarting audio stream...")
+                    stream_iteration = 0
+                    
+                    async for audio in session.start_stream(stream=self.stream(), mime_type="audio/pcm"):
+                        stream_iteration += 1
+                        print(f"📨 [DEBUG] Stream iteration {stream_iteration}: Received {type(audio)}")
+                        
+                        # Enhanced response debugging
+                        if hasattr(audio, '__dict__'):
+                            print(f"📨 [DEBUG] Audio response attributes: {list(audio.__dict__.keys())}")
+                        
+                        # Handle audio data
+                        if audio.data:
+                            print(f"🔊 [DEBUG] Audio data received: {len(audio.data)} bytes")
+                            array = np.frombuffer(audio.data, dtype=np.int16)
+                            self.output_queue.put_nowait((self.output_sample_rate, array))
+                        
+                        # Check for tool calls in the audio response
+                        tool_called = False
+                        if hasattr(audio, 'tool_call') and audio.tool_call:
+                            print("\n" + "🎆"*60)
+                            print("🎆 [BREAKTHROUGH] VOICE TOOL CALL IN AUDIO! 🎆")
+                            print("🎆"*60)
+                            await self._handle_tool_call(audio.tool_call)
+                            tool_called = True
+                        
+                        # Check for server content with tool calls
+                        if hasattr(audio, 'server_content') and audio.server_content:
+                            if hasattr(audio.server_content, 'tool_call') and audio.server_content.tool_call:
+                                print("\n" + "🎆"*60)
+                                print("🎆 [BREAKTHROUGH] VOICE TOOL CALL IN SERVER CONTENT! 🎆")
+                                print("🎆"*60)
+                                await self._handle_tool_call(audio.server_content.tool_call)
+                                tool_called = True
+                        
+                        # If tool was called, the stream will likely end soon
+                        if tool_called:
+                            print("⚠️ [SESSION] Tool called - stream will likely terminate, preparing to restart...")
+                    
+                    # Stream ended (normal after tool calls)
+                    print("🔄 [SESSION] Stream ended (expected after tool call), restarting in 0.5s...")
+                    await asyncio.sleep(0.5)  # Brief pause before restart
+                    
+                except asyncio.CancelledError:
+                    print("🛑 [SESSION] Stream cancelled, exiting...")
+                    break
+                except Exception as e:
+                    print(f"💥 [SESSION ERROR] Stream exception: {e}")
+                    logger.error(f"Stream error: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    print("🔄 [SESSION] Attempting to restart after error...")
+                    await asyncio.sleep(1.0)  # Longer pause after error
+            
+            print("🏁 [SESSION] Exited perpetual stream loop")
     
 
     def _create_gemini_tools(self):
         """Create tool declarations for Gemini Live API (function_declarations format)."""
         
-        # Define the function declaration for Live API
+        # Define the function declarations for Live API - Two-thread architecture
         bridge_design_request_declaration = {
             "name": "bridge_design_request",
-            "description": "Send user request directly to the bridge design triage agent. This function implements the chat-to-triage pattern where the chat agent forwards all bridge design requests to the smolagents triage system which coordinates geometry agents, structural analysis, and other specialized agents.",
+            "description": "Start bridge design processing in background thread. This function implements the two-thread pattern: STS (voice) thread stays responsive while Smolagents thread handles complex processing.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -188,72 +230,184 @@ class BridgeChatHandler(AsyncStreamHandler):
             }
         }
         
-        # Return in Live API format
-        tools = [{"function_declarations": [bridge_design_request_declaration]}]
-        logger.info(f"✅ Created {len(tools)} tool declarations for Live API")
+        # Status checking tool for two-thread architecture
+        are_smolagents_finished_declaration = {
+            "name": "are_smolagents_finished_yet",
+            "description": "Check if the background processing thread has finished working on smolagents tasks. Returns status and results if available.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_id": {
+                        "type": "string", 
+                        "description": "Optional task ID to check specific task. If not provided, checks all active tasks."
+                    }
+                },
+                "required": []
+            }
+        }
+        
+        # Return in Live API format - both tools
+        tools = [{"function_declarations": [bridge_design_request_declaration, are_smolagents_finished_declaration]}]
+        logger.info(f"✅ Created {len(tools[0]['function_declarations'])} tool declarations for Live API")
         return tools
     
     def _execute_bridge_design_request(self, user_request: str) -> str:
-        """Execute the bridge design request - the actual Python function."""
-        import time
+        """Execute bridge design request - STS thread starts processing, returns immediately."""
         print("\n" + "🎆"*50)
-        print("🎆 [MAJOR SUCCESS] VOICE TOOL FUNCTION CALLED! 🎆")
+        print("🎆 [TWO-THREAD] STS THREAD STARTING PROCESSING! 🎆")
         print("🎆"*50)
-        print("\n" + "="*80)
-        print("🚨 [FUNCTION CALL] Executing bridge_design_request()")
+        
+        # Generate unique task ID for tracking
+        task_id = str(uuid.uuid4())[:8]
+        timestamp = time.time()
+        
+        print(f"🚨 [STS THREAD] Starting bridge_design_request()")
         print(f"📝 [USER REQUEST] {user_request}")
-        print(f"🕰 [TIMESTAMP] {time.time()}")
-        print(f"🔍 [CALL STACK] Called from Gemini Live API")
-        print("="*80)
+        print(f"🏷️ [TASK ID] {task_id}")
+        print(f"🕰 [TIMESTAMP] {timestamp}")
         
         try:
-            # ALL triage system calls should run in background to keep voice interface responsive
-            # Even "simple" queries can take 10-20 seconds due to MCP connections and agent coordination
-            print("🎯 [DEBUG] Running all triage requests in background to maintain voice responsiveness...")
-            logger.info(f"🎯 Background task forwarded to triage agent: {user_request[:100]}...")
+            # Initialize task state in shared memory (thread-safe)
+            task_state = {
+                "task_id": task_id,
+                "user_request": user_request,
+                "status": "started",
+                "started_at": timestamp,
+                "finished_at": None,
+                "result": None,
+                "error": None
+            }
             
-            # Start the task asynchronously but return immediate response
-            import asyncio
-            asyncio.create_task(self._run_background_task(user_request))
+            # Thread-safe: Add to shared state
+            self.processing_tasks[task_id] = task_state
             
-            return f"I'm processing your request: '{user_request}'. The bridge design agents are working on this. You can continue chatting with me while they work - I'll respond with the results shortly!"
+            print(f"🧵 [STS THREAD] Task {task_id} added to shared state")
+            print("🎯 [STS THREAD] Starting Smolagents processing thread...")
+            
+            # Start processing in separate thread (async task)
+            asyncio.create_task(self._run_smolagents_processing_thread(task_id))
+            
+            return f"🚀 Started processing your request (Task ID: {task_id}). The bridge design agents are working in the background. You can ask me 'are the smolagents finished yet?' to check status, or continue our conversation!"
                 
         except Exception as e:
-            print(f"💥 [ERROR] Exception in bridge_design_request: {e}")
-            logger.error(f"Error calling triage agent: {e}")
+            print(f"💥 [STS THREAD ERROR] Exception in bridge_design_request: {e}")
             import traceback
             traceback.print_exc()
-            return f"Error communicating with bridge design system: {str(e)}"
-
-    async def _run_background_task(self, user_request: str):
-        """Execute bridge design task in background while allowing continued conversation."""
+            return f"❌ Error starting processing: {str(e)}"
+    
+    def _execute_are_smolagents_finished_yet(self, task_id: str = None) -> str:
+        """Check if smolagents processing thread has finished - STS thread polls status."""
+        print(f"🔍 [STS THREAD] Checking smolagents status for task_id: {task_id}")
+        
         try:
-            print(f"🎯 [BACKGROUND] Starting background task: {user_request[:50]}...")
-            logger.info(f"🎯 Starting background task: {user_request[:100]}...")
+            if not self.processing_tasks:
+                return "🤷 No active processing tasks found. Start a task first with bridge_design_request."
             
-            # Call the triage system directly (this is the blocking call that now runs in background)
-            print("🔧 [BACKGROUND] Calling triage system...")
+            if task_id:
+                # Check specific task
+                if task_id not in self.processing_tasks:
+                    return f"❌ Task ID {task_id} not found. Active tasks: {list(self.processing_tasks.keys())}"
+                    
+                task = self.processing_tasks[task_id]
+                status = task["status"]
+                
+                if status == "completed":
+                    result = task["result"]
+                    elapsed = task["finished_at"] - task["started_at"] 
+                    # Clean up completed task
+                    del self.processing_tasks[task_id]
+                    return f"✅ Task {task_id} completed! ({elapsed:.1f}s)\n\nResult: {result}"
+                elif status == "error":
+                    error = task["error"]
+                    # Clean up failed task
+                    del self.processing_tasks[task_id]
+                    return f"❌ Task {task_id} failed: {error}"
+                else:
+                    elapsed = time.time() - task["started_at"]
+                    return f"🔄 Task {task_id} still processing... ({elapsed:.1f}s elapsed). Request: '{task['user_request'][:50]}...'"
+            
+            else:
+                # Check all tasks
+                results = []
+                for tid, task in list(self.processing_tasks.items()):
+                    if task["status"] == "completed":
+                        result = task["result"]
+                        elapsed = task["finished_at"] - task["started_at"]
+                        results.append(f"✅ Task {tid} completed ({elapsed:.1f}s): {result}")
+                        del self.processing_tasks[tid]
+                    elif task["status"] == "error":
+                        error = task["error"] 
+                        results.append(f"❌ Task {tid} failed: {error}")
+                        del self.processing_tasks[tid]
+                    else:
+                        elapsed = time.time() - task["started_at"]
+                        results.append(f"🔄 Task {tid} processing ({elapsed:.1f}s): '{task['user_request'][:30]}...'")
+                
+                if not results:
+                    return "🤷 No active tasks found."
+                    
+                return "\n".join(results)
+                
+        except Exception as e:
+            print(f"💥 [STS THREAD ERROR] Exception checking status: {e}")
+            return f"❌ Error checking status: {str(e)}"
+
+    async def _run_smolagents_processing_thread(self, task_id: str):
+        """Execute smolagents processing in separate thread - updates shared state when done."""
+        try:
+            print(f"🧵 [SMOLAGENTS THREAD] Starting processing for task {task_id}")
+            
+            # Get task from shared state
+            task = self.processing_tasks.get(task_id)
+            if not task:
+                print(f"💥 [SMOLAGENTS THREAD] Task {task_id} not found in shared state!")
+                return
+                
+            user_request = task["user_request"]
+            print(f"🎯 [SMOLAGENTS THREAD] Processing: {user_request[:50]}...")
+            
+            # Update status to processing
+            async with self.task_lock:
+                self.processing_tasks[task_id]["status"] = "processing"
+            
+            # Call the triage system (this is the heavy, blocking operation)
+            print("🔧 [SMOLAGENTS THREAD] Calling triage system...")
+            logger.info(f"🎯 Smolagents thread processing: {user_request[:100]}...")
+            
             response = self.triage_system.handle_design_request(user_request)
             
-            print(f"📊 [BACKGROUND] Background task completed:")
+            print(f"📊 [SMOLAGENTS THREAD] Processing completed for task {task_id}:")
             print(f"    Success: {response.success}")
             print(f"    Message length: {len(response.message) if response.message else 0} characters")
             
-            if response.success:
-                print("✅ [BACKGROUND] Background task completed successfully")
-                print(f"📤 [BACKGROUND RESULT] {response.message}")
-                logger.info(f"✅ Background task completed: {response.message}")
+            # Update shared state with results (thread-safe)
+            async with self.task_lock:
+                if response.success:
+                    self.processing_tasks[task_id]["status"] = "completed"
+                    self.processing_tasks[task_id]["result"] = response.message
+                    self.processing_tasks[task_id]["announced"] = False  # Track if result was announced
+                    print(f"✅ [SMOLAGENTS THREAD] Task {task_id} completed successfully")
+                    print(f"📤 [SMOLAGENTS RESULT] {response.message}")
+                    logger.info(f"✅ Smolagents task {task_id} completed: {response.message}")
+                else:
+                    self.processing_tasks[task_id]["status"] = "error"
+                    self.processing_tasks[task_id]["error"] = response.message
+                    print(f"❌ [SMOLAGENTS THREAD] Task {task_id} failed: {response.message}")
+                    logger.error(f"❌ Smolagents task {task_id} failed: {response.message}")
                 
-                # TODO: In future, could send this result back to user via voice
-                # For now, user can ask "what was the result?" to get updates
-                
-            else:
-                print(f"❌ [BACKGROUND] Background task failed: {response.message}")
-                logger.error(f"❌ Background task failed: {response.message}")
+                self.processing_tasks[task_id]["finished_at"] = time.time()
                 
         except Exception as e:
-            print(f"💥 [BACKGROUND] Background task exception: {e}")
-            logger.error(f"Background task error: {e}")
+            print(f"💥 [SMOLAGENTS THREAD] Exception in task {task_id}: {e}")
+            logger.error(f"Smolagents thread error for task {task_id}: {e}")
+            
+            # Update shared state with error (thread-safe)
+            async with self.task_lock:
+                if task_id in self.processing_tasks:
+                    self.processing_tasks[task_id]["status"] = "error"
+                    self.processing_tasks[task_id]["error"] = str(e)
+                    self.processing_tasks[task_id]["finished_at"] = time.time()
+            
             import traceback
             traceback.print_exc()
 
@@ -283,14 +437,14 @@ class BridgeChatHandler(AsyncStreamHandler):
                     print(f"📝 [FUNCTION CALL] ID: {fc.id}")
                     print(f"📝 [FUNCTION CALL] Args: {fc.args}")
                     
-                    # Execute the actual function based on name
+                    # Execute the actual function based on name - Two-thread architecture
                     if fc.name == "bridge_design_request":
                         # Extract arguments
                         user_request = fc.args.get("user_request", "")
                         
                         print(f"🎯 [EXECUTING] bridge_design_request with args: {fc.args}")
                         
-                        # Call the actual function
+                        # Call the actual function (STS thread)
                         result = self._execute_bridge_design_request(user_request)
                         
                         # Create function response for Live API
@@ -303,6 +457,27 @@ class BridgeChatHandler(AsyncStreamHandler):
                         function_responses.append(function_response)
                         
                         print(f"✅ [FUNCTION RESPONSE] Created response for {fc.name}")
+                    
+                    elif fc.name == "are_smolagents_finished_yet":
+                        # Extract arguments for status check
+                        task_id = fc.args.get("task_id", None)
+                        
+                        print(f"🔍 [EXECUTING] are_smolagents_finished_yet with args: {fc.args}")
+                        
+                        # Call the status check function (STS thread)
+                        result = self._execute_are_smolagents_finished_yet(task_id)
+                        
+                        # Create function response for Live API
+                        from google.genai import types
+                        function_response = types.FunctionResponse(
+                            id=fc.id,
+                            name=fc.name,
+                            response={"result": result}
+                        )
+                        function_responses.append(function_response)
+                        
+                        print(f"✅ [FUNCTION RESPONSE] Created status response for {fc.name}")
+                    
                     else:
                         print(f"❌ [UNKNOWN FUNCTION] {fc.name}")
                         # Create error response
