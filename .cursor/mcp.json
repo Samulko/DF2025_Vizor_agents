@@ -1,0 +1,5 @@
+{
+  "args": [
+    "-m", "bridge_design_system.mcp.grasshopper_mcp.bridge"
+  ]
+} 

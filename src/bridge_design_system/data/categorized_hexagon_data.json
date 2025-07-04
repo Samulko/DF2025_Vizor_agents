@@ -28,9 +28,18 @@
       ]
     ],
     "tags": [
-      "num_vertices:6",
-      "shape_type:hexagon",
-      "angles:[49.68, 64.54, 51.73, 105.56, 44.95, 43.54]"
+      "hexagon",
+      "polygon",
+      "6-sided"
+    ],
+    "description": "This object is a polygon with 6 vertices. It is a hexagon.",
+    "angles": [
+      2846.336461164202,
+      3697.7751027485674,
+      2964.172999958166,
+      6048.2091395909865,
+      2575.5797832609087,
+      2494.407137986806
     ]
   },
   {
@@ -62,9 +71,18 @@
       ]
     ],
     "tags": [
-      "num_vertices:6",
-      "shape_type:hexagon",
-      "angles:[91.58, 69.42, 23.73, 45.11, 78.26, 51.9]"
+      "hexagon",
+      "polygon",
+      "6-sided"
+    ],
+    "description": "This object is a polygon with 6 vertices. It is a hexagon.",
+    "angles": [
+      5247.174535042492,
+      3977.59226958382,
+      1359.373671435926,
+      2584.3273751935853,
+      4484.201248703569,
+      2973.811524750245
     ]
   },
   {
@@ -96,9 +114,18 @@
       ]
     ],
     "tags": [
-      "num_vertices:6",
-      "shape_type:hexagon",
-      "angles:[85.42, 49.32, 33.82, 103.33, 62.16, 93.59]"
+      "hexagon",
+      "polygon",
+      "6-sided"
+    ],
+    "description": "This object is a polygon with 6 vertices. It is a hexagon.",
+    "angles": [
+      4894.091608467459,
+      2825.8873428160223,
+      1937.6838284821797,
+      5920.39394762711,
+      3561.3581015307605,
+      5362.433452750463
     ]
   }
 ]

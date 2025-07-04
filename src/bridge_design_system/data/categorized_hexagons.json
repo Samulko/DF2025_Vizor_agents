@@ -1,5 +1,6 @@
-{
-  "object_001": {
+[
+  {
+    "id": "object_001",
     "vertices": [
       [
         0.0,
@@ -26,28 +27,14 @@
         0.05057082908222621
       ]
     ],
-    "angles": [
-      49.677942866879036,
-      64.53835054123412,
-      51.73457844798774,
-      105.56116333507603,
-      44.95234736570479,
-      43.535617443118284
-    ],
-    "side_lengths": [
-      0.09932709160138443,
-      0.02584874817086673,
-      0.1062027361251896,
-      0.1166166422301847,
-      0.10903399727519368,
-      0.052087211813275455
-    ],
-    "category": "irregular polygon",
     "tags": [
-      "irregular polygon"
-    ]
+      "hexagon",
+      "irregular"
+    ],
+    "description": "This object is a hexagon. It appears to be an irregular hexagon."
   },
-  "object_002": {
+  {
+    "id": "object_002",
     "vertices": [
       [
         0.0,
@@ -74,28 +61,14 @@
         0.018809404471031327
       ]
     ],
-    "angles": [
-      91.58047206329405,
-      69.42208140611156,
-      23.725546331480505,
-      45.105021646550895,
-      78.26407611191838,
-      51.90280244064462
-    ],
-    "side_lengths": [
-      0.04720845345253078,
-      0.1489138648229737,
-      0.061243229478537366,
-      0.06993561229318475,
-      0.03481457650859113,
-      0.17335538433022563
-    ],
-    "category": "irregular polygon",
     "tags": [
-      "irregular polygon"
-    ]
+      "hexagon",
+      "irregular"
+    ],
+    "description": "This object is a hexagon. It appears to be an irregular hexagon."
   },
-  "object_003": {
+  {
+    "id": "object_003",
     "vertices": [
       [
         0.0,
@@ -122,25 +95,10 @@
         -0.002288356990331336
       ]
     ],
-    "angles": [
-      85.41801246198236,
-      49.32103842257332,
-      33.818962669663115,
-      103.3303674012378,
-      62.15742471428628,
-      93.59211966958335
-    ],
-    "side_lengths": [
-      0.09036797741174442,
-      0.08632306715958657,
-      0.05495425005676029,
-      0.029068598068804356,
-      0.04902174659471735,
-      0.13375277955948614
-    ],
-    "category": "irregular polygon",
     "tags": [
-      "irregular polygon"
-    ]
+      "hexagon",
+      "irregular"
+    ],
+    "description": "This object is a hexagon. It appears to be an irregular hexagon."
   }
-}
+]

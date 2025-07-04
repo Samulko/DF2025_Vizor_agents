@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     category_agent_provider: str = "gemini"
     category_agent_model: str = "gemini-2.5-flash-preview-05-20"
 
+    # Design Agent Configuration
+    design_agent_provider: str = "gemini"
+    design_agent_model: str = "gemini-2.5-pro"
+
     # MCP Configuration
     mcp_transport_mode: str = "http"  # "http" or "stdio"
     mcp_http_url: str = "http://localhost:8001/mcp"

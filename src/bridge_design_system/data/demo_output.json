@@ -1,0 +1,23 @@
+{
+  "shape": "Square",
+  "side_lengths": [
+    1.0,
+    1.0,
+    1.0,
+    1.0
+  ],
+  "angles": [
+    90.0,
+    90.0,
+    90.0,
+    90.0
+  ],
+  "clean_description": "The first piece is 10 mm thick, made of wood, and rigid.",
+  "tags": [
+    "wood",
+    "rigid",
+    "component",
+    "10mm",
+    "material"
+  ]
+}
