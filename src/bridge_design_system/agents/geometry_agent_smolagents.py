@@ -100,7 +100,7 @@ class SmolagentsGeometryAgent:
         # Append custom system prompt to default smolagents prompt
         custom_prompt = get_geometry_system_prompt()
         if self.fallback_mode:
-            custom_prompt += "\n\n**IMPORTANT: You are running in SIMULATION MODE without Grasshopper connection. Provide design feedback, parameter calculations, and conceptual guidance instead of actual geometry creation.**"
+            custom_prompt += "\n\n**IMPORTANT: You are running in SIMULATION MODE without Grasshopper connection. Focus on structural balance calculations and provide design feedback instead of actual geometry creation. Use simulation tools for parameter validation.**"
         
         self.agent.prompt_templates["system_prompt"] = (
             self.agent.prompt_templates["system_prompt"] + "\n\n" + custom_prompt
@@ -115,6 +115,7 @@ class SmolagentsGeometryAgent:
 
         This uses the persistent ToolCallingAgent that maintains context
         and memory across multiple requests for iterative design.
+        Automatically detects task type and provides appropriate context.
         """
         # Workshop logging - start
         self.step_counter += 1
@@ -374,7 +375,7 @@ General Recommendations:
         
         return [
             simulate_bridge_component,
-            calculate_bridge_parameters, 
+            calculate_bridge_parameters,
             validate_bridge_geometry,
             get_component_status
         ]

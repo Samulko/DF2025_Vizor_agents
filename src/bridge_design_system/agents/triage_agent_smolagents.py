@@ -15,7 +15,7 @@ from ..config.logging_config import get_logger
 from ..config.model_config import ModelProvider
 from ..memory import track_design_changes
 from ..monitoring.workshop_logging import add_workshop_logging
-from .rational_smolagents import create_rational_agent
+# DISABLED: from .rational_smolagents import create_rational_agent
 
 # NOTE: Voice capabilities moved to bridge_chat_agent.py (chat-supervisor pattern)
 # The triage agent is now purely for bridge design coordination without voice/chat handling
@@ -75,26 +75,26 @@ def create_triage_system(
     )
 
 
-    # Create rational agent for level validation
-    from .rational_smolagents import create_rational_agent
+    # DISABLED: Rational agent for level validation
+    # from .rational_smolagents import create_rational_agent
 
-    rational_monitor = None
-    if monitoring_callback:
-        # Check if it's a remote callback factory or local callback
-        if (
-            callable(monitoring_callback)
-            and hasattr(monitoring_callback, "__name__")
-            and "create" in monitoring_callback.__name__
-        ):
-            # Remote monitoring factory - create callback for this agent
-            rational_monitor = monitoring_callback("rational_agent")
-        else:
-            # Local monitoring - use existing pattern
-            from ..monitoring.agent_monitor import create_monitor_callback
+    # rational_monitor = None
+    # if monitoring_callback:
+    #     # Check if it's a remote callback factory or local callback
+    #     if (
+    #         callable(monitoring_callback)
+    #         and hasattr(monitoring_callback, "__name__")
+    #         and "create" in monitoring_callback.__name__
+    #     ):
+    #         # Remote monitoring factory - create callback for this agent
+    #         rational_monitor = monitoring_callback("rational_agent")
+    #     else:
+    #         # Local monitoring - use existing pattern
+    #         from ..monitoring.agent_monitor import create_monitor_callback
 
-            rational_monitor = create_monitor_callback("rational_agent", monitoring_callback)
+    #         rational_monitor = create_monitor_callback("rational_agent", monitoring_callback)
 
-    rational_agent = create_rational_agent(monitoring_callback=rational_monitor)
+    # rational_agent = create_rational_agent(monitoring_callback=rational_monitor)
 
     # Note: Material and structural analysis can be added as separate agents if needed
 
@@ -142,7 +142,7 @@ def create_triage_system(
         max_steps=max_steps,
         step_callbacks=step_callbacks,
         additional_authorized_imports=["typing", "json", "datetime"],
-        managed_agents=[geometry_agent, rational_agent],  # Pass ManagedAgent instances
+        managed_agents=[geometry_agent],  # DISABLED: rational_agent removed
         **kwargs,
     )
 
@@ -411,7 +411,7 @@ class TriageSystemWrapper:
 
         # Create managed agents using factory functions
         geometry_monitor = None
-        rational_monitor = None
+        # DISABLED: rational_monitor = None
 
         if monitoring_callback:
             if (
@@ -420,19 +420,20 @@ class TriageSystemWrapper:
                 and "create" in monitoring_callback.__name__
             ):
                 geometry_monitor = monitoring_callback("geometry_agent")
-                rational_monitor = monitoring_callback("rational_agent")
+                # DISABLED: rational_monitor = monitoring_callback("rational_agent")
             else:
                 from ..monitoring.agent_monitor import create_monitor_callback
 
                 geometry_monitor = create_monitor_callback("geometry_agent", monitoring_callback)
-                rational_monitor = create_monitor_callback("rational_agent", monitoring_callback)
+                # DISABLED: rational_monitor = create_monitor_callback("rational_agent", monitoring_callback)
 
         # Create agents using the updated factory functions (returns agents directly)
         self.geometry_agent = _create_mcp_enabled_geometry_agent(
             monitoring_callback=geometry_monitor,
         )
 
-        self.rational_agent = create_rational_agent(monitoring_callback=rational_monitor)
+        # DISABLED: self.rational_agent = create_rational_agent(monitoring_callback=rational_monitor)
+        self.rational_agent = None  # Disabled
 
         # Create triage manager with managed_agents and memory tracking
         manager_step_callbacks = [track_design_changes]
@@ -457,7 +458,7 @@ class TriageSystemWrapper:
             max_steps=6,
             step_callbacks=manager_step_callbacks,
             additional_authorized_imports=["typing", "json", "datetime"],
-            managed_agents=[self.geometry_agent, self.rational_agent],
+            managed_agents=[self.geometry_agent],  # DISABLED: rational_agent removed
         )
 
         self.component_registry = component_registry
@@ -527,7 +528,7 @@ class TriageSystemWrapper:
             "triage": {
                 "initialized": True,
                 "type": "smolagents_managed_agents",
-                "managed_agents": 2,  # managed_geometry + managed_rational
+                "managed_agents": 1,  # managed_geometry only (rational disabled)
                 "max_steps": self.manager.max_steps,
             },
             "geometry_agent": {
@@ -541,14 +542,10 @@ class TriageSystemWrapper:
                 "mcp_integration": "enabled",
             },
             "rational_agent": {
-                "initialized": hasattr(self, "rational_agent") and self.rational_agent is not None,
-                "type": (
-                    type(self.rational_agent).__name__
-                    if hasattr(self, "rational_agent")
-                    else "Unknown"
-                ),
+                "initialized": False,
+                "type": "Disabled",
                 "name": "rational_agent",
-                "level_validation": "enabled",
+                "level_validation": "disabled",
             },
         }
 

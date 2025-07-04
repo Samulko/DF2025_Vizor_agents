@@ -1,0 +1,47 @@
+{
+  "element_id": "element_001",
+  "shape_id": "quadrilateral_001",
+  "coordinates": [
+    [
+      0,
+      0
+    ],
+    [
+      1,
+      0
+    ],
+    [
+      1,
+      1
+    ],
+    [
+      0,
+      1
+    ]
+  ],
+  "shape_type": "quadrilateral",
+  "description": "This is a simple geometric shape, a square formed by the given coordinates.",
+  "tags": {
+    "clean_description": "A square defined by given coordinates.",
+    "tags": [
+      "square",
+      "geometry",
+      "coordinates",
+      "shape",
+      "polygon"
+    ]
+  },
+  "angles": [
+    90.0,
+    90.0,
+    90.0,
+    90.0
+  ],
+  "side_lengths": [
+    1.0,
+    1.0,
+    1.0,
+    1.0
+  ],
+  "perimeter": 4.0
+}
