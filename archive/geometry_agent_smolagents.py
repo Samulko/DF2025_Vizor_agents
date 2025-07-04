@@ -123,14 +123,6 @@ class SmolagentsGeometryAgent:
         
         mode = "simulation" if self.fallback_mode else "MCP"
         logger.info(f"🎯 Executing task in {mode} mode: {task[:100]}...")
-        
-        # Enhanced workshop logging - start
-        log_agent_interaction(
-            agent_name="geometry_agent",
-            step_number=self.step_counter,
-            task_description=task[:200] + "..." if len(task) > 200 else task,
-            status="started"
-        )
 
         try:
             # Log memory state before execution
@@ -148,33 +140,10 @@ class SmolagentsGeometryAgent:
                     f"📊 Completed task with {len(self.agent.memory.steps)} total memory steps"
                 )
 
-            # Enhanced workshop logging - success
-            duration = time.time() - start_time
-            result_str = str(result) if result else ""
-            log_agent_interaction(
-                agent_name="geometry_agent",
-                step_number=self.step_counter,
-                task_description=task[:200] + "..." if len(task) > 200 else task,
-                status="completed",
-                response_content=result_str[:500] + "..." if len(result_str) > 500 else result_str,
-                duration_seconds=duration
-            )
-            
             logger.info(f"✅ Task completed successfully in {mode} mode")
             return result
 
         except Exception as e:
-            # Enhanced workshop logging - error
-            duration = time.time() - start_time
-            log_agent_interaction(
-                agent_name="geometry_agent",
-                step_number=self.step_counter,
-                task_description=task[:200] + "..." if len(task) > 200 else task,
-                status="failed",
-                error_message=str(e),
-                duration_seconds=duration
-            )
-            
             logger.error(f"❌ Geometry agent execution failed in {mode} mode: {e}")
             # Don't re-raise as RuntimeError to avoid breaking the system
             return f"Error in {mode} mode: {e}"

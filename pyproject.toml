@@ -28,11 +28,14 @@ dependencies = [
     "mcpadapt[smolagents]>=0.1.9",
     "psutil>=5.9.0",
     "roslibpy>=1.6.0",
-    # OpenTelemetry dependencies for monitoring and tracing
+    "google-genai>=1.24.0",
+    "google-generativeai>=0.8.5",
+    "fastrtc<0.0.30",
+    "gradio>=4.0.0",
+    "numpy>=1.24.1",
+    "arize-phoenix>=4.0.0",
+    "opentelemetry-api>=1.20.0",
     "opentelemetry-sdk>=1.20.0",
-    "opentelemetry-exporter-otlp>=1.20.0",
-    "openinference-instrumentation-smolagents>=0.1.0",
-    "arize-phoenix>=5.0.0",
 ]
 
 [project.optional-dependencies]
@@ -44,14 +47,10 @@ dev = [
     "ruff>=0.1.0",
     "ipython>=8.0.0",
 ]
-telemetry = [
-    # Telemetry dependencies now included in main dependencies
-]
 voice = [
     "pyaudio>=0.2.13",
     "openai-whisper>=20231117",
     "openai>=1.0.0",
-    "numpy>=1.24.1",
     "pvporcupine>=3.0.0",
     "pvrecorder>=1.2.0",
     "scipy>=1.10.0",

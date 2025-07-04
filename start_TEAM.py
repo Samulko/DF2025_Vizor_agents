@@ -34,8 +34,17 @@ def run_command_in_background(cmd, name):
         print(f"❌ Failed to start {name}: {e}")
         return None
 
+def signal_handler(signum, frame):
+    """Handle shutdown signals gracefully."""
+    print(f"\n🛑 Received signal {signum}, shutting down...")
+    raise KeyboardInterrupt()
+
 def main():
     """Main launcher function."""
+    # Set up signal handlers
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
     print("=" * 60)
     print("🌉 Bridge Design System - TEAM Launch")
     print("=" * 60)
@@ -66,9 +75,11 @@ def main():
         print("=" * 60)
         print("📊 Phoenix UI:     http://localhost:6006")
         print("🖥️  LCARS Monitor:  http://localhost:5000")
+        print("📡 TCP Command:    localhost:8082")
         print("=" * 60)
         print("🚀 Starting Main System in foreground...")
         print("   (You can interact with it normally)")
+        print("   (Voice interface: python -m bridge_design_system.agents.chat_voice voice)")
         print("   (Press Ctrl+C to stop all services)")
         print("=" * 60)
         
@@ -78,7 +89,7 @@ def main():
         
         # Build command with any additional arguments passed to this script
         cmd = ["uv", "run", "python", "-m", "bridge_design_system.main", 
-               "--interactive", "--disable-gaze"]
+               "--interactive", "--enable-command-server", "--disable-gaze"]
         
         # Add any additional arguments passed to this launcher
         if len(sys.argv) > 1:

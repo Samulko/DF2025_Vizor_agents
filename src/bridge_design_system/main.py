@@ -18,6 +18,7 @@ from .state.component_registry import initialize_registry
 from .tools.material_tools import MaterialInventoryManager
 from .voice_input import get_user_input, check_voice_dependencies
 from .monitoring.trace_logger import finalize_workshop_session, get_trace_logger
+from .ipc import start_command_server, stop_command_server, get_command_server
 
 logger = get_logger(__name__)
 
@@ -469,6 +470,7 @@ def interactive_mode(
     otel_backend=None,
     disable_otel=False,
     disable_custom_monitoring=False,
+    enable_command_server=False,
 ):
     """Run the system in interactive mode.
 
@@ -482,6 +484,7 @@ def interactive_mode(
         otel_backend: OpenTelemetry backend to use (none, console, langfuse, phoenix, hybrid)
         disable_otel: If True, disable OpenTelemetry instrumentation completely
         disable_custom_monitoring: If True, disable custom LCARS monitoring
+        enable_command_server: If True, start TCP command server for external voice interfaces
     """
     mode = "legacy" if use_legacy else "smolagents-native"
     logger.info(f"Starting Bridge Design System in interactive mode ({mode})...")
@@ -499,6 +502,11 @@ def interactive_mode(
     try:
         # Don't start monitoring server - assume it's running separately
         # start_monitoring_server(enable_monitoring=enable_monitoring)
+
+        # Initialize trace logger if monitoring is enabled
+        if enable_monitoring:
+            trace_logger = get_trace_logger()
+            logger.info(f"📊 Workshop trace logging enabled - Session: {trace_logger.current_session_id}")
 
         # Always use remote monitoring callback
         monitoring_callback = get_monitoring_callback(enable_embedded_monitoring=False)
@@ -576,6 +584,76 @@ def interactive_mode(
             registry.clear()
             logger.info("✅ Started with fresh agent memories")
 
+        # Initialize TCP command server for external voice interfaces
+        command_server_task = None
+        command_server_running = False
+        if enable_command_server:
+            try:
+                print("🚀 Starting TCP command server for external voice interfaces...")
+                
+                # Create command handler that uses the triage agent
+                def command_handler(user_request: str):
+                    """Handle commands from external interfaces (e.g., voice chat)."""
+                    try:
+                        logger.info(f"📨 [COMMAND SERVER] Processing external request: {user_request[:100]}...")
+                        response = triage.handle_design_request(request=user_request, gaze_id=None)
+                        logger.info(f"✅ [COMMAND SERVER] Request completed: {'success' if response.success else 'failed'}")
+                        return response
+                    except Exception as e:
+                        logger.error(f"❌ [COMMAND SERVER] Error processing request: {e}")
+                        # Return a compatible error response
+                        class ErrorResponse:
+                            def __init__(self, message):
+                                self.success = False
+                                self.message = message
+                        return ErrorResponse(f"Error processing request: {str(e)}")
+                
+                # Start command server in background thread
+                command_server = start_command_server(host="localhost", port=8082, command_handler=command_handler)
+                
+                # Check if server was created successfully
+                if command_server is None:
+                    raise RuntimeError("Failed to create command server")
+                
+                server_started = threading.Event()
+                server_error = None
+                
+                def run_command_server():
+                    """Run command server in background thread."""
+                    nonlocal server_error
+                    try:
+                        import asyncio
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                        # Server start will fail if port is already in use
+                        loop.run_until_complete(command_server.start())
+                        server_started.set()
+                    except Exception as e:
+                        server_error = e
+                        logger.error(f"❌ Command server error: {e}")
+                        server_started.set()
+                
+                command_server_thread = threading.Thread(target=run_command_server, daemon=True)
+                command_server_thread.start()
+                
+                # Wait for server to start or fail
+                server_started.wait(timeout=2.0)
+                
+                if server_error:
+                    raise server_error
+                
+                print("✅ TCP command server started on localhost:8082")
+                print("📡 External voice interfaces can now connect")
+                command_server_running = True
+                
+            except Exception as e:
+                logger.error(f"❌ Failed to start command server: {e}")
+                print(f"⚠️ Command server failed to start: {e}")
+                if "address already in use" in str(e).lower():
+                    print("   💡 Tip: Another instance may be running. Check with: lsof -i :8082")
+                    print("   💡 To kill it: kill -9 $(lsof -t -i:8082)")
+                print("   Continuing without command server...")
+
         print("\n" + "=" * 60)
         print("AR-Assisted Bridge Design System")
         if use_legacy:
@@ -600,6 +678,17 @@ def interactive_mode(
             print("🖖 Live long and prosper!")
         else:
             print("⚠️ LCARS monitoring disabled (use --monitoring to enable)")
+
+        # Show command server information
+        if command_server_running:
+            print("🚀 TCP Command Server running on localhost:8082")
+            print("📡 External voice interfaces can connect via TCP")
+            print("🎤 Use voice chat agent in separate terminal")
+        elif enable_command_server:
+            print("⚠️ Command server enabled but failed to start (port may be in use)")
+            print("   Check with: lsof -i :8082")
+        else:
+            print("⚠️ Command server disabled (use --enable-command-server to enable)")
 
         print(
             "\nType 'exit' to quit, 'reset' to clear agent memories, 'hardreset' to clear everything"
@@ -928,7 +1017,29 @@ def interactive_mode(
                 try:
                     # Process the request with gaze context embedded in the text
                     print("\nProcessing...")
+                    start_time = time.time()
                     response = triage.handle_design_request(request=final_request, gaze_id=None)
+                    duration = time.time() - start_time
+
+                    # Log the interaction if monitoring is enabled
+                    if enable_monitoring:
+                        from .monitoring.trace_logger import log_agent_interaction
+                        log_agent_interaction(
+                            agent_name="triage_agent",
+                            step_number=getattr(triage, '_step_counter', 0) + 1,
+                            task_description=final_request[:200] + "..." if len(final_request) > 200 else final_request,
+                            status="completed" if response.success else "failed",
+                            tool_calls=getattr(response, 'tool_calls', []),
+                            response_content=response.message[:500] + "..." if len(response.message) > 500 else response.message,
+                            error_message=str(response.error) if response.error else None,
+                            duration_seconds=duration,
+                            token_usage=getattr(response, 'token_usage', None),
+                            memory_size=0  # Could be enhanced to track actual memory usage
+                        )
+                        # Update step counter
+                        if not hasattr(triage, '_step_counter'):
+                            triage._step_counter = 0
+                        triage._step_counter += 1
 
                     if response.success:
                         print(f"\nTriage Agent> {response.message}")
@@ -964,10 +1075,18 @@ def interactive_mode(
                     # Second Ctrl+C - force exit
                     print("\n\n🛑 Force quit requested. Exiting...")
                     break
+                except EOFError:
+                    # Input stream closed - exit gracefully
+                    print("\n\n🛑 Input stream closed. Exiting...")
+                    break
                 except:
                     # Any other error during confirmation, just continue
                     print("\nContinuing...")
                     continue
+            except EOFError:
+                # Input stream closed (e.g., when running from start_TEAM.py and Ctrl+C is pressed)
+                print("\n\n🛑 Input stream closed. Shutting down gracefully...")
+                break
             except Exception as e:
                 logger.error(f"Error processing request: {e}", exc_info=True)
                 print(f"\nError: {str(e)}")
@@ -1004,7 +1123,8 @@ def main():
     parser.add_argument(
         "--monitoring",
         action="store_true",
-        help="Enable LCARS agent monitoring interface (disabled by default for clean CLI)",
+        default=True,
+        help="Enable LCARS agent monitoring interface (enabled by default)",
     )
     parser.add_argument(
         "--start-mcp-server",
@@ -1068,6 +1188,11 @@ def main():
         "--disable-custom-monitoring",
         action="store_true",
         help="Disable custom LCARS monitoring (use only OpenTelemetry)",
+    )
+    parser.add_argument(
+        "--enable-command-server",
+        action="store_true",
+        help="Enable TCP command server for external voice interfaces (port 8082)",
     )
 
     args = parser.parse_args()
@@ -1155,6 +1280,7 @@ def main():
             otel_backend=args.otel_backend,
             disable_otel=args.disable_otel,
             disable_custom_monitoring=args.disable_custom_monitoring,
+            enable_command_server=args.enable_command_server,
         )
     else:
         # Default to smolagents interactive mode
@@ -1169,6 +1295,7 @@ def main():
             otel_backend=args.otel_backend,
             disable_otel=args.disable_otel,
             disable_custom_monitoring=args.disable_custom_monitoring,
+            enable_command_server=args.enable_command_server,
         )
 
 
