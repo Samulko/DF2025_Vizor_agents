@@ -33,7 +33,7 @@ class BridgeCommandClient:
     with the bridge design system.
     """
     
-    def __init__(self, host: str = "localhost", port: int = 8082, timeout: float = 30.0):
+    def __init__(self, host: str = "localhost", port: int = 8082, timeout: float = 120.0):
         self.host = host
         self.port = port
         self.timeout = timeout

@@ -125,7 +125,7 @@ class BridgeChatHandler(AsyncStreamHandler):
         print(f"    Tools: {[tool['function_declarations'][0]['name'] for tool in config['tools']]}")
         print(f"    System Instruction Length: {len(config['system_instruction'])} chars")
         
-        async with client.aio.live.connect(model="gemini-2.0-flash-live-001", config=config) as session:
+        async with client.aio.live.connect(model="gemini-live-2.5-flash-preview", config=config) as session:
             print("✅ [DEBUG] Connected to Gemini Live API successfully!")
             print(f"🔗 [DEBUG] Session object: {type(session)}")
             print(f"🔧 [DEBUG] Session available methods: {[attr for attr in dir(session) if not attr.startswith('_')]}")
@@ -253,6 +253,25 @@ class BridgeChatHandler(AsyncStreamHandler):
         print("\n" + "🎆"*50)
         print("🎆 [TWO-TERMINAL] VOICE TERMINAL SENDING TO MAIN TERMINAL! 🎆")
         print("🎆"*50)
+        
+        # Check if there are any active processing tasks
+        active_tasks = [tid for tid, task in self.processing_tasks.items() 
+                       if task["status"] in ["started", "processing"]]
+        
+        if active_tasks:
+            active_task_info = []
+            for tid in active_tasks:
+                task = self.processing_tasks[tid]
+                elapsed = time.time() - task["started_at"]
+                active_task_info.append(f"Task {tid}: '{task['user_request'][:30]}...' ({elapsed:.1f}s)")
+            
+            print(f"⚠️ [VOICE TERMINAL] Blocking new request - {len(active_tasks)} active tasks")
+            for info in active_task_info:
+                print(f"   📋 {info}")
+            
+            return f"⚠️ Please wait! I'm still processing {len(active_tasks)} task{'s' if len(active_tasks) > 1 else ''}:\n" + \
+                   "\n".join([f"• {info}" for info in active_task_info]) + \
+                   f"\n\nAsk me 'are the smolagents finished yet?' to check status, then try your request again when completed."
         
         # Generate unique task ID for tracking
         task_id = str(uuid.uuid4())[:8]
@@ -517,7 +536,14 @@ class BridgeChatHandler(AsyncStreamHandler):
 
 You operate in a two-terminal architecture where you send requests to the main bridge design system via TCP IPC.
 
-**CRITICAL: You MUST use the bridge_design_request tool for ALL bridge design requests, no matter how simple they seem.**
+**CRITICAL TASK MANAGEMENT RULE:**
+BEFORE sending ANY new bridge_design_request, you MUST FIRST check if previous tasks are finished by calling the are_smolagents_finished_yet tool. Only send new requests when all previous tasks are completed or failed.
+
+**WORKFLOW:**
+1. For bridge design tasks: First call are_smolagents_finished_yet
+2. If tasks are still processing: Tell user to wait and explain what's being processed
+3. If tasks are finished: Then proceed with bridge_design_request
+4. For simple questions: Respond directly without tools
 
 **For simple questions**, you can respond directly:
 - Basic bridge engineering concepts
@@ -525,7 +551,7 @@ You operate in a two-terminal architecture where you send requests to the main b
 - General design principles
 - Terminology explanations
 
-**For ANY bridge design tasks**, you MUST use the bridge_design_request tool:
+**For ANY bridge design tasks**, you MUST follow the workflow above:
 - Creating or modifying bridge components
 - Structural analysis and calculations  
 - Parametric design in Grasshopper
@@ -535,14 +561,14 @@ You operate in a two-terminal architecture where you send requests to the main b
 - Any request related to bridge design
 
 Available tools:
-- `bridge_design_request`: Sends requests to main.py bridge design system via TCP IPC - USE THIS TOOL FREQUENTLY
-- `are_smolagents_finished_yet`: Check if main.py has finished processing tasks
+- `are_smolagents_finished_yet`: Check if main.py has finished processing tasks - CALL THIS FIRST
+- `bridge_design_request`: Sends requests to main.py bridge design system via TCP IPC - ONLY AFTER CHECKING STATUS
 
-Examples of when to use bridge_design_request:
-- "Show me the current bridge design status" -> USE TOOL
-- "Create a simple beam bridge" -> USE TOOL  
-- "What tools are available?" -> USE TOOL
-- "Reset the design session" -> USE TOOL
+Examples of proper workflow:
+- User: "Create a simple beam bridge"
+- Assistant: [calls are_smolagents_finished_yet first]
+- If busy: "I'm still processing a previous task. Please wait..."
+- If free: [calls bridge_design_request with the user's request]
 
 Two-Terminal Architecture:
 - Terminal 1: main.py (bridge design system with --enable-command-server)
@@ -550,7 +576,7 @@ Two-Terminal Architecture:
 
 Keep responses concise and natural for voice interaction. Be technical but accessible. When using tools, explain what you're doing and interpret the results for the user.
 
-REMEMBER: When in doubt, use the bridge_design_request tool. It's better to use it too often than not enough."""
+REMEMBER: ALWAYS check task status BEFORE sending new bridge design requests. This prevents overwhelming the main system."""
 
     async def stream(self) -> AsyncGenerator[bytes, None]:
         """Stream audio data to Gemini Live."""
@@ -599,7 +625,7 @@ def create_bridge_chat_stream(server_port: int = 7860, share: bool = False):
         mode="send-receive",
         handler=BridgeChatHandler(),
         concurrency_limit=5,
-        time_limit=90,
+        time_limit=300,  # 5 minutes session limit
         ui_args={
             "pulse_color": "rgb(0, 123, 255)",  # Bridge blue
             "icon_button_color": "rgb(0, 123, 255)",
