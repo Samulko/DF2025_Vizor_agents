@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     triage_agent_model: str = "gemini-2.5-flash-preview-05-20"
     geometry_agent_provider: str = "gemini"
     geometry_agent_model: str = "gemini-2.5-flash-preview-05-20"
+    surface_agent_provider: str = "gemini"
+    surface_agent_model: str = "ggemini-2.5-pro"
     material_agent_provider: str = "gemini"
     material_agent_model: str = "gemini-2.5-flash-preview-05-20"
     structural_agent_provider: str = "gemini"
