@@ -439,6 +439,17 @@ uv run ruff check src/
 uv run python -m bridge_design_system.main
 ```
 
+```
+uv run python -m bridge_design_system.agents.chat_voice voice
+
+uv run python -m bridge_design_system.main --interactive --enable-command-server --disable-gaze
+
+  python -m bridge_design_system.agents.chat_voice voice
+
+```
+
 ## License
 
 This project is licensed under the MIT License. See the `LICENSE` file for details.
+
+

@@ -24,8 +24,8 @@ try:
 except ImportError:
     CHAT_DEPENDENCIES_AVAILABLE = False
 
-from .triage_agent_smolagents import TriageSystemWrapper
 from ..config.logging_config import get_logger
+from ..ipc import send_bridge_design_request
 
 logger = get_logger(__name__)
 load_dotenv()
@@ -49,9 +49,6 @@ class BridgeChatHandler(AsyncStreamHandler):
     def __init__(self, expected_layout: Literal["mono"] = "mono", output_sample_rate: int = 24000):
         super().__init__(expected_layout, output_sample_rate, input_sample_rate=16000)
         
-        # Initialize triage system directly
-        self.triage_system = TriageSystemWrapper()
-        
         # Async queues for audio
         self.input_queue: asyncio.Queue = asyncio.Queue()
         self.output_queue: asyncio.Queue = asyncio.Queue()
@@ -60,11 +57,11 @@ class BridgeChatHandler(AsyncStreamHandler):
         # Initialize session as None - will be set in start_up
         self.session = None
         
-        # Two-thread architecture: shared state for STS <-> Smolagents communication
+        # Two-terminal architecture: shared state for IPC communication
         self.processing_tasks: Dict[str, Dict] = {}  # Track active processing tasks
         self.task_lock = asyncio.Lock()  # Thread-safe access to shared state
         
-        logger.info("🌉 Bridge chat handler initialized with triage system")
+        logger.info("🌉 Bridge chat handler initialized for two-terminal IPC architecture")
 
     def copy(self) -> "BridgeChatHandler":
         return BridgeChatHandler(expected_layout="mono", output_sample_rate=self.output_sample_rate)
@@ -214,10 +211,10 @@ class BridgeChatHandler(AsyncStreamHandler):
     def _create_gemini_tools(self):
         """Create tool declarations for Gemini Live API (function_declarations format)."""
         
-        # Define the function declarations for Live API - Two-thread architecture
+        # Define the function declarations for Live API - Two-terminal architecture
         bridge_design_request_declaration = {
             "name": "bridge_design_request",
-            "description": "Start bridge design processing in background thread. This function implements the two-thread pattern: STS (voice) thread stays responsive while Smolagents thread handles complex processing.",
+            "description": "Send bridge design request to main.py system via TCP IPC. This implements two-terminal architecture: voice terminal communicates with main bridge design terminal.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -230,10 +227,10 @@ class BridgeChatHandler(AsyncStreamHandler):
             }
         }
         
-        # Status checking tool for two-thread architecture
+        # Status checking tool for two-terminal architecture
         are_smolagents_finished_declaration = {
             "name": "are_smolagents_finished_yet",
-            "description": "Check if the background processing thread has finished working on smolagents tasks. Returns status and results if available.",
+            "description": "Check if the main.py system has finished processing bridge design tasks. Returns status and results if available.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -252,16 +249,16 @@ class BridgeChatHandler(AsyncStreamHandler):
         return tools
     
     def _execute_bridge_design_request(self, user_request: str) -> str:
-        """Execute bridge design request - STS thread starts processing, returns immediately."""
+        """Execute bridge design request - Send via IPC to main.py system, returns immediately."""
         print("\n" + "🎆"*50)
-        print("🎆 [TWO-THREAD] STS THREAD STARTING PROCESSING! 🎆")
+        print("🎆 [TWO-TERMINAL] VOICE TERMINAL SENDING TO MAIN TERMINAL! 🎆")
         print("🎆"*50)
         
         # Generate unique task ID for tracking
         task_id = str(uuid.uuid4())[:8]
         timestamp = time.time()
         
-        print(f"🚨 [STS THREAD] Starting bridge_design_request()")
+        print(f"🚨 [VOICE TERMINAL] Starting bridge_design_request()")
         print(f"📝 [USER REQUEST] {user_request}")
         print(f"🏷️ [TASK ID] {task_id}")
         print(f"🕰 [TIMESTAMP] {timestamp}")
@@ -281,23 +278,23 @@ class BridgeChatHandler(AsyncStreamHandler):
             # Thread-safe: Add to shared state
             self.processing_tasks[task_id] = task_state
             
-            print(f"🧵 [STS THREAD] Task {task_id} added to shared state")
-            print("🎯 [STS THREAD] Starting Smolagents processing thread...")
+            print(f"🧵 [VOICE TERMINAL] Task {task_id} added to shared state")
+            print("🎯 [VOICE TERMINAL] Starting IPC processing thread...")
             
             # Start processing in separate thread (async task)
-            asyncio.create_task(self._run_smolagents_processing_thread(task_id))
+            asyncio.create_task(self._run_ipc_processing_thread(task_id))
             
-            return f"🚀 Started processing your request (Task ID: {task_id}). The bridge design agents are working in the background. You can ask me 'are the smolagents finished yet?' to check status, or continue our conversation!"
+            return f"🚀 Started processing your request (Task ID: {task_id}). The main bridge design system is working on it. You can ask me 'are the smolagents finished yet?' to check status, or continue our conversation!"
                 
         except Exception as e:
-            print(f"💥 [STS THREAD ERROR] Exception in bridge_design_request: {e}")
+            print(f"💥 [VOICE TERMINAL ERROR] Exception in bridge_design_request: {e}")
             import traceback
             traceback.print_exc()
             return f"❌ Error starting processing: {str(e)}"
     
     def _execute_are_smolagents_finished_yet(self, task_id: str = None) -> str:
-        """Check if smolagents processing thread has finished - STS thread polls status."""
-        print(f"🔍 [STS THREAD] Checking smolagents status for task_id: {task_id}")
+        """Check if main.py processing has finished - Voice terminal polls status."""
+        print(f"🔍 [VOICE TERMINAL] Checking main.py status for task_id: {task_id}")
         
         try:
             if not self.processing_tasks:
@@ -349,34 +346,34 @@ class BridgeChatHandler(AsyncStreamHandler):
                 return "\n".join(results)
                 
         except Exception as e:
-            print(f"💥 [STS THREAD ERROR] Exception checking status: {e}")
+            print(f"💥 [VOICE TERMINAL ERROR] Exception checking status: {e}")
             return f"❌ Error checking status: {str(e)}"
 
-    async def _run_smolagents_processing_thread(self, task_id: str):
-        """Execute smolagents processing in separate thread - updates shared state when done."""
+    async def _run_ipc_processing_thread(self, task_id: str):
+        """Execute bridge design request via IPC to main.py - updates shared state when done."""
         try:
-            print(f"🧵 [SMOLAGENTS THREAD] Starting processing for task {task_id}")
+            print(f"🧵 [IPC THREAD] Starting IPC processing for task {task_id}")
             
             # Get task from shared state
             task = self.processing_tasks.get(task_id)
             if not task:
-                print(f"💥 [SMOLAGENTS THREAD] Task {task_id} not found in shared state!")
+                print(f"💥 [IPC THREAD] Task {task_id} not found in shared state!")
                 return
                 
             user_request = task["user_request"]
-            print(f"🎯 [SMOLAGENTS THREAD] Processing: {user_request[:50]}...")
+            print(f"🎯 [IPC THREAD] Processing: {user_request[:50]}...")
             
             # Update status to processing
             async with self.task_lock:
                 self.processing_tasks[task_id]["status"] = "processing"
             
-            # Call the triage system (this is the heavy, blocking operation)
-            print("🔧 [SMOLAGENTS THREAD] Calling triage system...")
-            logger.info(f"🎯 Smolagents thread processing: {user_request[:100]}...")
+            # Send request via IPC to main.py (this is the heavy, blocking operation)
+            print("🔧 [IPC THREAD] Sending request to main.py via TCP...")
+            logger.info(f"🎯 IPC thread processing: {user_request[:100]}...")
             
-            response = self.triage_system.handle_design_request(user_request)
+            response = await send_bridge_design_request(user_request)
             
-            print(f"📊 [SMOLAGENTS THREAD] Processing completed for task {task_id}:")
+            print(f"📊 [IPC THREAD] Processing completed for task {task_id}:")
             print(f"    Success: {response.success}")
             print(f"    Message length: {len(response.message) if response.message else 0} characters")
             
@@ -386,20 +383,20 @@ class BridgeChatHandler(AsyncStreamHandler):
                     self.processing_tasks[task_id]["status"] = "completed"
                     self.processing_tasks[task_id]["result"] = response.message
                     self.processing_tasks[task_id]["announced"] = False  # Track if result was announced
-                    print(f"✅ [SMOLAGENTS THREAD] Task {task_id} completed successfully")
-                    print(f"📤 [SMOLAGENTS RESULT] {response.message}")
-                    logger.info(f"✅ Smolagents task {task_id} completed: {response.message}")
+                    print(f"✅ [IPC THREAD] Task {task_id} completed successfully")
+                    print(f"📤 [IPC RESULT] {response.message}")
+                    logger.info(f"✅ IPC task {task_id} completed: {response.message}")
                 else:
                     self.processing_tasks[task_id]["status"] = "error"
                     self.processing_tasks[task_id]["error"] = response.message
-                    print(f"❌ [SMOLAGENTS THREAD] Task {task_id} failed: {response.message}")
-                    logger.error(f"❌ Smolagents task {task_id} failed: {response.message}")
+                    print(f"❌ [IPC THREAD] Task {task_id} failed: {response.message}")
+                    logger.error(f"❌ IPC task {task_id} failed: {response.message}")
                 
                 self.processing_tasks[task_id]["finished_at"] = time.time()
                 
         except Exception as e:
-            print(f"💥 [SMOLAGENTS THREAD] Exception in task {task_id}: {e}")
-            logger.error(f"Smolagents thread error for task {task_id}: {e}")
+            print(f"💥 [IPC THREAD] Exception in task {task_id}: {e}")
+            logger.error(f"IPC thread error for task {task_id}: {e}")
             
             # Update shared state with error (thread-safe)
             async with self.task_lock:
@@ -518,7 +515,7 @@ class BridgeChatHandler(AsyncStreamHandler):
             logger.warning(f"Could not load system prompt from {prompt_path}: {e}. Using fallback.")
             return """You are a helpful bridge design assistant that can have natural conversations about bridge engineering.
 
-You have access to a specialized bridge design supervisor that coordinates geometry and structural analysis agents for complex tasks.
+You operate in a two-terminal architecture where you send requests to the main bridge design system via TCP IPC.
 
 **CRITICAL: You MUST use the bridge_design_request tool for ALL bridge design requests, no matter how simple they seem.**
 
@@ -538,13 +535,18 @@ You have access to a specialized bridge design supervisor that coordinates geome
 - Any request related to bridge design
 
 Available tools:
-- `bridge_design_request`: For ALL bridge design and engineering tasks - USE THIS TOOL FREQUENTLY
+- `bridge_design_request`: Sends requests to main.py bridge design system via TCP IPC - USE THIS TOOL FREQUENTLY
+- `are_smolagents_finished_yet`: Check if main.py has finished processing tasks
 
 Examples of when to use bridge_design_request:
 - "Show me the current bridge design status" -> USE TOOL
 - "Create a simple beam bridge" -> USE TOOL  
 - "What tools are available?" -> USE TOOL
 - "Reset the design session" -> USE TOOL
+
+Two-Terminal Architecture:
+- Terminal 1: main.py (bridge design system with --enable-command-server)
+- Terminal 2: voice chat (this interface) communicates via TCP
 
 Keep responses concise and natural for voice interaction. Be technical but accessible. When using tools, explain what you're doing and interpret the results for the user.
 
@@ -681,24 +683,24 @@ class BridgeTextChatInterface:
     """
     Text-based interface for bridge design chat (for testing without voice).
     
-    Uses the same supervisor tools but via text input/output.
+    Uses IPC to communicate with main.py system via text input/output.
     """
     
     def __init__(self):
         """Initialize text chat interface."""
-        self.triage_system = TriageSystemWrapper()
-        logger.info("🌉 Bridge text chat interface initialized")
+        logger.info("🌉 Bridge text chat interface initialized for two-terminal architecture")
     
     def chat_loop(self):
         """Run interactive text chat loop."""
-        print("🌉 Bridge Design Text Chat Interface")
-        print("=" * 50)
+        print("🌉 Bridge Design Text Chat Interface (Two-Terminal Architecture)")
+        print("=" * 70)
         print("Available commands:")
-        print("  <any request>    - Send request to triage agent")
-        print("  status           - Get system status")
-        print("  reset            - Reset design session")
+        print("  <any request>    - Send request to main.py via IPC")
+        print("  status           - Check interface status")
+        print("  reset            - Use 'reset' in main.py terminal")
         print("  help             - Show this help")
         print("  exit             - Exit chat")
+        print("💡 Make sure main.py is running with --enable-command-server")
         print()
         
         while True:
@@ -711,35 +713,35 @@ class BridgeTextChatInterface:
                 elif user_input.lower() == "help":
                     self._show_help()
                 elif user_input.lower() == "status":
-                    status = self.triage_system.get_status()
-                    print(f"📊 Status: {json.dumps(status, indent=2)}")
+                    print("📊 Status: Text chat interface using two-terminal IPC architecture")
+                    print("   Main.py system should be running with --enable-command-server")
                 elif user_input.lower() == "reset":
-                    self.triage_system.reset_all_agents()
-                    print("🔄 Reset: All agent memories cleared")
+                    print("🔄 Reset: Use 'reset' command in main.py terminal")
                 elif user_input:
-                    # Send any non-empty request to triage agent
+                    # Send any non-empty request to main.py via IPC
                     print("\n" + "="*60)
-                    print("🎯 [TEXT CHAT] Sending to triage agent...")
+                    print("🎯 [TEXT CHAT] Sending to main.py via IPC...")
                     print(f"📝 [USER INPUT] {user_input}")
                     print("="*60)
                     
                     try:
-                        print("🔧 [DEBUG] Calling triage_system.handle_design_request()...")
-                        response = self.triage_system.handle_design_request(user_input)
+                        print("🔧 [DEBUG] Calling main.py via TCP IPC...")
+                        response = asyncio.run(send_bridge_design_request(user_input))
                         
                         print(f"📊 [DEBUG] Response received:")
                         print(f"    Success: {response.success}")
                         print(f"    Message length: {len(response.message) if response.message else 0} characters")
                         
                         if response.success:
-                            print("✅ [SUCCESS] Triage agent completed successfully")
+                            print("✅ [SUCCESS] Main.py processing completed successfully")
                             print(f"📤 [RESPONSE] {response.message}")
                         else:
-                            print("❌ [FAILURE] Triage agent failed")
+                            print("❌ [FAILURE] Main.py processing failed")
                             print(f"💥 [ERROR] {response.message}")
                             
                     except Exception as e:
                         print(f"💥 [EXCEPTION] Error in text chat: {e}")
+                        print("💡 Make sure main.py is running with --enable-command-server")
                         import traceback
                         traceback.print_exc()
                     
@@ -751,19 +753,20 @@ class BridgeTextChatInterface:
     
     def _show_help(self):
         """Show help information."""
-        print("🌉 Bridge Design Chat Commands:")
-        print("  <any request>    - Send any request to triage agent")
+        print("🌉 Bridge Design Chat Commands (Two-Terminal Architecture):")
+        print("  <any request>    - Send any request to main.py via IPC")
         print("                     Examples:")
         print("                     'Create a cable stayed bridge'")
         print("                     'Modify element 021 center point'")
         print("                     'What is the current design status?'")
-        print("  status           - Check triage system and agent status")
-        print("  reset            - Clear all agent memories for fresh start")
+        print("  status           - Check text chat interface status")
+        print("  reset            - Use 'reset' command in main.py terminal")
         print("  help             - Show this help message")
         print("  exit             - Exit the chat interface")
         print()
-        print("💡 All requests are sent to the triage agent which")
-        print("   coordinates geometry and rational agents automatically.")
+        print("💡 All requests are sent via TCP to main.py which runs")
+        print("   the bridge design system with triage agent coordination.")
+        print("💡 Make sure main.py is running with --enable-command-server")
 
 
 def launch_text_chat():
