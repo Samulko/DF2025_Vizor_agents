@@ -29,9 +29,18 @@
     ],
     "tags": [
       "hexagon",
-      "irregular_polygon"
+      "polygon",
+      "6-sided"
     ],
-    "description": "This is a 6-sided polygon with angles (in degrees): [49.677942866879036, 64.53835054123412, 51.73457844798774, 105.56116333507603, 44.95234736570479, 43.535617443118284]."
+    "description": "This object is a polygon with 6 vertices. It is a hexagon.",
+    "angles": [
+      2846.336461164202,
+      3697.7751027485674,
+      2964.172999958166,
+      6048.2091395909865,
+      2575.5797832609087,
+      2494.407137986806
+    ]
   },
   {
     "id": "object_002",
@@ -63,9 +72,18 @@
     ],
     "tags": [
       "hexagon",
-      "irregular_polygon"
+      "polygon",
+      "6-sided"
     ],
-    "description": "This is a 6-sided polygon with angles (in degrees): [91.58047206329405, 69.42208140611156, 23.725546331480505, 45.105021646550895, 78.26407611191838, 51.90280244064462]."
+    "description": "This object is a polygon with 6 vertices. It is a hexagon.",
+    "angles": [
+      5247.174535042492,
+      3977.59226958382,
+      1359.373671435926,
+      2584.3273751935853,
+      4484.201248703569,
+      2973.811524750245
+    ]
   },
   {
     "id": "object_003",
@@ -97,8 +115,17 @@
     ],
     "tags": [
       "hexagon",
-      "irregular_polygon"
+      "polygon",
+      "6-sided"
     ],
-    "description": "This is a 6-sided polygon with angles (in degrees): [85.41801246198236, 49.32103842257332, 33.818962669663115, 103.3303674012378, 62.15742471428628, 93.59211966958335]."
+    "description": "This object is a polygon with 6 vertices. It is a hexagon.",
+    "angles": [
+      4894.091608467459,
+      2825.8873428160223,
+      1937.6838284821797,
+      5920.39394762711,
+      3561.3581015307605,
+      5362.433452750463
+    ]
   }
 ]

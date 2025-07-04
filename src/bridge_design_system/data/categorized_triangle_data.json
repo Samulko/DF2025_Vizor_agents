@@ -16,7 +16,7 @@
       ]
     ],
     "tags": [],
-    "description": "A triangle with vertices at [[0.0, 0.0], [0.061840090558705235, -0.053291045392879405], [0.050443200137388566, 0.06795782778743176]]. It has angles 136.12 degrees, 138.04 degrees, 85.83 degrees. The side lengths are 0.0816, 0.1218, 0.0846. Its perimeter is 0.2881.",
+    "description": "A triangle with vertices at [[0.0, 0.0], [0.061840090558705235, -0.053291045392879405], [0.050443200137388566, 0.06795782778743176]]. It has angles 136.12 degrees, 138.04 degrees, 85.83 degrees. The side lengths are 0.0816, 0.1218, 0.0846 and its perimeter is 0.2881.",
     "angles": [
       136.12309213781688,
       138.04474349542087,
@@ -46,7 +46,7 @@
       ]
     ],
     "tags": [],
-    "description": "A triangle with vertices at [[0.0, 0.0], [-0.0738188927305059, -0.11308831915570057], [0.11157003616175412, -0.07146229643452724]]. It has angles 135.79 degrees, 134.70 degrees, 89.51 degrees. The side lengths are 0.1350, 0.1900, 0.1325. Its perimeter is 0.4575.",
+    "description": "A triangle with vertices at [[0.0, 0.0], [-0.0738188927305059, -0.11308831915570057], [0.11157003616175412, -0.07146229643452724]]. It has angles 135.79 degrees, 134.70 degrees, 89.51 degrees. The side lengths are 0.1350, 0.1900, 0.1325 and its perimeter is 0.4575.",
     "angles": [
       135.78960817853394,
       134.70488363310184,
@@ -76,7 +76,7 @@
       ]
     ],
     "tags": [],
-    "description": "A triangle with vertices at [[0.0, 0.0], [-0.07921908941353806, -0.06807796256734876], [-0.014894840612022675, -0.16585751455952313]]. It has angles 82.66 degrees, 141.53 degrees, 135.81 degrees. The side lengths are 0.1045, 0.1170, 0.1665. Its perimeter is 0.3880.",
+    "description": "A triangle with vertices at [[0.0, 0.0], [-0.07921908941353806, -0.06807796256734876], [-0.014894840612022675, -0.16585751455952313]]. It has angles 82.66 degrees, 141.53 degrees, 135.81 degrees. The side lengths are 0.1045, 0.1170, 0.1665 and its perimeter is 0.3880.",
     "angles": [
       82.66435881008178,
       141.52940998800517,

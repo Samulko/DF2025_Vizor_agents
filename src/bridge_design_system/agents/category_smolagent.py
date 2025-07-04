@@ -4,23 +4,23 @@ import math
 import argparse
 from pathlib import Path
 from typing import Dict, List, Any
-import re
+import os
+import logging
+
+import google.generativeai as genai
 
 from smolagents import CodeAgent, tool
-from bridge_design_system.config.logging_config import get_logger
 from bridge_design_system.config.model_config import ModelProvider
 from bridge_design_system.config.settings import settings
 
+# Setup logger
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
-logger = get_logger(__name__)
-
-# 默认数据目录
-# category_smolagent.py
+# Default data directory
 BASE_DIR = Path(__file__).resolve().parents[1] / "data"
 
-
-
-# ─── STEP 1: TOOLS ────────────────────────────────────────────────────────────
+# ─── TOOLS ────────────────────────────────────────────────────────────────
 
 @tool
 def calculate_distance(point1: List[float], point2: List[float]) -> float:
@@ -35,7 +35,6 @@ def calculate_distance(point1: List[float], point2: List[float]) -> float:
         The Euclidean distance between point1 and point2.
     """
     return math.hypot(point2[0] - point1[0], point2[1] - point1[1])
-
 
 @tool
 def calculate_angles(vertices: List[List[float]]) -> List[float]:
@@ -64,7 +63,6 @@ def calculate_angles(vertices: List[List[float]]) -> List[float]:
             angles.append(0.0)
     return angles
 
-
 @tool
 def save_categorized_data(data: Dict[str, Any], filename: str) -> str:
     """
@@ -83,33 +81,83 @@ def save_categorized_data(data: Dict[str, Any], filename: str) -> str:
         json.dump(data, f, ensure_ascii=False, indent=2)
     return f"✅ Data written to {out_path}"
 
-
 @tool
-def generate_tags_from_description(description: str) -> list:
+def generate_tags_from_description(description: str) -> dict:
     """
-    Generate prompt tags from a description (keyword-based fallback).
-
+    Clean up the description and generate tags using Google Generative AI.
+    
     Args:
-        description: The descriptive text for the object.
-
+        description: Description of the physical object
+        
     Returns:
-        A list of tags extracted from the description.
+        Dictionary with 'clean_description' (string) and 'tags' (list) keys.
+        Example: {"clean_description": ..., "tags": [...]}
     """
-    import re
-    words = re.findall(r'\b\w+\b', description.lower())
-    return list(set(words))
+    try:
+        # Get Gemini API key from settings
+        api_key = settings.gemini_api_key
+        
+        if not api_key:
+            logger.error("Gemini API key not found in settings")
+            return {"clean_description": description, "tags": []}
+        
+        # Configure the API
+        genai.configure(api_key=api_key)
+        
+        # Create the model
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        
+        # Prepare the prompt
+        prompt = f"""
+        For the following description of a physical object, provide:
+        1. A clean, grammatically correct version of the description
+        2. 2-5 concise, meaningful tags
+        
+        Format your response exactly like this:
+        Clean Description: [clean description here]
+        Tags: [tag1, tag2, tag3]
+        
+        Original description: '{description}'
+        """
+        
+        # Generate content
+        response = model.generate_content(prompt)
+        
+        # Parse the response
+        response_text = response.text.strip()
+        
+        # Extract clean description and tags
+        clean_description = description  # fallback
+        tags = []
+        
+        # Parse the structured response
+        lines = response_text.split('\n')
+        for line in lines:
+            line = line.strip()
+            if line.startswith('Clean Description:'):
+                clean_description = line.replace('Clean Description:', '').strip()
+            elif line.startswith('Tags:'):
+                tags_part = line.replace('Tags:', '').strip()
+                # Parse comma-separated tags
+                tags = [tag.strip() for tag in tags_part.split(',') if tag.strip()]
+        
+        return {
+            "clean_description": clean_description,
+            "tags": tags
+        }
+        
+    except Exception as e:
+        logger.error(f"Tag generation failed: {e}")
+        return {"clean_description": description, "tags": []}
 
-
-# ─── STEP 2: AGENT FACTORY ────────────────────────────────────────────────────
+# ─── AGENT FACTORY ────────────────────────────────────────────────────────
 
 def create_category_agent(model_name: str = None) -> CodeAgent:
-    """
-    Create a category agent for shape analysis.
-    """
     agent_name = 'category'
     if model_name is None:
         model_name = getattr(settings, 'category_agent_model', 'gemini-2.5-flash-preview-05-20')
     model = ModelProvider.get_model(agent_name, temperature=None)
+    # Register all computation tools, including tag generation
     tools = [calculate_distance, calculate_angles, save_categorized_data, generate_tags_from_description]
     agent = CodeAgent(
         tools=tools,
@@ -121,8 +169,7 @@ def create_category_agent(model_name: str = None) -> CodeAgent:
     )
     return agent
 
-
-# ─── STEP 3: SHAPE ANALYSIS ──────────────────────────────────────────────────
+# ─── SHAPE ANALYSIS ───────────────────────────────────────────────────────
 
 def load_catalog(path: Path) -> Dict[str, Any]:
     if not path.exists():
@@ -160,110 +207,104 @@ def analyze_shape(vertices: List[List[float]]) -> str:
     else:
         return f"polygon_{n}"
 
+def generate_shape_description(shape_type, vertices, angles=None, side_lengths=None, perimeter=None):
+    desc = f"A {shape_type} with vertices at {vertices}."
+    if angles:
+        desc += f" It has angles {', '.join(f'{a:.2f} degrees' for a in angles)}."
+    if side_lengths:
+        desc += f" The side lengths are {', '.join(f'{l:.4f}' for l in side_lengths)}."
+    if perimeter:
+        desc += f" Its perimeter is {perimeter:.4f}."
+    return desc
 
-def categorize(catalog: Dict[str, Any], agent=None) -> Dict[str, Any]:
-    """
-    Categorize shapes into triangles, squares, hexagons, octagons, and general polygons.
-    Polygons with 8 or more sides are grouped as 'polygon_8plus'.
-    Extract tags from description if present. Always include a 'description' field in output.
-    """
-    stats = {"total": 0, "types": {}}
-    categorized = {
-        "triangle": [],
-        "square": [],
-        "hexagon": [],
-        "octagon": [],
-        "polygon_8plus": [],
-        "other_polygons": []
-    }
+
+# ─── MAIN PROCESSING LOGIC ────────────────────────────────────────────────
+
+def process_catalog(catalog: Dict[str, Any], agent: CodeAgent) -> Dict[str, Any]:
+    logger.info("Processing catalog items...")
     for obj in catalog.get("catalog", []):
-        stats["total"] += 1
-        verts = obj.get("vertices", [])
-        description = obj.get("description", "")
-        tags = []
-        if description:
-            if agent:
-                prompt = f"Extract 3-5 meaningful, comma-separated tags from this description: '{description}'"
-                tags_str = agent.run(prompt)
-                if isinstance(tags_str, str):
-                    tags = [tag.strip() for tag in tags_str.split(',') if tag.strip()]
-                elif isinstance(tags_str, list):
-                    tags = tags_str
-                else:
-                    tags = [str(tags_str)]
-            else:
-                tags = generate_tags_from_description(description)
-        # Always include description in output
-        obj["description"] = description
-        obj["tags"] = tags
-        shape = analyze_shape(verts)
-        if shape == "triangle":
-            categorized["triangle"].append(obj)
-            stats["types"]["triangle"] = stats["types"].get("triangle", 0) + 1
-        elif shape == "square":
-            categorized["square"].append(obj)
-            stats["types"]["square"] = stats["types"].get("square", 0) + 1
-        elif shape == "hexagon":
-            categorized["hexagon"].append(obj)
-            stats["types"]["hexagon"] = stats["types"].get("hexagon", 0) + 1
-        elif shape == "octagon":
-            categorized["octagon"].append(obj)
-            stats["types"]["octagon"] = stats["types"].get("octagon", 0) + 1
-        elif shape.startswith("polygon_"):
-            n = int(shape.split("_")[1])
-            if n >= 8:
-                categorized["polygon_8plus"].append(obj)
-                stats["types"]["polygon_8plus"] = stats["types"].get("polygon_8plus", 0) + 1
-            else:
-                categorized["other_polygons"].append(obj)
-                stats["types"]["other_polygons"] = stats["types"].get("other_polygons", 0) + 1
-        else:
-            categorized["other_polygons"].append(obj)
-            stats["types"]["other_polygons"] = stats["types"].get("other_polygons", 0) + 1
-    categorized["stats"] = stats
-    return categorized
+        vertices = obj.get("vertices", [])
+        raw_description = obj.get("description", "")
+        # Clean up the description using the LLM
+        cleaned_description = clean_description_with_llm(agent, raw_description)
+        obj["description"] = cleaned_description
+        # Generate tags from the cleaned description
+        obj["tags"] = safe_generate_tags(agent, cleaned_description)
+        # Analyze shape
+        shape = analyze_shape(vertices)
+        obj["shape_type"] = shape
+        # Calculate angles, side lengths, perimeter
+        angles = calculate_angles(vertices)
+        side_lengths = [calculate_distance(vertices[i], vertices[(i+1)%len(vertices)]) for i in range(len(vertices))] if len(vertices) >= 3 else []
+        perimeter = sum(side_lengths) if side_lengths else 0.0
+        # Generate shape description (local, not LLM)
+        desc = generate_shape_description(shape, vertices, angles, side_lengths, perimeter)
+        obj["shape_analysis"] = desc
+        obj["angles"] = angles
+        obj["side_lengths"] = side_lengths
+        obj["perimeter"] = perimeter
+    logger.info("Catalog processing complete.")
+    return catalog
 
+# ─── CLI ENTRY POINT ──────────────────────────────────────────────────────
 
-# ─── STEP 4: DEMO & CLI ────────────────────────────────────────────────────────
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--catalog", type=Path, default=BASE_DIR/"found_material_catalog.json")
+    parser.add_argument("--output", type=str, default="material_categories.json")
+    args = parser.parse_args()
 
-def demo(catalog_file: Path, out_file: str):
     logger.info("Loading catalog...")
-    catalog = load_catalog(catalog_file)
+    catalog = load_catalog(args.catalog)
+    logger.info("Creating category agent...")
     agent = create_category_agent()
-    logger.info("Categorizing locally...")
-    result = categorize(catalog, agent)
-    logger.info(f"Total objects: {result['stats']['total']}")
-    # Save each category to its own file
-    for shape in ["triangle", "square", "hexagon", "octagon", "polygon_8plus", "other_polygons"]:
-        if result[shape]:
-            fname = f"{shape}_categories.json"
-            msg = save_categorized_data(result[shape], fname)
-            logger.info(f"{shape.capitalize()}s: {msg}")
-    # Save a general file with all categories
-    general_categories = {shape: result[shape] for shape in ["triangle", "square", "hexagon", "octagon", "polygon_8plus", "other_polygons"]}
-    msg = save_categorized_data(general_categories, "all_categories.json")
-    logger.info(f"All categories: {msg}")
-    # Optionally, run analysis for each shape type
-    for shape in ["triangle", "square", "hexagon", "octagon", "polygon_8plus", "other_polygons"]:
-        sample = result[shape][:3] if result[shape] else []
-        if sample:
-            prompt = (
-                f"The variable `{shape}` is a list of objects to analyze.\n"
-                f"{shape} = {sample}\n"
-                f"Please analyze the list `{shape}`."
-            )
-            analysis = agent.run(prompt)
-            if isinstance(analysis, (dict, list)):
-                analysis_str = json.dumps(analysis, ensure_ascii=False, indent=2)
-            else:
-                analysis_str = str(analysis)
-            logger.info(f"Agent analysis for {shape}s:\n{analysis_str}")
+    logger.info("Processing catalog...")
+    updated_catalog = process_catalog(catalog, agent)
+    logger.info("Saving updated catalog...")
+    msg = save_categorized_data(updated_catalog, args.output)
+    logger.info(msg)
+    logger.info("Done.")
+
+def testTags():
+    description = "Eh, the first piece is 10 cm thick, no, 10 mm thick, wooden, and stiff"
+    result = generate_tags_from_description(description)
+    print("Result:", result)
+    print("Clean Description:", result["clean_description"])
+    print("Tags:", result["tags"])
+
+def demo_category_agent():
+    """
+    Demonstrates how to create and use the category agent with a natural language task.
+    """
+    # Path of the json output in the data directory
+    data_dir = Path(__file__).resolve().parents[1] / "data"
+    jsonPath = data_dir / "demo_output.json"
+    jsonPath = "demo_output.json"
+    print("🤖 Creating category agent...")
+    agent = create_category_agent()
+    print(f"Agent created: {agent.name}")
+    print(f"Available tools: {len(agent.tools)}")
+    print(f"Max steps: {agent.max_steps}")
+
+    # Example task for the agent
+    print("\n📝 Running example agentic task...")
+
+    # Use the jsonPath variable in the task string
+    task = (
+        f"Given the vertices [[0,0], [1,0], [1,1], [0,1]] and the description 'Eh, the first piece is 10 cm thick, no, 10 mm thick, wooden, and stiff', "
+        f"classify the shape, calculate its angles and side lengths, generate a clean description and tags, and save the result to {jsonPath}."
+    )
+    result = agent.run(task)
+    print(f"Result: {result}")
+
+    # Check if json is created and throw an error if it's not
+    if not jsonPath.exists():
+        raise FileNotFoundError(f"❌ Output file '{jsonPath}' was not created by the agent.")
+    else:
+        print(f"✅ Output file '{jsonPath}' was successfully created.")
 
 
-
-if __name__=="__main__":
-    p = argparse.ArgumentParser()
-    p.add_argument("--catalog", type=Path, default=BASE_DIR/"found_material_catalog.json")
-    p.add_argument("--output", type=str, default="material_categories.json")
-    args = p.parse_args()
-    demo(args.catalog, args.output)
+if __name__ == "__main__":
+    # main()
+    # testTags()
+    demo_category_agent()
