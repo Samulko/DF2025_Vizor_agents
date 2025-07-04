@@ -7,14 +7,18 @@ instead of custom coordination code.
 """
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Generator
 
 from smolagents import CodeAgent, tool
 
 from ..config.logging_config import get_logger
 from ..config.model_config import ModelProvider
 from ..memory import track_design_changes
+from ..monitoring.workshop_logging import add_workshop_logging
 from .rational_smolagents import create_rational_agent
+
+# NOTE: Voice capabilities moved to bridge_chat_agent.py (chat-supervisor pattern)
+# The triage agent is now purely for bridge design coordination without voice/chat handling
 
 # OLD FILE-BASED MEMORY TOOLS - COMMENTED OUT, USING NATIVE MEMORY INSTEAD
 # from ..tools.memory_tools import clear_memory, recall, remember, search_memory
@@ -151,6 +155,9 @@ def create_triage_system(
         manager.prompt_templates["system_prompt"] + "\n\n" + custom_prompt
     )
 
+    # Add modular workshop logging - just 1 line!
+    add_workshop_logging(manager, "triage_agent")
+
     logger.info("Created triage system with native smolagents delegation")
     return manager
 
@@ -163,7 +170,7 @@ def get_triage_system_prompt() -> str:
 
     if not prompt_path.exists():
         raise FileNotFoundError(f"Required system prompt file not found: {prompt_path}")
-
+    
     return prompt_path.read_text(encoding="utf-8")
 
 
@@ -456,6 +463,9 @@ class TriageSystemWrapper:
         self.component_registry = component_registry
         self.logger = logger
 
+        # Add modular workshop logging - just 1 line!
+        add_workshop_logging(self.manager, "triage_agent")
+
         logger.info("✅ Created TriageSystemWrapper with proper managed_agents pattern")
 
     def handle_design_request(
@@ -727,3 +737,29 @@ class TriageSystemWrapper:
         except Exception as e:
             logger.error(f"❌ Error generating design history summary: {e}")
             return {"error": str(e)}
+
+
+# NOTE: Voice capabilities moved to bridge_chat_agent.py using chat-supervisor pattern
+# This file now focuses purely on bridge design coordination without voice/chat handling
+
+
+# CLI entry point (voice moved to bridge_chat_agent.py)
+if __name__ == "__main__":
+    import sys
+    
+    print("🌉 Bridge Design Triage Agent (Supervisor)")
+    print("=" * 50)
+    print("NOTE: This is the pure bridge design supervisor.")
+    print("For voice/chat interface, use:")
+    print("  python launch_voice_agent.py           # Chat-supervisor pattern")
+    print("  python launch_voice_agent.py text      # Text interface")
+    print()
+    print("This module provides:")
+    print("  - BridgeDesignSupervisor: Pure coordination logic")
+    print("  - TriageSystemWrapper: Backward compatibility")
+    print("  - Factory functions for supervisor creation")
+    print()
+    print("Architecture: Chat-Supervisor Pattern")
+    print("  💬 Chat: bridge_chat_agent.py (Gemini Live API)")
+    print("  🔧 Supervisor: triage_agent_smolagents.py (Bridge design)")
+    print("  🎯 Integration: Tools connect chat to supervisor")

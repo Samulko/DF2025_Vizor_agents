@@ -341,4 +341,9 @@ def get_user_input(prompt: str = "Designer> ", voice_enabled: bool = False) -> s
         # Standard keyboard input
         if voice_enabled:
             logger.warning("Voice input requested but dependencies not available - using keyboard")
-        return input(f"\n{prompt}").strip()
+        try:
+            return input(f"\n{prompt}").strip()
+        except EOFError:
+            # Input stream closed (e.g., when process is terminated)
+            logger.debug("EOFError in input - stream closed")
+            raise  # Re-raise to be handled by caller

@@ -28,6 +28,18 @@ dependencies = [
     "mcpadapt[smolagents]>=0.1.9",
     "psutil>=5.9.0",
     "roslibpy>=1.6.0",
+    # OpenTelemetry dependencies for monitoring and tracing
+    "opentelemetry-sdk>=1.20.0",
+    "opentelemetry-exporter-otlp>=1.20.0",
+    "openinference-instrumentation-smolagents>=0.1.0",
+    "arize-phoenix>=5.0.0",
+    # Voice and chat dependencies for full system operation
+    "fastrtc[stt,tts,vad]>=0.0.28",
+    "google-genai>=1.24.0", 
+    "gradio>=5.35.0",
+    # Additional dependencies for complete functionality
+    "pillow>=10.0.0",  # Image processing for multimodal
+    "numpy>=1.24.1",   # Required by many AI/ML packages
 ]
 
 [project.optional-dependencies]
@@ -38,6 +50,9 @@ dev = [
     "black>=23.0.0",
     "ruff>=0.1.0",
     "ipython>=8.0.0",
+]
+telemetry = [
+    # Telemetry dependencies now included in main dependencies
 ]
 voice = [
     "pyaudio>=0.2.13",
@@ -51,6 +66,18 @@ voice = [
     "torchaudio>=2.0.0",
     "pvcobra>=2.0.0",
     "numba>=0.58.0",
+]
+chat = [
+    # Chat-supervisor pattern dependencies (included in main dependencies)
+    # All chat dependencies are now in main deps for easier setup
+]
+multimodal = [
+    # Multimodal chat dependencies (audio + video + images)
+    "google-genai>=0.8.0",
+    "fastrtc>=0.0.28",
+    "gradio>=5.0.0", 
+    "pillow>=10.0.0",  # For image processing
+    "websockets>=11.0.0",  # For WebRTC handling
 ]
 
 [project.scripts]
@@ -86,6 +113,7 @@ select = [
 ]
 
 # UV mirror configuration for China firewall bypass
+# This enables fast package installation in China and other regions with PyPI access issues
 # Active configuration - change mirror if needed for your location
 [[tool.uv.index]]
 name = "aliyun"
