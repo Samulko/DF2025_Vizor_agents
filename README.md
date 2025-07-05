@@ -444,12 +444,11 @@ This is meant to be run in WSL
 
 # Run this in terminal 1
 
-uv run python -m bridge_design_system.main --interactive --enable-command-server --disable-gaze
+uv run python start_TEAM.py 
 
 # Run this in terminal 2
 
-uv run python -m bridge_design_system.agents.chat_voice voice
-```
+uv run python -m bridge_design_system.agents.chat2 voice```
 
 ## License
 
