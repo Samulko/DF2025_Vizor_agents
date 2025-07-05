@@ -1,7 +1,7 @@
 {
   "ratings": {
+    "storage": 20,
     "self_weight": 30,
-    "complexity": 50,
-    "storage": 70
+    "complexity": 80
   }
 }

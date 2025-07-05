@@ -70,16 +70,27 @@ def main():
             processes.append(("LCARS", lcars_process))
             time.sleep(2)  # Wait for LCARS to start
         
+        # 3. Start Desk Design Voice Interface
+        desk_process = run_command_in_background(
+            "uv run python -m bridge_design_system.agents.chat2",
+            "Desk Design Interface"
+        )
+        if desk_process:
+            processes.append(("Desk Design", desk_process))
+            time.sleep(2)  # Wait for Desk Design to start
+        
         print("\n" + "=" * 60)
         print("🎯 Background services started successfully!")
         print("=" * 60)
         print("📊 Phoenix UI:     http://localhost:6006")
         print("🖥️  LCARS Monitor:  http://localhost:5000")
+        print("🪑 Desk Design UI: http://localhost:7860")
         print("📡 TCP Command:    localhost:8082")
         print("=" * 60)
         print("🚀 Starting Main System in foreground...")
         print("   (You can interact with it normally)")
-        print("   (Voice interface: python -m bridge_design_system.agents.chat_voice voice)")
+        print("   (Voice interfaces available via web UIs)")
+        print("   (Bridge voice: python -m bridge_design_system.agents.chat_voice voice)")
         print("   (Press Ctrl+C to stop all services)")
         print("=" * 60)
         
