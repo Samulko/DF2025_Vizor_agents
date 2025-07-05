@@ -53,8 +53,8 @@ def create_triage_system(
 
     # REFACTORED: Removed shared component tracking - geometry agent is now autonomous
 
-    # Create autonomous geometry agent with full MCP access (proper smolagents pattern)
-    geometry_monitor = None
+    # Create design agent as the single managed agent
+    design_monitor = None
     if monitoring_callback:
         # Check if it's a remote callback factory or local callback
         if (
@@ -63,38 +63,16 @@ def create_triage_system(
             and "create" in monitoring_callback.__name__
         ):
             # Remote monitoring factory - create callback for this agent
-            geometry_monitor = monitoring_callback("geometry_agent")
+            design_monitor = monitoring_callback("design_agent")
         else:
             # Local monitoring - use existing pattern
             from ..monitoring.agent_monitor import create_monitor_callback
 
-            geometry_monitor = create_monitor_callback("geometry_agent", monitoring_callback)
+            design_monitor = create_monitor_callback("design_agent", monitoring_callback)
 
-    geometry_agent = _create_mcp_enabled_geometry_agent(
-        monitoring_callback=geometry_monitor,
+    design_agent = _create_design_agent(
+        monitoring_callback=design_monitor,
     )
-
-
-    # Create rational agent for level validation
-    from .rational_smolagents import create_rational_agent
-
-    rational_monitor = None
-    if monitoring_callback:
-        # Check if it's a remote callback factory or local callback
-        if (
-            callable(monitoring_callback)
-            and hasattr(monitoring_callback, "__name__")
-            and "create" in monitoring_callback.__name__
-        ):
-            # Remote monitoring factory - create callback for this agent
-            rational_monitor = monitoring_callback("rational_agent")
-        else:
-            # Local monitoring - use existing pattern
-            from ..monitoring.agent_monitor import create_monitor_callback
-
-            rational_monitor = create_monitor_callback("rational_agent", monitoring_callback)
-
-    rational_agent = create_rational_agent(monitoring_callback=rational_monitor)
 
     # Note: Material and structural analysis can be added as separate agents if needed
 
@@ -142,7 +120,7 @@ def create_triage_system(
         max_steps=max_steps,
         step_callbacks=step_callbacks,
         additional_authorized_imports=["typing", "json", "datetime"],
-        managed_agents=[geometry_agent, rational_agent],  # Pass ManagedAgent instances
+        managed_agents=[design_agent],  # Pass single design agent instance
         **kwargs,
     )
 
@@ -174,28 +152,36 @@ def get_triage_system_prompt() -> str:
     return prompt_path.read_text(encoding="utf-8")
 
 
-def _create_mcp_enabled_geometry_agent(
+def _create_design_agent(
     monitoring_callback: Optional[Any] = None,
 ) -> Any:
     """
-    Create geometry agent using existing standalone implementation.
+    Create design agent using the design_agent.py implementation.
 
     Following smolagents best practices, this imports and configures
-    the standalone geometry agent for use in managed_agents.
+    the design agent for use in managed_agents.
 
     Args:
         monitoring_callback: Optional callback for real-time monitoring
 
     Returns:
-        SmolagentsGeometryAgent instance configured for managed_agents
+        Design agent instance configured for managed_agents
     """
-    logger.info("Creating geometry agent using standalone implementation")
+    logger.info("Creating design agent using design_agent.py implementation")
 
-    from .geometry_agent_smolagents import create_geometry_agent
+    from .design_agent import create_geometry_agent
 
-    return create_geometry_agent(
-        monitoring_callback=monitoring_callback,
-    )
+    # Add monitoring if provided
+    design_agent = create_geometry_agent(model_name="design")
+    
+    # Add monitoring callback to step_callbacks if provided
+    if monitoring_callback:
+        if not hasattr(design_agent, 'step_callbacks'):
+            design_agent.step_callbacks = []
+        design_agent.step_callbacks.append(monitoring_callback)
+        logger.info("Added monitoring callback to design agent")
+
+    return design_agent
 
 
 def _create_coordination_tools() -> List:
@@ -409,9 +395,8 @@ class TriageSystemWrapper:
         basic_coordination_tools = _create_coordination_tools()
         manager_tools = basic_coordination_tools
 
-        # Create managed agents using factory functions
-        geometry_monitor = None
-        rational_monitor = None
+        # Create managed design agent using factory function
+        design_monitor = None
 
         if monitoring_callback:
             if (
@@ -419,20 +404,16 @@ class TriageSystemWrapper:
                 and hasattr(monitoring_callback, "__name__")
                 and "create" in monitoring_callback.__name__
             ):
-                geometry_monitor = monitoring_callback("geometry_agent")
-                rational_monitor = monitoring_callback("rational_agent")
+                design_monitor = monitoring_callback("design_agent")
             else:
                 from ..monitoring.agent_monitor import create_monitor_callback
 
-                geometry_monitor = create_monitor_callback("geometry_agent", monitoring_callback)
-                rational_monitor = create_monitor_callback("rational_agent", monitoring_callback)
+                design_monitor = create_monitor_callback("design_agent", monitoring_callback)
 
-        # Create agents using the updated factory functions (returns agents directly)
-        self.geometry_agent = _create_mcp_enabled_geometry_agent(
-            monitoring_callback=geometry_monitor,
+        # Create single design agent using the updated factory function
+        self.design_agent = _create_design_agent(
+            monitoring_callback=design_monitor,
         )
-
-        self.rational_agent = create_rational_agent(monitoring_callback=rational_monitor)
 
         # Create triage manager with managed_agents and memory tracking
         manager_step_callbacks = [track_design_changes]
@@ -457,7 +438,7 @@ class TriageSystemWrapper:
             max_steps=6,
             step_callbacks=manager_step_callbacks,
             additional_authorized_imports=["typing", "json", "datetime"],
-            managed_agents=[self.geometry_agent, self.rational_agent],
+            managed_agents=[self.design_agent],
         )
 
         self.component_registry = component_registry
@@ -466,7 +447,7 @@ class TriageSystemWrapper:
         # Add modular workshop logging - just 1 line!
         add_workshop_logging(self.manager, "triage_agent")
 
-        logger.info("✅ Created TriageSystemWrapper with proper managed_agents pattern")
+        logger.info("✅ Created TriageSystemWrapper with single design agent pattern")
 
     def handle_design_request(
         self, request: str, gaze_id: Optional[str] = None
@@ -527,28 +508,20 @@ class TriageSystemWrapper:
             "triage": {
                 "initialized": True,
                 "type": "smolagents_managed_agents",
-                "managed_agents": 2,  # managed_geometry + managed_rational
+                "managed_agents": 1,  # single design agent
                 "max_steps": self.manager.max_steps,
             },
-            "geometry_agent": {
-                "initialized": hasattr(self, "geometry_agent") and self.geometry_agent is not None,
+            "design_agent": {
+                "initialized": hasattr(self, "design_agent") and self.design_agent is not None,
                 "type": (
-                    type(self.geometry_agent).__name__
-                    if hasattr(self, "geometry_agent")
+                    type(self.design_agent).__name__
+                    if hasattr(self, "design_agent")
                     else "Unknown"
                 ),
-                "name": "geometry_agent",
+                "name": "design_agent",
                 "mcp_integration": "enabled",
-            },
-            "rational_agent": {
-                "initialized": hasattr(self, "rational_agent") and self.rational_agent is not None,
-                "type": (
-                    type(self.rational_agent).__name__
-                    if hasattr(self, "rational_agent")
-                    else "Unknown"
-                ),
-                "name": "rational_agent",
-                "level_validation": "enabled",
+                "geometry_tools": "integrated",
+                "evaluation_criteria": "supported",
             },
         }
 
@@ -572,15 +545,9 @@ class TriageSystemWrapper:
                         agent.memory.steps.clear()
                         logger.info(f"✅ Cleared {steps_cleared} {agent_name} memory steps")
 
-                    # Special handling for geometry agent's internal component cache
-                    if hasattr(agent, "_wrapper"):
-                        wrapper = agent._wrapper
-                        if hasattr(wrapper, "internal_component_cache"):
-                            cache_cleared = len(wrapper.internal_component_cache)
-                            wrapper.internal_component_cache.clear()
-                            logger.info(
-                                f"✅ Cleared {cache_cleared} {agent_name} component cache entries"
-                            )
+                    # Special handling for design agent's MCP connection
+                    if hasattr(agent, "_mcp_connection"):
+                        logger.info(f"✅ Design agent MCP connection maintained")
 
             logger.info("🔄 All agent memories have been reset - starting fresh session")
 
@@ -588,9 +555,9 @@ class TriageSystemWrapper:
             logger.warning(f"⚠️ Error during agent reset: {e}")
             logger.info("🔄 Reset completed with warnings")
 
-    def transfer_geometry_memory(self, element_filter: Optional[str] = None) -> bool:
+    def transfer_design_memory(self, element_filter: Optional[str] = None) -> bool:
         """
-        Transfer design memory from geometry agent to triage agent.
+        Transfer design memory from design agent to triage agent.
 
         Uses smolagents native memory.steps transfer pattern from documentation
         to share design history between agents for coordination purposes.
@@ -604,14 +571,10 @@ class TriageSystemWrapper:
         try:
             from ..memory import transfer_agent_memory
 
-            logger.info("🔄 Transferring geometry memory to triage agent")
+            logger.info("🔄 Transferring design memory to triage agent")
 
-            # Get the actual geometry agent from wrapper if needed
-            geometry_agent = self.geometry_agent
-            if hasattr(geometry_agent, "_wrapper"):
-                source_agent = geometry_agent._wrapper.agent
-            else:
-                source_agent = geometry_agent
+            # Get the design agent directly
+            source_agent = self.design_agent
 
             # Transfer to triage manager
             success = transfer_agent_memory(
@@ -619,9 +582,9 @@ class TriageSystemWrapper:
             )
 
             if success:
-                logger.info("✅ Geometry memory transfer completed successfully")
+                logger.info("✅ Design memory transfer completed successfully")
             else:
-                logger.warning("⚠️ No geometry memory found to transfer")
+                logger.warning("⚠️ No design memory found to transfer")
 
             return success
 
@@ -633,7 +596,7 @@ class TriageSystemWrapper:
         """
         Query original element state across all agents.
 
-        Searches both triage and geometry agent memory for original element values.
+        Searches both triage and design agent memory for original element values.
         Solves the core use case: "What was element 002's original length?"
 
         Args:
@@ -647,24 +610,18 @@ class TriageSystemWrapper:
 
             logger.debug(f"🔍 Querying original state for element {element_id}")
 
-            # First check triage agent memory (may have transferred geometry memory)
+            # First check triage agent memory (may have transferred design memory)
             triage_result = get_original_element_state(self.manager, element_id)
             if triage_result:
                 logger.info(f"✅ Found original state in triage agent memory")
                 return triage_result
 
-            # Then check geometry agent memory directly
-            geometry_agent = self.geometry_agent
-            if hasattr(geometry_agent, "_wrapper"):
-                geometry_result = get_original_element_state(
-                    geometry_agent._wrapper.agent, element_id
-                )
-            else:
-                geometry_result = get_original_element_state(geometry_agent, element_id)
+            # Then check design agent memory directly
+            design_result = get_original_element_state(self.design_agent, element_id)
 
-            if geometry_result:
-                logger.info(f"✅ Found original state in geometry agent memory")
-                return geometry_result
+            if design_result:
+                logger.info(f"✅ Found original state in design agent memory")
+                return design_result
 
             logger.debug(f"🔍 No original state found for element {element_id}")
             return None
@@ -688,49 +645,43 @@ class TriageSystemWrapper:
 
             logger.debug("📊 Generating design history summary")
 
-            summary = {"triage_agent": {}, "geometry_agent": {}, "overall_statistics": {}}
+            summary = {"triage_agent": {}, "design_agent": {}, "overall_statistics": {}}
 
             # Get triage agent statistics
             summary["triage_agent"] = get_memory_statistics(self.manager)
             summary["triage_agent"]["agent_role"] = "coordination"
 
-            # Get geometry agent statistics
-            geometry_agent = self.geometry_agent
-            if hasattr(geometry_agent, "_wrapper"):
-                summary["geometry_agent"] = get_memory_statistics(geometry_agent._wrapper.agent)
-                geometry_changes = get_element_changes_count(geometry_agent._wrapper.agent)
-            else:
-                summary["geometry_agent"] = get_memory_statistics(geometry_agent)
-                geometry_changes = get_element_changes_count(geometry_agent)
-
-            summary["geometry_agent"]["agent_role"] = "execution"
+            # Get design agent statistics
+            summary["design_agent"] = get_memory_statistics(self.design_agent)
+            design_changes = get_element_changes_count(self.design_agent)
+            summary["design_agent"]["agent_role"] = "execution"
 
             # Calculate overall statistics
             total_steps = summary["triage_agent"].get("total_steps", 0) + summary[
-                "geometry_agent"
+                "design_agent"
             ].get("total_steps", 0)
 
             total_design_changes = summary["triage_agent"].get("design_changes", 0) + summary[
-                "geometry_agent"
+                "design_agent"
             ].get("design_changes", 0)
 
             summary["overall_statistics"] = {
                 "total_memory_steps": total_steps,
                 "total_design_changes": total_design_changes,
-                "elements_modified": geometry_changes,
+                "elements_modified": design_changes,
                 "system_health": {
                     "has_design_activity": total_design_changes > 0,
                     "memory_coordination": "active" if total_steps > 0 else "inactive",
                     "agents_with_memory": sum(
                         1
-                        for stats in [summary["triage_agent"], summary["geometry_agent"]]
+                        for stats in [summary["triage_agent"], summary["design_agent"]]
                         if stats.get("total_steps", 0) > 0
                     ),
                 },
             }
 
             logger.info(
-                f"📊 Design history summary: {total_design_changes} changes across {len(geometry_changes)} elements"
+                f"📊 Design history summary: {total_design_changes} changes across {len(design_changes)} elements"
             )
             return summary
 
@@ -758,8 +709,10 @@ if __name__ == "__main__":
     print("  - BridgeDesignSupervisor: Pure coordination logic")
     print("  - TriageSystemWrapper: Backward compatibility")
     print("  - Factory functions for supervisor creation")
+    print("  - Single Design Agent: Unified geometry and analysis")
     print()
     print("Architecture: Chat-Supervisor Pattern")
     print("  💬 Chat: bridge_chat_agent.py (Gemini Live API)")
     print("  🔧 Supervisor: triage_agent_smolagents.py (Bridge design)")
+    print("  🎯 Design Agent: design_agent.py (MCP + evaluation criteria)")
     print("  🎯 Integration: Tools connect chat to supervisor")

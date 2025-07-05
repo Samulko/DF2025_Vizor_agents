@@ -8,14 +8,20 @@ Provides tools and a factory to:
 Follows smolagents patterns with a persistent MCP connection for Grasshopper integration.
 """
 
-from typing import List
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
-from smolagents import CodeAgent, tool
-from ..config.model_config import ModelProvider
 from mcp import StdioServerParameters
 from mcpadapt.core import MCPAdapt
 from mcpadapt.smolagents_adapter import SmolAgentsAdapter
+from smolagents import ToolCallingAgent, tool
+
+from ..config.logging_config import get_logger
+from ..config.model_config import ModelProvider
 from ..config.settings import settings
+from ..memory import track_design_changes
+
+logger = get_logger(__name__)
 
 
 # =============================================================================
@@ -46,109 +52,208 @@ def load_evaluation_criteria(path: str = "evaluation_criteria.json") -> dict:
     return data
 
 
-# @tool
-def convert_criteria_to_parameters(criteria: dict) -> dict:
+@tool
+def load_design_profile(path: str = "src/bridge_design_system/agents/design_profile.json") -> dict:
     """
-    Convert raw percentage values from JSON into design parameters:
-      - X_size (1–10 int)
-      - number_of_layers (1–50 int)
-      - model_rotation (0.08–0.80 float, 2 decimals)
-      - timber_units_per_layer (1–5 int)
+    Load design profile JSON containing user preferences and design constraints.
+    
+    Args:
+        path: Path to design_profile.json file (defaults to agents directory)
+    
+    Returns:
+        A dict containing design profile preferences including ratings for:
+        - self_weight: Weight preference rating (0-100)
+        - complexity: Complexity preference rating (0-100) 
+        - storage: Storage preference rating (0-100)
     """
-    from decimal import Decimal, ROUND_HALF_UP
+    from pathlib import Path
+    import json
 
-    mapping = {
-        "X_size": (Decimal(1), Decimal(10), "int"),
-        "number_of_layers": (Decimal(1), Decimal(50), "int"),
-        "model_rotation": (Decimal("0.08"), Decimal("0.80"), "float"),
-        "timber_units_per_layer": (Decimal(1), Decimal(5), "int"),
-    }
+    file_path = Path(path)
+    if not file_path.exists():
+        # Try relative to current file location
+        file_path = Path(__file__).parent / "design_profile.json"
+        if not file_path.exists():
+            # Try project root
+            file_path = Path(__file__).parent.parent.parent.parent / path
+            if not file_path.exists():
+                raise FileNotFoundError(f"Design profile JSON file not found: {path}")
+    
+    content = file_path.read_text(encoding="utf-8")
+    data = json.loads(content)
+    return data
 
-    results = {}
-    for key, pct in criteria.items():
-        if key not in mapping:
-            continue
-        min_v, max_v, typ = mapping[key]
-        ratio = Decimal(pct) / Decimal(100)
-        raw = min_v + ratio * (max_v - min_v)
-        if typ == "int":
-            val = int(raw.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
-            val = max(int(min_v), min(int(max_v), val))
-        else:
-            # float rotation, two decimal places
-            val_dec = raw.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-            val = float(val_dec)
-            val = max(float(min_v), min(float(max_v), val))
-        results[key] = val
-    return results
 
 
 # =============================================================================
-# STEP 2: CREATE THE AGENT TEMPLATE
-# This is the MVP agent that students will expand
+# STEP 2: CREATE THE DESIGN AGENT CLASS
+# Following the rational_smolagents_complete.py pattern
 # =============================================================================
 
 
-def create_geometry_agent(tools: List = None, model_name: str = "geometry") -> CodeAgent:
+class DesignSmolagent:
     """
-    Create a Geometry Agent configured for slider updates and multi-stage bakes.
+    Specialized smolagent for bridge design parameter updates and geometry creation.
 
-    This agent provides:
-    1. JSON loading of evaluation criteria
-    2. Conversion of percentages to slider values
-    3. MCP-based updates of Grasshopper slider components and three bake sequences.
+    This agent connects to the MCP server to access Grasshopper components and
+    performs design operations including parameter conversion and model baking.
+    """
+
+    def __init__(self, model_name: str = "design", **kwargs):
+        """
+        Initialize the design smolagent with MCP connection and custom tools.
+
+        Args:
+            model_name: Model configuration name from settings
+            **kwargs: Additional arguments for extensibility
+        """
+        self.model_name = model_name
+        
+        # Agent identification
+        self.name = "design_agent"
+        self.description = "Handles bridge design parameters and geometry creation via MCP connection"
+        
+        # Initialize model
+        self.model = ModelProvider.get_model(model_name, temperature=0.1)
+        
+        # MCP server configuration
+        self.stdio_params = StdioServerParameters(
+            command=settings.mcp_stdio_command,
+            args=settings.mcp_stdio_args.split(","),
+            env=None
+        )
+        
+        # Establish MCP connection
+        logger.info("Establishing MCP connection for design agent...")
+        try:
+            self.mcp_connection = MCPAdapt(self.stdio_params, SmolAgentsAdapter())
+            self.mcp_tools = self.mcp_connection.__enter__()
+            logger.info(f"MCP connection established with {len(self.mcp_tools)} tools")
+            
+            # Use MCP tools plus our custom design tools
+            all_tools = list(self.mcp_tools)
+            all_tools.extend([load_evaluation_criteria, load_design_profile])
+            
+            # Add native smolagents memory tracking callback
+            step_callbacks = [track_design_changes]
+            
+            # Create the ToolCallingAgent
+            self.agent = ToolCallingAgent(
+                tools=all_tools,
+                model=self.model,
+                max_steps=20,
+                name="design_agent",
+                description=self.description,
+                step_callbacks=step_callbacks,
+            )
+            
+            # Add specialized system prompt
+            custom_prompt = get_design_system_prompt()
+            self.agent.prompt_templates["system_prompt"] = (
+                self.agent.prompt_templates["system_prompt"] + "\n\n" + custom_prompt
+            )
+            
+            logger.info("Design smolagent initialized successfully")
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize design smolagent: {e}")
+            raise RuntimeError(f"Design smolagent initialization failed: {e}")
+
+    def run(self, task: str) -> Any:
+        """
+        Execute design task including parameter conversion and geometry creation.
+
+        Args:
+            task: Task description for design operations
+
+        Returns:
+            Result of the agent execution
+        """
+        logger.info(f"Executing design task: {task[:100]}...")
+        
+        try:
+            result = self.agent.run(task)
+            logger.info("Design task completed successfully")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Design task failed: {e}")
+            raise RuntimeError(f"Design smolagent execution failed: {e}")
+
+    def __del__(self):
+        """Clean up MCP connection when agent is destroyed."""
+        try:
+            if hasattr(self, "mcp_connection") and self.mcp_connection:
+                self.mcp_connection.__exit__(None, None, None)
+                logger.info("MCP connection closed for design smolagent")
+        except Exception as e:
+            logger.warning(f"Error closing MCP connection: {e}")
+
+
+def get_design_system_prompt() -> str:
+    """Get custom system prompt for design agent from file."""
+    current_file = Path(__file__)
+    project_root = current_file.parent.parent.parent.parent
+    prompt_path = project_root / "system_prompts" / "geometry_agent.md"
+    
+    if not prompt_path.exists():
+        # Return a default prompt if file doesn't exist
+        return """
+You are a specialized bridge design agent focused on parameter conversion and geometry creation with design profile integration.
+
+Your primary tasks:
+1. Load evaluation criteria from JSON files using load_evaluation_criteria
+2. Load design profile preferences using load_design_profile 
+3. Use MCP tools to update Grasshopper sliders and bake 3D models
+4. Handle multi-stage design workflows with parameter scaling
+5. Ensure all designs comply with design_profile.json preferences
+
+When working with design tasks:
+1. Always start by loading the design profile with load_design_profile to understand user preferences
+2. Load evaluation criteria with load_evaluation_criteria when needed
+3. Consider design profile ratings (self_weight, complexity, storage) in all design decisions
+4. Use MCP tools to update Grasshopper and create geometry that aligns with user preferences
+5. Verify results meet both technical requirements and design profile constraints
+
+Design Profile Integration:
+- self_weight rating: Consider weight implications in design choices
+- complexity rating: Balance design sophistication with user preference
+- storage rating: Consider storage and transportation requirements
+
+Be systematic, precise, and thorough in your design operations while always respecting the user's design profile preferences.
+        """.strip()
+    
+    return prompt_path.read_text(encoding="utf-8")
+
+
+def create_geometry_agent(tools: List = None, model_name: str = "design", **kwargs) -> ToolCallingAgent:
+    """
+    Factory function for creating design smolagent instances.
 
     Args:
-        tools: Optional initial tools (defaults to load + convert)
-        model_name: Model name for LLM configuration (default 'geometry')
+        tools: Optional additional tools (ignored, MCP tools are auto-added)
+        model_name: Model configuration name from settings
+        **kwargs: Additional arguments for agent configuration
 
     Returns:
-        A configured CodeAgent ready for geometry tasks.
+        Configured ToolCallingAgent for design operations
     """
-    # ESSENTIAL ELEMENT 1: Get the AI model
-    # This connects to the language model that powers the agent
-    model = ModelProvider.get_model(model_name)
-
-    # ESSENTIAL ELEMENT 2: Prepare the tools
-    # Tools are functions the agent can call to perform actions
-    agent_tools = tools or []  # Use provided tools or default empty list
-
-    # Add JSON-loading and conversion tools
-    agent_tools = [load_evaluation_criteria, convert_criteria_to_parameters] + agent_tools
-
-    # Set up persistent MCP connection and include GH_MCP commands as tools
-    stdio_params = StdioServerParameters(
-        settings.mcp_stdio_command,
-        settings.mcp_stdio_args.split(","),
-        env=None
-    )
-    mcp_connection = MCPAdapt(stdio_params, SmolAgentsAdapter())
-    mcp_tools = mcp_connection.__enter__()
-    agent_tools += list(mcp_tools)
-
-    # ESSENTIAL ELEMENT 3: Create the agent
-    # This is the core smolagents pattern
-    agent = CodeAgent(
-        tools=agent_tools,  # What the agent can do
-        model=model,  # How the agent thinks
-        max_steps=20,  # Increased steps for full workflow
-        additional_authorized_imports=["math", "json", "decimal", "pathlib"],  # Include needed modules
-        name="geometry_agent",  # Agent identifier
-        description="Geometry agent for parameter updates and bakes via MCP",  # What this agent does
-    )
-
-    # Inject geometry agent system prompt
-    from pathlib import Path
-    prompt_path = Path(__file__).parent.parent.parent.parent / "system_prompts" / "geometry_agent.md"
-    if not prompt_path.exists():
-        raise FileNotFoundError(f"Geometry system prompt not found: {prompt_path}")
-    geometry_prompt = prompt_path.read_text(encoding="utf-8")
-    agent.prompt_templates["system_prompt"] += "\n\n" + geometry_prompt
-
-    # Persist MCP connection for cleanup
-    agent._mcp_connection = mcp_connection
-
-    return agent
+    logger.info("Creating design smolagent...")
+    
+    wrapper = DesignSmolagent(model_name=model_name, **kwargs)
+    
+    # Extract the internal ToolCallingAgent
+    internal_agent = wrapper.agent
+    
+    # Store wrapper reference for proper cleanup
+    internal_agent._wrapper = wrapper
+    
+    # Add workshop logging
+    from ..monitoring.workshop_logging import add_workshop_logging
+    add_workshop_logging(internal_agent, "design_agent")
+    
+    logger.info("Design smolagent created successfully")
+    return internal_agent
 
 
 # =============================================================================
@@ -187,7 +292,7 @@ def demo_geometry_agent():
 # =============================================================================
 
 
-def create_agent_with_custom_tools(custom_tools: List) -> CodeAgent:
+def create_agent_with_custom_tools(custom_tools: List) -> ToolCallingAgent:
     """
     Creates an agent with student's custom tools.
 

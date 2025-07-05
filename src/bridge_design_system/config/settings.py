@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     syslogic_agent_model: str = "gemini-2.5-flash-preview-05-20"
     rational_agent_provider: str = "gemini"
     rational_agent_model: str = "gemini-2.5-flash-preview-05-20"
+    design_agent_provider: str = "gemini"
+    design_agent_model: str = "gemini-2.5-flash-preview-05-20"
 
     # MCP Configuration
     mcp_transport_mode: str = "http"  # "http" or "stdio"
