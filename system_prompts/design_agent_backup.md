@@ -32,7 +32,7 @@ The design agent is equipped with tools to:
 ## Design Task
 The agent is asked to:
 
-> Design a structure that packs into a box form, using the provided found objects data. The agent should generate or update the necessary Python scripts for Grasshopper components to realize this design.
+> Design a structure that packs into a given form, using the provided found objects data. The agent should generate or update the necessary Python scripts for Grasshopper components to realize this design.
 
 ## Expected Behavior
 - The agent should use the loaded data to generate a design that arranges the pieces in a form given by the task.

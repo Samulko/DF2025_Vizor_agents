@@ -200,18 +200,25 @@
             background: var(--lcars-orange);
         }
 
-        .agent-card[data-agent="geometry_agent"] .lcars-main-panel {
+        .agent-card[data-agent="surface_agent"] .lcars-main-panel {
             background: var(--lcars-red);
         }
-        .agent-card[data-agent="geometry_agent"] .lcars-status-section {
+        .agent-card[data-agent="surface_agent"] .lcars-status-section {
             background: var(--lcars-red);
         }
 
-        .agent-card[data-agent="syslogic_agent"] .lcars-main-panel {
+        .agent-card[data-agent="category_agent"] .lcars-main-panel {
             background: var(--lcars-purple);
         }
-        .agent-card[data-agent="syslogic_agent"] .lcars-status-section {
+        .agent-card[data-agent="category_agent"] .lcars-status-section {
             background: var(--lcars-purple);
+        }
+
+        .agent-card[data-agent="design_agent"] .lcars-main-panel {
+            background: var(--lcars-blue);
+        }
+        .agent-card[data-agent="design_agent"] .lcars-status-section {
+            background: var(--lcars-blue);
         }
 
         /* NEW AGENT TEMPLATE - UNCOMMENT AND MODIFY FOR NEW AGENTS */
@@ -226,9 +233,9 @@
 
         /* AVAILABLE LCARS COLORS FOR NEW AGENTS:
          * --lcars-orange (used by triage_agent)
-         * --lcars-red (used by geometry_agent) 
-         * --lcars-purple (used by syslogic_agent)
-         * --lcars-blue (available)
+         * --lcars-red (used by surface_agent) 
+         * --lcars-purple (used by category_agent)
+         * --lcars-blue (used by design_agent)
          * --lcars-pink (available)
          * --lcars-yellow (available)
          * 
@@ -900,12 +907,12 @@
             }
 
             renderAgents() {
-                const agentOrder = ['triage_agent', 'geometry_agent', 'syslogic_agent'];
+                const agentOrder = ['triage_agent', 'surface_agent', 'category_agent', 'design_agent'];
                 
                 /* NEW AGENT TEMPLATE - ADD YOUR AGENT TO THE ARRAY ABOVE
                  * 
                  * EXAMPLE: Add 'material_agent' to the array:
-                 * const agentOrder = ['triage_agent', 'geometry_agent', 'syslogic_agent', 'material_agent'];
+                 * const agentOrder = ['triage_agent', 'surface_agent', 'category_agent', 'design_agent', 'material_agent'];
                  * 
                  * NOTES:
                  * - Agent name must match exactly what you registered in server.py
