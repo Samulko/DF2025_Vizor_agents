@@ -1,0 +1,47 @@
+{
+  "circles": {
+    "weight": {
+      "name": "Self-Weight",
+      "color": "#FF3030",
+      "gradientId": "weightGradient",
+      "position": {"x": 200, "y": 200},
+      "minRadius": 40,
+      "maxRadius": 120,
+      "defaultValue": 20
+    },
+    "storage": {
+      "name": "Storage",
+      "color": "#FFCC00",
+      "gradientId": "storageGradient",
+      "position": {"x": 400, "y": 200},
+      "minRadius": 40,
+      "maxRadius": 120,
+      "defaultValue": 60
+    },
+    "complexity": {
+      "name": "Complexity",
+      "color": "#3366FF",
+      "gradientId": "complexityGradient",
+      "position": {"x": 300, "y": 350},
+      "minRadius": 40,
+      "maxRadius": 120,
+      "defaultValue": 20
+    }
+  },
+  "animations": {
+    "breathing": {
+      "amplitude": 3,
+      "period": 3500,
+      "phaseOffset": [0, 1200, 2400]
+    },
+    "transition": {
+      "duration": 650,
+      "easing": "ease-out"
+    }
+  },
+  "field_mapping": {
+    "weight": "surface_area",
+    "storage": "timber_layers", 
+    "complexity": "complexity"
+  }
+}

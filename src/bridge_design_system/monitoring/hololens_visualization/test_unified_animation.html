@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unified Animation Manager Test</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: 'Montserrat', sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            min-height: 100vh;
+        }
+        
+        .test-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+        }
+        
+        .test-button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: 'Montserrat', sans-serif;
+        }
+        
+        .test-button:hover {
+            background: #45a049;
+        }
+        
+        .test-button.danger {
+            background: #f44336;
+        }
+        
+        .test-button.danger:hover {
+            background: #da190b;
+        }
+        
+        .log-output {
+            background: rgba(0, 0, 0, 0.8);
+            color: #00FF00;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+        
+        .status-display {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>Unified Animation Manager Test</h1>
+        
+        <div class="test-section">
+            <h3>Animation State Tests</h3>
+            <button class="test-button" onclick="testRandomAnimation()">Test Random Animation</button>
+            <button class="test-button" onclick="testStableAnimation()">Test Stable Animation</button>
+            <button class="test-button" onclick="testDataUpdate()">Test Data Update</button>
+            <button class="test-button" onclick="testCollision()">Test Collision Detection</button>
+        </div>
+        
+        <div class="test-section">
+            <h3>Performance Tests</h3>
+            <button class="test-button" onclick="testPerformance()">Test Performance</button>
+            <button class="test-button" onclick="testMemoryUsage()">Test Memory Usage</button>
+            <button class="test-button" onclick="testFPS()">Test FPS</button>
+        </div>
+        
+        <div class="test-section">
+            <h3>System Control</h3>
+            <button class="test-button" onclick="startSystem()">Start System</button>
+            <button class="test-button" onclick="stopSystem()">Stop System</button>
+            <button class="test-button danger" onclick="resetSystem()">Reset System</button>
+        </div>
+        
+        <div class="status-display">
+            <h4>Current Status:</h4>
+            <div id="current-state">Not initialized</div>
+            <div id="update-count">Updates: 0</div>
+            <div id="fps-display">FPS: --</div>
+        </div>
+        
+        <div class="log-output" id="log-output">
+            <div>Test log will appear here...</div>
+        </div>
+    </div>
+
+    <script>
+        // 模拟测试环境
+        let testAnimationManager = null;
+        let testCollisionDetector = null;
+        let testAnimationUtils = null;
+        let fpsCounter = 0;
+        let lastFpsTime = 0;
+        
+        // 模拟DOM元素
+        const mockElements = {
+            'circle-weight': { setAttribute: () => {}, style: {}, classList: { add: () => {}, remove: () => {} } },
+            'circle-storage': { setAttribute: () => {}, style: {}, classList: { add: () => {}, remove: () => {} } },
+            'circle-complexity': { setAttribute: () => {}, style: {}, classList: { add: () => {}, remove: () => {} } },
+            'label-weight': { textContent: '', setAttribute: () => {}, classList: { add: () => {}, remove: () => {} } },
+            'label-storage': { textContent: '', setAttribute: () => {}, classList: { add: () => {}, remove: () => {} } },
+            'label-complexity': { textContent: '', setAttribute: () => {}, classList: { add: () => {}, remove: () => {} } },
+            'status-text': { textContent: '' }
+        };
+        
+        // 模拟document.getElementById
+        const originalGetElementById = document.getElementById;
+        document.getElementById = function(id) {
+            return mockElements[id] || originalGetElementById.call(document, id);
+        };
+        
+        function log(message) {
+            const logOutput = document.getElementById('log-output');
+            const timestamp = new Date().toLocaleTimeString();
+            logOutput.innerHTML += `<div>[${timestamp}] ${message}</div>`;
+            logOutput.scrollTop = logOutput.scrollHeight;
+            console.log(message);
+        }
+        
+        function updateStatus() {
+            document.getElementById('current-state').textContent = 
+                testAnimationManager ? testAnimationManager.getCurrentState() : 'Not initialized';
+            document.getElementById('update-count').textContent = 
+                testAnimationManager ? `Updates: ${testAnimationManager.getUpdateCount()}` : 'Updates: 0';
+        }
+        
+        function updateFPS() {
+            fpsCounter++;
+            const currentTime = performance.now();
+            if (currentTime - lastFpsTime >= 1000) {
+                document.getElementById('fps-display').textContent = `FPS: ${fpsCounter}`;
+                fpsCounter = 0;
+                lastFpsTime = currentTime;
+            }
+            requestAnimationFrame(updateFPS);
+        }
+        
+        // 测试函数
+        function testRandomAnimation() {
+            log('Testing random animation...');
+            if (testAnimationManager) {
+                testAnimationManager.animationState = 'random';
+                log('Random animation state set');
+            } else {
+                log('ERROR: Animation manager not initialized');
+            }
+        }
+        
+        function testStableAnimation() {
+            log('Testing stable animation...');
+            if (testAnimationManager) {
+                testAnimationManager.animationState = 'stable';
+                log('Stable animation state set');
+            } else {
+                log('ERROR: Animation manager not initialized');
+            }
+        }
+        
+        function testDataUpdate() {
+            log('Testing data update...');
+            if (testAnimationManager) {
+                const testData = {
+                    values: {
+                        'Self-Weight': Math.floor(Math.random() * 100),
+                        'Storage': Math.floor(Math.random() * 100),
+                        'Complexity': Math.floor(Math.random() * 100)
+                    }
+                };
+                testAnimationManager.handleDataChanged(testData);
+                log(`Data updated: ${JSON.stringify(testData.values)}`);
+                updateStatus();
+            } else {
+                log('ERROR: Animation manager not initialized');
+            }
+        }
+        
+        function testCollision() {
+            log('Testing collision detection...');
+            if (testCollisionDetector) {
+                const testCircles = {
+                    weight: {
+                        id: 'weight',
+                        position: { x: 100, y: 100 },
+                        currentRadius: 50,
+                        element: mockElements['circle-weight']
+                    },
+                    storage: {
+                        id: 'storage',
+                        position: { x: 120, y: 100 },
+                        currentRadius: 50,
+                        element: mockElements['circle-storage']
+                    }
+                };
+                testCollisionDetector.detectCollisions(testCircles);
+                log('Collision detection test completed');
+            } else {
+                log('ERROR: Collision detector not initialized');
+            }
+        }
+        
+        function testPerformance() {
+            log('Testing performance...');
+            if (testAnimationUtils) {
+                const result = testAnimationUtils.performanceMonitor.measure(() => {
+                    // 模拟一些计算
+                    let sum = 0;
+                    for (let i = 0; i < 1000000; i++) {
+                        sum += Math.random();
+                    }
+                    return sum;
+                });
+                log(`Performance test completed in ${result.duration.toFixed(2)}ms`);
+            } else {
+                log('ERROR: Animation utils not initialized');
+            }
+        }
+        
+        function testMemoryUsage() {
+            log('Testing memory usage...');
+            if (testAnimationUtils) {
+                const memoryInfo = testAnimationUtils.getMemoryUsage();
+                if (memoryInfo) {
+                    log(`Memory usage: ${(memoryInfo.used / 1024 / 1024).toFixed(2)}MB / ${(memoryInfo.total / 1024 / 1024).toFixed(2)}MB`);
+                } else {
+                    log('Memory usage information not available');
+                }
+            } else {
+                log('ERROR: Animation utils not initialized');
+            }
+        }
+        
+        function testFPS() {
+            log('Testing FPS...');
+            updateFPS();
+            log('FPS monitoring started');
+        }
+        
+        function startSystem() {
+            log('Starting unified animation system...');
+            
+            // 模拟初始化
+            testAnimationUtils = new AnimationUtils();
+            testCollisionDetector = new CollisionDetector();
+            
+            // 模拟动画管理器初始化
+            testAnimationManager = {
+                animationState: 'random',
+                updateCount: 0,
+                circles: {
+                    weight: { id: 'weight', config: { minRadius: 30, maxRadius: 100 } },
+                    storage: { id: 'storage', config: { minRadius: 30, maxRadius: 100 } },
+                    complexity: { id: 'complexity', config: { minRadius: 30, maxRadius: 100 } }
+                },
+                getCurrentState: () => testAnimationManager.animationState,
+                getUpdateCount: () => testAnimationManager.updateCount,
+                handleDataChanged: (data) => {
+                    testAnimationManager.updateCount++;
+                    testAnimationManager.animationState = 'stable';
+                    log(`Data changed, update count: ${testAnimationManager.updateCount}`);
+                }
+            };
+            
+            log('System started successfully');
+            updateStatus();
+        }
+        
+        function stopSystem() {
+            log('Stopping unified animation system...');
+            testAnimationManager = null;
+            testCollisionDetector = null;
+            testAnimationUtils = null;
+            log('System stopped');
+            updateStatus();
+        }
+        
+        function resetSystem() {
+            log('Resetting unified animation system...');
+            stopSystem();
+            setTimeout(() => {
+                startSystem();
+                log('System reset completed');
+            }, 1000);
+        }
+        
+        // 初始化
+        log('Unified Animation Manager Test initialized');
+        log('Click "Start System" to begin testing');
+    </script>
+</body>
+</html> 

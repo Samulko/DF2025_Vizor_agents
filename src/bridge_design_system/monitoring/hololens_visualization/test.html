@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HoloLens Visualization Test</title>
+    
+    <style>
+        body {
+            background: #1a1a1a;
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            color: white;
+        }
+        
+        .test-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .test-info {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .test-controls {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .test-controls button {
+            background: #3366FF;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        
+        .test-controls button:hover {
+            background: #2255DD;
+        }
+        
+        #app-container {
+            border: 2px solid #333;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+    </style>
+    
+    <!-- CSS资源 -->
+    <link rel="stylesheet" href="assets/css/base.css">
+    <link rel="stylesheet" href="assets/css/circles.css">
+</head>
+<body>
+    <div class="test-container">
+        <div class="test-info">
+            <h2>HoloLens 三圆可视化系统 - 测试页面</h2>
+            <p>此页面用于测试三个圆圈和数字的动画效果。</p>
+            <p><strong>预期行为：</strong></p>
+            <ul>
+                <li>页面加载后立即显示"初始化中..."状态</li>
+                <li>三个圆圈应该立即开始随机动画（大小和数字变化）</li>
+                <li>动画应该持续到数据加载完成或超时</li>
+            </ul>
+        </div>
+        
+        <div class="test-controls">
+            <h3>测试控制</h3>
+            <button onclick="testStateChange('stable')">切换到稳定状态</button>
+            <button onclick="testStateChange('updating')">切换到更新状态</button>
+            <button onclick="testStateChange('error')">切换到错误状态</button>
+            <button onclick="testDataChange()">模拟数据变化</button>
+            <button onclick="location.reload()">重新加载页面</button>
+        </div>
+        
+        <!-- 主容器 -->
+        <div id="app-container">
+            <!-- SVG画布容器 -->
+            <svg id="circles-canvas" width="800" height="600" viewBox="0 0 800 600">
+                <!-- SVG滤镜定义 -->
+                <defs>
+                    <!-- 发光效果滤镜 -->
+                    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+                        <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                        <feMerge> 
+                            <feMergeNode in="coloredBlur"/>
+                            <feMergeNode in="SourceGraphic"/>
+                        </feMerge>
+                    </filter>
+                    
+                    <!-- 警告发光滤镜 -->
+                    <filter id="warning-glow" x="-50%" y="-50%" width="200%" height="200%">
+                        <feGaussianBlur stdDeviation="5" result="warningBlur"/>
+                        <feMerge> 
+                            <feMergeNode in="warningBlur"/>
+                            <feMergeNode in="SourceGraphic"/>
+                        </feMerge>
+                    </filter>
+                    
+                    <!-- 闪光效果滤镜 -->
+                    <filter id="flash" x="-50%" y="-50%" width="200%" height="200%">
+                        <feGaussianBlur stdDeviation="2" result="flashBlur"/>
+                        <feMerge> 
+                            <feMergeNode in="flashBlur"/>
+                            <feMergeNode in="SourceGraphic"/>
+                        </feMerge>
+                    </filter>
+                </defs>
+                
+                <!-- 渐变定义 -->
+                <defs>
+                    <!-- 红色圆圈渐变 -->
+                    <radialGradient id="weightGradient" cx="50%" cy="50%" r="50%">
+                        <stop offset="0%" style="stop-color:#FF3030;stop-opacity:0.8"/>
+                        <stop offset="70%" style="stop-color:#FF3030;stop-opacity:0.6"/>
+                        <stop offset="100%" style="stop-color:#FF3030;stop-opacity:0.3"/>
+                    </radialGradient>
+                    
+                    <!-- 黄色圆圈渐变 -->
+                    <radialGradient id="storageGradient" cx="50%" cy="50%" r="50%">
+                        <stop offset="0%" style="stop-color:#FFCC00;stop-opacity:0.8"/>
+                        <stop offset="70%" style="stop-color:#FFCC00;stop-opacity:0.6"/>
+                        <stop offset="100%" style="stop-color:#FFCC00;stop-opacity:0.3"/>
+                    </radialGradient>
+                    
+                    <!-- 蓝色圆圈渐变 -->
+                    <radialGradient id="complexityGradient" cx="50%" cy="50%" r="50%">
+                        <stop offset="0%" style="stop-color:#3366FF;stop-opacity:0.8"/>
+                        <stop offset="70%" style="stop-color:#3366FF;stop-opacity:0.6"/>
+                        <stop offset="100%" style="stop-color:#3366FF;stop-opacity:0.3"/>
+                    </radialGradient>
+                </defs>
+                
+                <!-- 圆圈组 -->
+                <g id="circles-group">
+                    <!-- 圆圈将通过JavaScript动态创建 -->
+                </g>
+                
+                <!-- 数字标签组 -->
+                <g id="labels-group">
+                    <!-- 数字标签将通过JavaScript动态创建 -->
+                </g>
+            </svg>
+            
+            <!-- 状态指示器 -->
+            <div id="status-indicator" class="status-indicator">
+                <span id="status-text">初始化中...</span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- JavaScript资源 -->
+    <script src="assets/js/utils/mathUtils.js"></script>
+    <script src="assets/js/utils/colorUtils.js"></script>
+    <script src="assets/js/core/renderEngine.js"></script>
+    <script src="assets/js/core/dataManager.js"></script>
+    <script src="assets/js/core/app.js"></script>
+    <script src="assets/js/components/circleElement.js"></script>
+    <script src="assets/js/components/labelDisplay.js"></script>
+    <script src="assets/js/components/threeCircles.js"></script>
+    <script src="assets/js/main.js"></script>
+    
+    <script>
+        // 测试函数
+        function testStateChange(state) {
+            if (window.main && window.main.app) {
+                window.main.app.setState(state);
+                console.log(`测试: 切换到 ${state} 状态`);
+            } else {
+                console.error('测试: 应用未初始化');
+            }
+        }
+        
+        function testDataChange() {
+            const testData = {
+                "Self-Weight": Math.floor(Math.random() * 100),
+                "Storage": Math.floor(Math.random() * 100),
+                "Complexity": Math.floor(Math.random() * 100),
+                "timestamp": Date.now()
+            };
+            
+            if (window.main && window.main.app && window.main.app.dataManager) {
+                window.main.app.dataManager.triggerEvent('dataChanged', testData);
+                console.log('测试: 模拟数据变化', testData);
+            } else {
+                console.error('测试: 数据管理器未初始化');
+            }
+        }
+        
+        // 页面加载完成后显示测试信息
+        window.addEventListener('load', function() {
+            console.log('测试页面加载完成');
+            console.log('使用浏览器控制台查看详细日志');
+        });
+    </script>
+</body>
+</html> 

@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HoloLens Three-Circle Visualization System - Phase 1</title>
+    
+    <!-- Google Fonts - Montserrat -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- 透明背景设置 -->
+    <style>
+        html, body {
+            background: transparent !important;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: 'Montserrat', sans-serif;
+        }
+        
+        /* 响应式SVG容器 */
+        #circles-canvas {
+            width: 80vw;
+            height: 80vh;
+            max-width: 1200px;
+            max-height: 800px;
+        }
+    </style>
+    
+    <!-- CSS资源 -->
+    <link rel="stylesheet" href="assets/css/base.css">
+    <link rel="stylesheet" href="assets/css/circles.css">
+</head>
+<body>
+    <!-- 主容器 -->
+    <div id="app-container">
+        <!-- SVG画布容器 -->
+        <svg id="circles-canvas" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid meet">
+            <!-- SVG滤镜定义 -->
+            <defs>
+                <!-- 发光效果滤镜 -->
+                <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+                    <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                    <feMerge> 
+                        <feMergeNode in="coloredBlur"/>
+                        <feMergeNode in="SourceGraphic"/>
+                    </feMerge>
+                </filter>
+                
+                <!-- 警告发光滤镜 -->
+                <filter id="warning-glow" x="-50%" y="-50%" width="200%" height="200%">
+                    <feGaussianBlur stdDeviation="5" result="warningBlur"/>
+                    <feMerge> 
+                        <feMergeNode in="warningBlur"/>
+                        <feMergeNode in="SourceGraphic"/>
+                    </feMerge>
+                </filter>
+                
+                <!-- 闪光效果滤镜 -->
+                <filter id="flash" x="-50%" y="-50%" width="200%" height="200%">
+                    <feGaussianBlur stdDeviation="2" result="flashBlur"/>
+                    <feMerge> 
+                        <feMergeNode in="flashBlur"/>
+                        <feMergeNode in="SourceGraphic"/>
+                    </feMerge>
+                </filter>
+            </defs>
+            
+            <!-- 渐变定义 -->
+            <defs>
+                <!-- 红色圆圈渐变 -->
+                <radialGradient id="weightGradient" cx="50%" cy="50%" r="50%">
+                    <stop offset="0%" style="stop-color:#FF3030;stop-opacity:0.8"/>
+                    <stop offset="70%" style="stop-color:#FF3030;stop-opacity:0.6"/>
+                    <stop offset="100%" style="stop-color:#FF3030;stop-opacity:0.3"/>
+                </radialGradient>
+                
+                <!-- 黄色圆圈渐变 -->
+                <radialGradient id="storageGradient" cx="50%" cy="50%" r="50%">
+                    <stop offset="0%" style="stop-color:#FFCC00;stop-opacity:0.8"/>
+                    <stop offset="70%" style="stop-color:#FFCC00;stop-opacity:0.6"/>
+                    <stop offset="100%" style="stop-color:#FFCC00;stop-opacity:0.3"/>
+                </radialGradient>
+                
+                <!-- 蓝色圆圈渐变 -->
+                <radialGradient id="complexityGradient" cx="50%" cy="50%" r="50%">
+                    <stop offset="0%" style="stop-color:#3366FF;stop-opacity:0.8"/>
+                    <stop offset="70%" style="stop-color:#3366FF;stop-opacity:0.6"/>
+                    <stop offset="100%" style="stop-color:#3366FF;stop-opacity:0.3"/>
+                </radialGradient>
+            </defs>
+            
+            <!-- 圆圈组 -->
+            <g id="circles-group">
+                <!-- 圆圈将通过JavaScript动态创建 -->
+            </g>
+            
+            <!-- 数字标签组 -->
+            <g id="labels-group">
+                <!-- 数字标签将通过JavaScript动态创建 -->
+            </g>
+        </svg>
+        
+        <!-- 状态指示器 -->
+        <div id="status-indicator" class="status-indicator">
+            <span id="status-text">Initializing...</span>
+        </div>
+    </div>
+    
+    <!-- JavaScript资源 -->
+    <script src="assets/js/utils/mathUtils.js"></script>
+    <script src="assets/js/utils/colorUtils.js"></script>
+    <script src="assets/js/core/renderEngine.js"></script>
+    <script src="assets/js/core/dataManager.js"></script>
+    <script src="assets/js/core/app.js"></script>
+    <script src="assets/js/animation/animationUtils.js"></script>
+    <script src="assets/js/animation/collisionDetector.js"></script>
+    <script src="assets/js/animation/animationManager.js"></script>
+    <script src="assets/js/main.js"></script>
+</body>
+</html>

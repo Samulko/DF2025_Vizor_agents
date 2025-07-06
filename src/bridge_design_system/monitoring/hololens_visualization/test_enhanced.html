@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced HoloLens Visualization Test</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/css/base.css">
+    <link rel="stylesheet" href="assets/css/circles.css">
+    <style>
+        body {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            font-family: 'Montserrat', sans-serif;
+        }
+        
+        .test-controls {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            color: white;
+            z-index: 1000;
+        }
+        
+        .test-controls button {
+            display: block;
+            margin: 10px 0;
+            padding: 10px 15px;
+            background: #3366FF;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: 'Montserrat', sans-serif;
+        }
+        
+        .test-controls button:hover {
+            background: #2a5298;
+        }
+        
+        .info-panel {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 10px;
+            color: white;
+            z-index: 1000;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div id="app-container">
+        <!-- 状态指示器 -->
+        <div id="status-indicator" class="status-indicator" data-state="initializing">
+            Initializing...
+        </div>
+        
+        <!-- SVG画布 -->
+        <svg id="circles-canvas" width="100%" height="100%" viewBox="0 0 1000 1000" preserveAspectRatio="xMidYMid meet">
+            <!-- 渐变定义 -->
+            <defs>
+                <!-- 权重渐变 -->
+                <radialGradient id="weightGradient" cx="50%" cy="50%" r="50%">
+                    <stop offset="0%" style="stop-color:#FF3030;stop-opacity:1" />
+                    <stop offset="100%" style="stop-color:#CC0000;stop-opacity:0.8" />
+                </radialGradient>
+                
+                <!-- 存储渐变 -->
+                <radialGradient id="storageGradient" cx="50%" cy="50%" r="50%">
+                    <stop offset="0%" style="stop-color:#FFCC00;stop-opacity:1" />
+                    <stop offset="100%" style="stop-color:#CC9900;stop-opacity:0.8" />
+                </radialGradient>
+                
+                <!-- 复杂度渐变 -->
+                <radialGradient id="complexityGradient" cx="50%" cy="50%" r="50%">
+                    <stop offset="0%" style="stop-color:#3366FF;stop-opacity:1" />
+                    <stop offset="100%" style="stop-color:#0033CC;stop-opacity:0.8" />
+                </radialGradient>
+                
+                <!-- 发光效果 -->
+                <filter id="glow">
+                    <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                    <feMerge> 
+                        <feMergeNode in="coloredBlur"/>
+                        <feMergeNode in="SourceGraphic"/>
+                    </feMerge>
+                </filter>
+                
+                <!-- 闪光效果 -->
+                <filter id="flash">
+                    <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+                    <feMerge> 
+                        <feMergeNode in="coloredBlur"/>
+                        <feMergeNode in="SourceGraphic"/>
+                    </feMerge>
+                </filter>
+            </defs>
+            
+            <!-- 圆圈组 -->
+            <g id="circles-group"></g>
+            
+            <!-- 标签组 -->
+            <g id="labels-group"></g>
+        </svg>
+    </div>
+    
+    <!-- 测试控制面板 -->
+    <div class="test-controls">
+        <h3>Test Controls</h3>
+        <button onclick="testStateChange('initializing')">Set Initializing</button>
+        <button onclick="testStateChange('locked')">Set Locked</button>
+        <button onclick="testStateChange('stable')">Set Stable</button>
+        <button onclick="testStateChange('updating')">Set Updating</button>
+        <button onclick="testStateChange('error')">Set Error</button>
+        <button onclick="testDataToggle()">Toggle Live Data</button>
+        <button onclick="testRandomValues()">Random Values</button>
+        <button onclick="simulateDataChange()">Simulate Data Change</button>
+        <button onclick="simulateDataLoss()">Simulate Data Loss</button>
+    </div>
+    
+    <!-- 信息面板 -->
+    <div class="info-panel">
+        <h4>Enhanced Features:</h4>
+        <ul>
+            <li>✅ 圆直径达到窗口40%</li>
+            <li>✅ 数字变化更慢 (8秒变1次)</li>
+            <li>✅ 动画一直运行</li>
+            <li>✅ 3个圆保持红黄蓝色系</li>
+            <li>✅ 检测到JSON变化时停止数字变化</li>
+            <li>✅ 数据变化时有强调效果</li>
+            <li>✅ 响应式设计</li>
+        </ul>
+        <div id="data-status" style="margin-top: 10px; padding: 5px; background: rgba(255,255,255,0.1); border-radius: 5px;">
+            数据状态: <span id="data-status-text">无数据</span>
+        </div>
+    </div>
+
+    <!-- 脚本 -->
+    <script src="assets/js/utils/mathUtils.js"></script>
+    <script src="assets/js/utils/colorUtils.js"></script>
+    <script src="assets/js/components/circleElement.js"></script>
+    <script src="assets/js/core/renderEngine.js"></script>
+    <script src="assets/js/core/dataManager.js"></script>
+    <script src="assets/js/main.js"></script>
+    
+    <script>
+        // 测试函数
+        function testStateChange(state) {
+            if (window.renderEngine) {
+                Object.keys(window.renderEngine.config.circles).forEach(circleId => {
+                    window.renderEngine.setCircleState(circleId, state, Math.floor(Math.random() * 100));
+                });
+                updateStatusIndicator(state);
+            }
+        }
+        
+        function testDataToggle() {
+            if (window.renderEngine) {
+                const newState = !window.renderEngine.hasLiveData;
+                window.renderEngine.hasLiveData = newState;
+                window.renderEngine.updateAllCircleElementsDataState(newState);
+                console.log(`Live data toggled to: ${newState}`);
+                updateDataStatus(newState);
+            }
+        }
+        
+        function testRandomValues() {
+            if (window.renderEngine) {
+                Object.keys(window.renderEngine.config.circles).forEach(circleId => {
+                    const randomValue = Math.floor(Math.random() * 100);
+                    window.renderEngine.setCircleState(circleId, 'stable', randomValue);
+                });
+            }
+        }
+        
+        function simulateDataChange() {
+            if (window.renderEngine) {
+                console.log('Simulating data change...');
+                // 模拟检测到数据变化
+                window.renderEngine.hasLiveData = true;
+                window.renderEngine.switchToDataMode();
+                window.renderEngine.updateAllCircleElementsDataState(true);
+                updateDataStatus(true);
+            }
+        }
+        
+        function simulateDataLoss() {
+            if (window.renderEngine) {
+                console.log('Simulating data loss...');
+                // 模拟数据消失
+                window.renderEngine.hasLiveData = false;
+                window.renderEngine.switchToNoDataMode();
+                window.renderEngine.updateAllCircleElementsDataState(false);
+                updateDataStatus(false);
+            }
+        }
+        
+        function updateStatusIndicator(state) {
+            const indicator = document.getElementById('status-indicator');
+            if (indicator) {
+                indicator.dataset.state = state;
+                indicator.textContent = state.charAt(0).toUpperCase() + state.slice(1);
+            }
+        }
+        
+        function updateDataStatus(hasData) {
+            const statusText = document.getElementById('data-status-text');
+            if (statusText) {
+                statusText.textContent = hasData ? '有数据' : '无数据';
+                statusText.style.color = hasData ? '#00FF00' : '#FFCC00';
+            }
+        }
+        
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Enhanced test page loaded');
+            
+            // 等待所有脚本加载完成
+            setTimeout(() => {
+                if (window.renderEngine) {
+                    console.log('RenderEngine initialized successfully');
+                    updateDataStatus(window.renderEngine.hasLiveData);
+                } else {
+                    console.error('RenderEngine not found');
+                }
+            }, 1000);
+        });
+    </script>
+</body>
+</html> 
