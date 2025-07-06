@@ -61,6 +61,9 @@ class SurfaceAgent:
         try:
             self.mcp_connection = MCPAdapt(self.stdio_params, SmolAgentsAdapter())
             self.mcp_tools = self.mcp_connection.__enter__()
+            if not self.mcp_tools or len(self.mcp_tools) == 0:
+                logger.error("No MCP tools/components retrieved. Check Grasshopper/MCP connection.")
+                raise RuntimeError("No MCP tools/components retrieved. Ensure Grasshopper is running and MCP is connected.")
             logger.info(f"MCP connection established with {len(self.mcp_tools)} tools")
 
             # Use MCP tools plus custom analysis and adjustment tools
@@ -101,7 +104,7 @@ class SurfaceAgent:
 
     def run(self, task: str) -> Any:
         """
-        Generate, execute surface analysis or adjustment task.
+        Generate surface, execute surface analysis or adjustment task.
 
         Args:
             task: Task description for surface generation, analysis or adjustment
@@ -119,113 +122,6 @@ class SurfaceAgent:
         except Exception as e:
             logger.error(f"Surface agent task failed: {e}")
             raise RuntimeError(f"Surface agent execution failed: {e}")
-
-    def _create_shape_analysis_tool(self):
-        """
-        Create custom tool for surface shape detection.
-
-        Returns:
-            Custom tool function for shape analysis
-        """
-
-        @tool
-        def analyze_surface_shape(surface_id: str) -> str:
-            """
-            Analyze the shape of a surface and determine its type (e.g., flat, curved, saddle).
-
-            Args:
-                surface_id: Surface identifier to analyze
-
-            Returns:
-                Analysis report of the surface's shape
-            Note:
-                'rows' and 'columns' refer to the number of control points (control mesh density) of the surface.
-            """
-            try:
-                logger.info(f"Analyzing shape for surface {surface_id}")
-                return f"""
-SURFACE SHAPE ANALYSIS REPORT - Surface {surface_id}:
-============================================
-Surface ID: {surface_id}
-Analysis Focus: Detect surface type (flat, curved, saddle, etc.)
-
-Control Mesh: 'rows' and 'columns' refer to the number and density of control points for the surface.
-
-Next Steps:
-1. Use get_python3_script to read current surface parameters
-2. Extract control points, curvature, and other relevant values
-3. Classify the surface shape
-4. Report the detected shape and suggest possible adjustments
-
-Status: Ready for parameter extraction and shape classification
-                """.strip()
-            except Exception as e:
-                return f"Error analyzing surface {surface_id}: {str(e)}"
-
-        return analyze_surface_shape
-
-    def _create_surface_adjust_tool(self):
-        """
-        Create custom tool for surface parameter adjustment via natural language.
-
-        Returns:
-            Custom tool function for surface adjustment
-        """
-
-        @tool
-        def adjust_surface_parameters(
-            surface_id: str,
-            rows: Optional[int] = None,
-            cols: Optional[int] = None,
-            width: Optional[float] = None,
-            depth: Optional[float] = None,
-            height: Optional[float] = None,
-            flatness: Optional[float] = None,
-        ) -> str:
-            """
-            Adjust the parameters of a surface using natural language instructions.
-
-            Args:
-                surface_id: Surface identifier to adjust
-                rows: Number of control points in the row direction (optional)
-                cols: Number of control points in the column direction (optional)
-                width: Surface width (optional)
-                depth: Surface depth (optional)
-                height: Surface height (optional)
-                flatness: Flatness parameter (optional)
-
-            Returns:
-                Adjustment report
-            Note:
-                'rows' and 'cols' control the density of the surface's control points (control mesh).
-            """
-            try:
-                logger.info(
-                    f"Adjusting surface {surface_id} with parameters: rows={rows}, cols={cols}, width={width}, depth={depth}, height={height}, flatness={flatness}"
-                )
-                return f"""
-SURFACE ADJUSTMENT REPORT - Surface {surface_id}:
-============================================
-Surface ID: {surface_id}
-Adjusted Parameters:
-- Rows (control points): {rows}
-- Columns (control points): {cols}
-- Width: {width}
-- Depth: {depth}
-- Height: {height}
-- Flatness: {flatness}
-
-Next Steps:
-1. Use edit_python3_script to update the surface parameters in Grasshopper
-2. Regenerate the surface with new parameters
-3. Verify the new surface shape and report any issues
-
-Status: Adjustment instructions ready for execution
-                """.strip()
-            except Exception as e:
-                return f"Error adjusting surface {surface_id}: {str(e)}"
-
-        return adjust_surface_parameters
 
     def _create_surface_generation_tool(self):
         """
@@ -250,22 +146,21 @@ Status: Adjustment instructions ready for execution
             try:
                 logger.info(f"Generating surface from description: {description}")
                 return f"""
-SURFACE GENERATION REPORT:
-============================================
-Description: {description}
+                    SURFACE GENERATION REPORT:
+                    ============================================
+                    Description: {description}
 
-Note: 'rows' and 'columns' refer to the number and density of control points for the surface (control mesh).
+                    Note: 'rows' and 'columns' refer to the number and density of control points for the surface (control mesh).
 
-Next Steps:
-1. Parse the description to extract surface parameters (rows, cols, width, depth, height, flatness, etc.)
-2. Use edit_python3_script or create_python3_script to generate the surface in Grasshopper
-3. Verify the generated surface matches the described intent
+                    Next Steps:
+                    1. Parse the description to extract surface parameters (rows, cols, width, depth, height, flatness, etc.)
+                    2. Use edit_python3_script or create_python3_script to generate the surface in Grasshopper
+                    3. Verify the generated surface matches the described intent
 
-Status: Surface generation instructions ready for execution
-                """.strip()
+                    Status: Surface generation instructions ready for execution
+                                    """.strip()
             except Exception as e:
                 return f"Error generating surface from description: {str(e)}"
-
         return generate_surface_from_description
 
     def __del__(self):
@@ -278,6 +173,120 @@ Status: Surface generation instructions ready for execution
             logger.warning(f"Error closing MCP connection: {e}")
 
 
+    def _create_shape_analysis_tool(self):
+        """
+        Create custom tool for surface shape detection.
+
+        Returns:
+            Custom tool function for shape analysis
+        """
+
+        @tool
+        def analyze_surface_shape(surface_id: str = None, component_id: str = None) -> str:
+            """
+            Analyze the shape of a surface and determine its type (e.g., flat, curved, saddle).
+
+            Args:
+                surface_id: Surface identifier to analyze
+                component_id: (Optional) Grasshopper component ID to use directly
+
+            Returns:
+                Analysis report of the surface's shape
+            Note:
+                'rows' and 'columns' refer to the number of control points (control mesh density) of the surface.
+            """
+            try:
+                if not surface_id and not component_id:
+                    return "Error: Either surface_id or component_id must be provided. If automatic retrieval fails, please provide the component ID manually."
+                logger.info(f"Analyzing shape for surface {surface_id or component_id}")
+                return f"""
+                SURFACE SHAPE ANALYSIS REPORT - Surface {surface_id or component_id}:
+                ============================================
+                Surface ID: {surface_id or component_id}
+                Analysis Focus: Detect surface type (flat, curved, saddle, etc.)
+
+                Control Mesh: 'rows' and 'columns' refer to the number and density of control points for the surface.
+
+                Next Steps:
+                1. Use get_python3_script to read current surface parameters
+                2. Extract control points, curvature, and other relevant values
+                3. Classify the surface shape
+                4. Report the detected shape and suggest possible adjustments
+
+                Status: Ready for parameter extraction and shape classification
+                """.strip()
+            except Exception as e:
+                logger.error(f"Error analyzing surface {surface_id or component_id}: {str(e)}")
+                return f"Error analyzing surface {surface_id or component_id}: {str(e)}"
+
+        return analyze_surface_shape
+
+    def _create_surface_adjust_tool(self):
+        """
+        Create custom tool for surface parameter adjustment via natural language.
+
+        Returns:
+            Custom tool function for surface adjustment
+        """
+
+        @tool
+        def adjust_surface_parameters(
+            surface_id: str = None,
+            component_id: str = None,
+            rows: Optional[int] = None,
+            cols: Optional[int] = None,
+            width: Optional[float] = None,
+            depth: Optional[float] = None,
+            height: Optional[float] = None,
+            flatness: Optional[float] = None,
+            ) -> str:
+            """
+            Adjust the parameters of a surface using natural language instructions.
+            Args:
+                surface_id: Surface identifier to adjust
+                component_id: (Optional) Grasshopper component ID to use directly
+                rows: Number of control points in the row direction (optional)
+                cols: Number of control points in the column direction (optional)
+                width: Surface width (optional)
+                depth: Surface depth (optional)
+                height: Surface height (optional)
+                flatness: Flatness parameter (optional)
+            Returns:
+                Adjustment report
+            Note:
+                'rows' and 'cols' control the density of the surface's control points (control mesh).
+            """
+            try:
+                if not surface_id and not component_id:
+                    return "Error: Either surface_id or component_id must be provided. If automatic retrieval fails, please provide the component ID manually."
+                logger.info(
+                    f"Adjusting surface {surface_id or component_id} with parameters: rows={rows}, cols={cols}, width={width}, depth={depth}, height={height}, flatness={flatness}"
+                )
+                return f"""
+                    SURFACE ADJUSTMENT REPORT - Surface {surface_id or component_id}:
+                    ============================================
+                    Surface ID: {surface_id or component_id}
+                    Adjusted Parameters:
+                    - Rows (control points): {rows}
+                    - Columns (control points): {cols}
+                    - Width: {width}
+                    - Depth: {depth}
+                    - Height: {height}
+                    - Flatness: {flatness}
+
+                    Next Steps:
+                    1. Use edit_python3_script to update the surface parameters in Grasshopper
+                    2. Regenerate the surface with new parameters
+                    3. Verify the new surface shape and report any issues
+
+                    Status: Adjustment instructions ready for execution
+                    """.strip()
+            except Exception as e:
+                logger.error(f"Error adjusting surface {surface_id or component_id}: {str(e)}")
+                return f"Error adjusting surface {surface_id or component_id}: {str(e)}"
+        return adjust_surface_parameters
+
+    
 def get_surface_system_prompt() -> str:
     """Get custom system prompt for surface agent from file or use default."""
     current_file = Path(__file__)
@@ -287,24 +296,24 @@ def get_surface_system_prompt() -> str:
     if not prompt_path.exists():
         # Return a default prompt if file doesn't exist
         return """
-You are a specialized agent for surface analysis and adjustment using Grasshopper via MCP.
+            You are a specialized agent for surface generation, analysis and adjustment using Grasshopper via MCP.
 
-Your primary tasks are:
-- Allow users to generate surfaces by specifying rows, cols, width, depth, height, and flatness in natural language
-- Detect the shape of a given surface (flat, curved, saddle, etc.)
-- Allow users to adjust surfaces by specifying rows, cols, width, depth, height, and flatness in natural language
-- Use analyze_surface_shape to classify the surface
-- Use adjust_surface_parameters to update the surface in Grasshopper
-- Always verify the result after adjustment
+            Your primary tasks are:
+            - Allow users to generate surfaces by specifying rows, cols, width, depth, height, and flatness in natural language
+            - Detect the shape of a given surface (flat, curved, saddle, etc.)
+            - Allow users to adjust surfaces by specifying rows, cols, width, depth, height, and flatness in natural language
+            - Use analyze_surface_shape to classify the surface
+            - Use adjust_surface_parameters to update the surface in Grasshopper
+            - Always verify the result after adjustment
 
-Be systematic, precise, and responsive to user intent in surface generation and modification.
+            Be systematic, precise, and responsive to user intent in surface generation and modification.
         """.strip()
     return prompt_path.read_text(encoding="utf-8")
 
 
 def create_surface_agent(
     model_name: str = "surface", monitoring_callback: Optional[Any] = None, **kwargs
-) -> ToolCallingAgent:
+    ) -> ToolCallingAgent:
     """
     Factory function for creating surface agent instances.
 
@@ -332,20 +341,34 @@ def create_surface_agent(
 
 def demo_surface_agent():
     """
-    Demonstration function showing basic surface adjustment operations.
-
-    This function creates an agent instance and runs a simple surface analysis and adjustment task.
+    Demonstration function showing surface generation, analysis, and visualization.
     """
     print("Starting surface agent demonstration...")
 
     try:
         agent = create_surface_agent()
 
-        demo_task = "Analyze the current surface and adjust it to have 10 rows, 10 columns, width 20, depth 10, height 5, and flatness 0.8."
-        result = agent.run(demo_task)
+        # 1. Generate a surface from a natural language description
+        generation_task = "Create a surface with 10 rows, 10 columns, width 20, depth 10, height 5, and flatness 0.8."
+        generation_result = agent.run(f"generate_surface_from_description: {generation_task}")
+        print("Surface generation result:")
+        print(generation_result)
+
+        # 2. Analyze the generated surface
+        # You may need to extract the surface_id from the generation_result if your system uses IDs
+        # For now, let's assume the surface_id is 'surface_1'
+        analysis_task = "analyze_surface_shape: surface_1"
+        analysis_result = agent.run(analysis_task)
+        print("Surface analysis result:")
+        print(analysis_result)
+
+        # 3. (Optional) Visualize the result in Grasshopper
+        # If you have a visualization tool, call it here, e.g.:
+        # visualization_result = agent.run("visualize_surface: surface_1")
+        # print("Visualization result:")
+        # print(visualization_result)
 
         print("Demonstration completed successfully")
-        print(f"Result: {result}")
 
     except Exception as e:
         print(f"Demonstration failed: {e}")

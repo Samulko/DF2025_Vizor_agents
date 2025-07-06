@@ -56,7 +56,7 @@ This separation of concerns ensures:
   * Environment: Runs in Rhino 8 Grasshopper with advanced MCP (Model Context Protocol) integration.
 
   * Capabilities:
-    - Detects and classifies surface shape from geometric data.
+    - Generates and classifies surface shape from geometric data based on the natural language.
     - Updates surface parameters (rows, cols, width, depth, height, flatness, translation) as specified, preserving values not mentioned.
     - Verifies adjustments by re-reading and confirming the regenerated surface matches requested specs.
 
